@@ -1,0 +1,111 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-yellow:      #FFE500;
+  --color-yellow-dark: #D4BE00;
+
+  --color-red:         #DC0A1E;
+  --color-red-dark:    #A80716;
+  --color-red-soft:    #FFF0F1;
+
+  --color-navy:        #0F1F6B;
+  --color-navy-mid:    #1A2F8A;
+  --color-navy-light:  #E6EAF8;
+
+  --color-black:       #0D0D0D;
+  --color-gray-dark:   #2E2E2E;
+  --color-gray:        #666666;
+  --color-gray-light:  #B0B0B0;
+  --color-surface:     #F3F2EE;
+  --color-white:       #FFFFFF;
+  --color-border:      #E2E1DC;
+
+  --font-display: 'Epilogue', system-ui, sans-serif;
+  --font-body:    'Figtree', system-ui, sans-serif;
+}
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    font-size: 15px;
+  }
+  @media (min-width: 768px)  { html { font-size: 16px; } }
+  @media (min-width: 1280px) { html { font-size: 17px; } }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--color-white);
+    color: var(--color-black);
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    font-weight: 900;
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+  }
+
+  img { max-width: 100%; height: auto; display: block; }
+  a { color: inherit; text-decoration: none; }
+
+  ::selection { background: var(--color-yellow); color: var(--color-black); }
+}
+
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track  { background: var(--color-surface); }
+::-webkit-scrollbar-thumb  { background: var(--color-red); border-radius: 2px; }
+
+/* Yellow marker */
+.mark {
+  background: var(--color-yellow);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* Dot-grid texture */
+.dot-grid {
+  background-image: radial-gradient(circle, rgba(0,0,0,0.1) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Marquee */
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 28s linear infinite;
+}
+.marquee-track:hover { animation-play-state: paused; }
+
+/* Pill / badge */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border-radius: 100px;
+}
+
+/* Hover lift */
+.lift {
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+.lift:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 14px 40px rgba(0,0,0,0.1);
+}
