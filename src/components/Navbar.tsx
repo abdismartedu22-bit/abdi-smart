@@ -60,7 +60,7 @@ export default function Navbar() {
           </span>
         </a>
 
-        <nav className="hidden md:flex" style={{ alignItems: 'center', gap: '36px', display: 'flex' }}>
+        <nav className="hidden md:flex" style={{ alignItems: 'center', gap: '36px' }}>
           {links.map((l) => (
             <a
               key={l.href}
