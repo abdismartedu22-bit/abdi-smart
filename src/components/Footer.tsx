@@ -101,7 +101,8 @@ export default function Footer() {
             color: 'rgba(255,255,255,0.18)',
           }}
         >
-          &copy; {new Date().getFullYear()} Abdi Smart Education. All rights reserved.
+          &copy; {new Date().getFullYear()} Abdi Smart Education. All rights reserved. &middot;{' '}
+          <a href="https://www.builtbypolaris.com/" target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: '2px', opacity: 0.6 }}>Website built by Polaris.</a>
         </div>
       </div>
     </footer>
