@@ -86,7 +86,7 @@ export default function AdminHome() {
       students: studentsRes.count ?? 0,
     });
 
-    const sessions = ((todaySchedRes.data ?? []) as TodaySession[]);
+    const sessions = ((todaySchedRes.data ?? []) as unknown as TodaySession[]);
     setTodaySessions(sessions);
     setRecentUsers((recentRes.data ?? []) as RecentUser[]);
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { getWeekStart, nextWeek, prevWeek, toISODate, formatWeekLabel } from '../../lib/dates';
-import { addDays, startOfMonth, format } from 'date-fns';
+import { startOfMonth, format } from 'date-fns';
 import * as XLSX from 'xlsx';
 
 type Group = { id: string; nama: string; kode: string };
@@ -35,7 +35,6 @@ export default function DownloadPage() {
   async function downloadJadwal() {
     setLoading(true);
     const weekStartISO = toISODate(jadwalWeek);
-    const weekEndISO = toISODate(addDays(jadwalWeek, 6));
 
     let q = supabase
       .from('schedules')
@@ -49,7 +48,6 @@ export default function DownloadPage() {
     const { data } = await q;
     const rows = data ?? [];
 
-    const HARI = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     const header = ['Hari', 'Grup', 'Jam Mulai', 'Jam Selesai', 'Materi', 'Pengajar', 'Lokasi'];
     const body = rows.map((r: any) => [
       r.hari,
@@ -61,7 +59,6 @@ export default function DownloadPage() {
       r.lokasi ?? '-',
     ]);
 
-    const weekLabel = formatWeekLabel(jadwalWeek);
     writeExcel([header, ...body], 'Jadwal', `Jadwal_${weekStartISO}.xlsx`);
     setLoading(false);
   }

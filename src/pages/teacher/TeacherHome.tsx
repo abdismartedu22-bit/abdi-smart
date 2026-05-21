@@ -56,7 +56,7 @@ export default function TeacherHome() {
       .eq('week_start', weekStart)
       .order('jam_mulai');
 
-    const all = (weekData ?? []) as Session[];
+    const all = (weekData ?? []) as unknown as Session[];
     const todayList = all.filter(s => s.hari === todayH);
     setTodaySessions(todayList);
     setWeekSessions(all);

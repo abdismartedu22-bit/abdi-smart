@@ -64,7 +64,7 @@ export default function AdminRealisasi() {
       .lte('session_date', endISO)
       .order('session_date');
 
-    setRows((data ?? []) as RealisasiRow[]);
+    setRows((data ?? []) as unknown as RealisasiRow[]);
     setLoading(false);
   }, [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -76,7 +76,6 @@ export default function AdminRealisasi() {
     });
   }, []);
 
-  const weekDays = getWeekDays(weekStart);
   const displayed = rows.filter(r => {
     if (filterGroup && r.schedule?.groups?.id !== filterGroup) return false;
     if (filterStatus === 'belum' && r.sesi_status) return false;

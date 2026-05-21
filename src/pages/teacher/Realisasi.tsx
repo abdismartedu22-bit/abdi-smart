@@ -65,7 +65,7 @@ export default function TeacherRealisasi() {
       .eq('hari', getTodayHari())
       .order('jam_mulai');
 
-    const todaySessions = (sched ?? []) as SessionToday[];
+    const todaySessions = (sched ?? []) as unknown as SessionToday[];
     setSessions(todaySessions);
 
     if (todaySessions.length === 0) { setLoading(false); return; }
@@ -81,7 +81,7 @@ export default function TeacherRealisasi() {
     todaySessions.forEach(s => {
       studentMap[s.id] = (sg ?? [])
         .filter(r => r.group_id === s.groups.id)
-        .map(r => ({ student_id: r.student_id, profiles: r.profiles as { id: string; display_name: string } }));
+        .map(r => ({ student_id: r.student_id, profiles: r.profiles as unknown as { id: string; display_name: string } }));
     });
     setStudents(studentMap);
 

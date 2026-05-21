@@ -66,7 +66,7 @@ export default function StaffHasilTO() {
       .from('tryout_results')
       .select('id, student_id, type, nama_to, tanggal_to, scores, total_score, student:profiles!student_id(id, display_name)')
       .order('tanggal_to', { ascending: false });
-    setResults((data ?? []) as TOResult[]);
+    setResults((data ?? []) as unknown as TOResult[]);
     setLoading(false);
   }, []);
 

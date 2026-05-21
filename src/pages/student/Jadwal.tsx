@@ -52,7 +52,7 @@ export default function StudentJadwal() {
       .eq('week_start', toISODate(weekStart))
       .order('jam_mulai');
 
-    setSchedules((data ?? []) as ScheduleRow[]);
+    setSchedules((data ?? []) as unknown as ScheduleRow[]);
     setLoading(false);
   }
 

@@ -94,7 +94,7 @@ export default function StudentAbsen() {
       .eq('hari', todayHari)
       .order('jam_mulai');
 
-    const todaySessions = (sched ?? []) as SessionToday[];
+    const todaySessions = (sched ?? []) as unknown as SessionToday[];
     setSessions(todaySessions);
 
     if (todaySessions.length > 0) {

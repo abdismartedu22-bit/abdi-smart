@@ -67,7 +67,7 @@ export default function StaffHome() {
         .lte('week_start', weekEnd),
     ]);
 
-    const sessions = (todayRes.data ?? []) as TodaySession[];
+    const sessions = (todayRes.data ?? []) as unknown as TodaySession[];
     setTodaySessions(sessions);
 
     const weekSessions = weekRes.data ?? [];

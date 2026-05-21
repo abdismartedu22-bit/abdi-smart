@@ -81,7 +81,7 @@ export default function StudentHome() {
       .select('group_id, groups!group_id(id, nama, kode, warna, warna_text)')
       .eq('student_id', user!.id);
 
-    const myGroups = ((sg ?? []).map(r => r.groups)).filter(Boolean) as Group[];
+    const myGroups = ((sg ?? []).map(r => r.groups)).filter(Boolean) as unknown as Group[];
     setGroups(myGroups);
     const groupIds = myGroups.map(g => g.id);
 
@@ -95,7 +95,7 @@ export default function StudentHome() {
         .eq('week_start', weekStart)
         .order('jam_mulai');
 
-      const weekSessions = (schedWeek ?? []) as NextSession[];
+      const weekSessions = (schedWeek ?? []) as unknown as NextSession[];
       let found: NextSession | null = null;
 
       // Find next session from today onwards (same week)
@@ -128,7 +128,7 @@ export default function StudentHome() {
           .eq('week_start', nextWeekStart)
           .order('jam_mulai')
           .limit(1);
-        found = ((nextWeekData ?? []) as NextSession[])[0] ?? null;
+        found = ((nextWeekData ?? []) as unknown as NextSession[])[0] ?? null;
       }
 
       setNextSession(found);

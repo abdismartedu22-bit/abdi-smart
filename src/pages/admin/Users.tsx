@@ -529,7 +529,7 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
             <div style={{ display: 'flex', gap: '16px' }}>
               {['reguler', 'privat'].map(t => (
                 <label key={t} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-                  <input type="radio" name="tipe" value={t} checked={form.tipe === t} onChange={() => setForm(f => ({ ...f, tipe: t }))} />
+                  <input type="radio" name="tipe" value={t} checked={form.tipe === t} onChange={() => setForm(f => ({ ...f, tipe: t as 'reguler' | 'privat' }))} />
                   {t.charAt(0).toUpperCase() + t.slice(1)}
                 </label>
               ))}

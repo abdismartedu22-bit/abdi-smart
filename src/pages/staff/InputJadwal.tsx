@@ -69,7 +69,7 @@ export default function InputJadwal() {
       supabase.from('groups').select('*').eq('active', true).order('nama'),
       supabase.from('profiles').select('id, display_name').eq('role', 'teacher').order('display_name'),
     ]);
-    setSchedules((sched ?? []) as ScheduleRow[]);
+    setSchedules((sched ?? []) as unknown as ScheduleRow[]);
     setGroups(grp ?? []);
     setTeachers((teach ?? []) as Teacher[]);
     setLoading(false);
