@@ -79,6 +79,29 @@ export default function Navbar() {
             </a>
           ))}
           <a
+            href="/login"
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontWeight: 600,
+              fontSize: '0.85rem',
+              color: 'var(--color-navy)',
+              padding: '11px 20px',
+              borderRadius: '100px',
+              border: '1.5px solid var(--color-navy)',
+              transition: 'background 0.2s, color 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'var(--color-navy)';
+              (e.currentTarget as HTMLElement).style.color = '#fff';
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.background = 'transparent';
+              (e.currentTarget as HTMLElement).style.color = 'var(--color-navy)';
+            }}
+          >
+            Masuk
+          </a>
+          <a
             href="https://wa.me/6287848661688"
             target="_blank"
             rel="noopener noreferrer"
@@ -156,6 +179,22 @@ export default function Navbar() {
             </a>
           ))}
           <a
+            href="/login"
+            onClick={() => setOpen(false)}
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontWeight: 600,
+              fontSize: '0.9rem',
+              color: 'var(--color-navy)',
+              padding: '14px',
+              borderRadius: '100px',
+              border: '1.5px solid var(--color-navy)',
+              textAlign: 'center',
+            }}
+          >
+            Masuk
+          </a>
+          <a
             href="https://wa.me/6287848661688"
             target="_blank"
             rel="noopener noreferrer"
@@ -169,7 +208,6 @@ export default function Navbar() {
               padding: '14px',
               borderRadius: '100px',
               textAlign: 'center',
-              marginTop: '4px',
             }}
           >
             Daftar Sekarang
