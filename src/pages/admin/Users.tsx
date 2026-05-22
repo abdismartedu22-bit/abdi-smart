@@ -1,5 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import PasswordInput from '../../components/shared/PasswordInput';
 import type { Role, Group } from '../../types';
 
@@ -69,6 +70,7 @@ export default function AdminUsers() {
 /* ===================== USERS TAB ===================== */
 
 function UsersTab() {
+  const { user: me } = useAuth();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +82,7 @@ function UsersTab() {
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
   const [showResetPw, setShowResetPw] = useState(false);
   const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -147,6 +150,9 @@ function UsersTab() {
               <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                 <button onClick={() => { setEditTarget(u); setShowEdit(true); }} style={btnEdit}>Edit</button>
                 <button onClick={() => { setResetTarget(u); setShowResetPw(true); }} style={btnGhost}>Reset PW</button>
+                {u.id !== me?.id && (
+                  <button onClick={() => setDeleteTarget(u)} style={{ ...btnGhost, color: '#DC0A1E', borderColor: '#FECACA' }}>Hapus</button>
+                )}
               </div>
             </div>
           ))}
@@ -172,6 +178,13 @@ function UsersTab() {
         <ResetPwModal
           user={resetTarget}
           onClose={() => setShowResetPw(false)}
+        />
+      )}
+      {deleteTarget && (
+        <DeleteUserModal
+          user={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDone={() => { setDeleteTarget(null); load(); }}
         />
       )}
     </>
@@ -388,6 +401,53 @@ function ResetPwModal({ user, onClose }: { user: UserRow; onClose: () => void })
           </form>
         )}
       </Modal>
+    </Overlay>
+  );
+}
+
+/* ===================== DELETE USER MODAL ===================== */
+
+function DeleteUserModal({ user, onClose, onDone }: { user: UserRow; onClose: () => void; onDone: () => void }) {
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleDelete() {
+    setDeleting(true);
+    setError('');
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ user_id: user.id }),
+    });
+    const json = await res.json();
+    setDeleting(false);
+    if (!res.ok) { setError(json.error ?? 'Gagal menghapus user'); return; }
+    onDone();
+  }
+
+  return (
+    <Overlay>
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '28px 32px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#0D0D0D' }}>Hapus User?</h2>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#666', margin: '0 0 6px' }}>
+          Akun <strong>{user.display_name}</strong> (@{user.username}) akan dihapus permanen.
+        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#DC0A1E', margin: '0 0 20px' }}>
+          Semua data absensi dan hasil TO milik user ini ikut terhapus dan tidak bisa dipulihkan.
+        </p>
+        {error && <p style={{ ...errorStyle, marginBottom: '12px' }}>{error}</p>}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={onClose} style={btnSecondary}>Batal</button>
+          <button onClick={handleDelete} disabled={deleting} style={{ ...btnPrimary, background: '#DC0A1E' }}>
+            {deleting ? 'Menghapus...' : 'Hapus Permanen'}
+          </button>
+        </div>
+      </div>
     </Overlay>
   );
 }
