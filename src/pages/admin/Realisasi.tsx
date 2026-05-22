@@ -1,31 +1,44 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getWeekStart, toISODate, fmtTime, fmtTimestampWITA } from '../../lib/dates';
+import { getWeekStart, toISODate, fmtTime, fmtTimestampWITA, nowWITAMinutes } from '../../lib/dates';
 import { addDays } from 'date-fns';
 import WeekPicker from '../../components/shared/WeekPicker';
 import GrupBadge from '../../components/shared/GrupBadge';
 
 type Group = { id: string; nama: string; kode: string; warna: string; warna_text: string };
 
-type RealisasiRow = {
+/* ---- Realisasi Sesi types ---- */
+
+type ScheduleRow = {
   id: string;
+  hari: string;
+  jam_mulai: string;
+  jam_selesai: string;
+  materi: string | null;
+  lokasi: string | null;
+  week_start: string;
+  groups: Group;
+  teacher: { id: string; display_name: string };
+};
+
+type TeacherAttRow = {
+  id: string;
+  schedule_id: string;
   session_date: string;
-  status: string | null;
   sesi_status: string | null;
   note: string | null;
   catatan_admin: string | null;
   locked_at: string | null;
   checkin_at: string | null;
-  schedule: {
-    id: string;
-    hari: string;
-    jam_mulai: string;
-    jam_selesai: string;
-    materi: string | null;
-    groups: Group;
-    teacher: { id: string; display_name: string };
-  };
 };
+
+type MergedRow = {
+  schedule: ScheduleRow;
+  att: TeacherAttRow | null;
+  session_date: string;
+};
+
+/* ---- Absensi Siswa types ---- */
 
 type StudentAttRow = {
   id: string;
@@ -44,6 +57,31 @@ type StudentAttRow = {
     groups: Group;
   };
 };
+
+/* ---- Helpers ---- */
+
+const HARI_IDX: Record<string, number> = {
+  Senin: 0, Selasa: 1, Rabu: 2, Kamis: 3, Jumat: 4, Sabtu: 5, Minggu: 6,
+};
+
+function getSessionDate(weekStartISO: string, hari: string): string {
+  const [y, mo, d] = weekStartISO.split('-').map(Number);
+  const date = new Date(y, mo - 1, d + (HARI_IDX[hari] ?? 0));
+  return toISODate(date);
+}
+
+function todayWITA(): string {
+  const now = new Date();
+  return new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function hasPassed(sessionDateISO: string, jamSelesai: string): boolean {
+  const today = todayWITA();
+  if (sessionDateISO < today) return true;
+  if (sessionDateISO > today) return false;
+  const [h, m] = jamSelesai.split(':').map(Number);
+  return nowWITAMinutes() > h * 60 + m;
+}
 
 const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
   terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
@@ -96,16 +134,23 @@ export default function AdminRealisasi() {
   );
 }
 
-/* ===================== REALISASI SESI TAB (existing) ===================== */
+/* ===================== REALISASI SESI TAB ===================== */
 
 function RealisasiSesiTab() {
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
-  const [rows, setRows] = useState<RealisasiRow[]>([]);
+  const [rows, setRows] = useState<MergedRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterGroup, setFilterGroup] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [editing, setEditing] = useState<RealisasiRow | null>(null);
+  const [editing, setEditing] = useState<MergedRow | null>(null);
+  const [, setTick] = useState(0);
+
+  // Re-check "has passed" every minute so the list updates without a page refresh
+  useEffect(() => {
+    const t = setInterval(() => setTick(n => n + 1), 60_000);
+    return () => clearInterval(t);
+  }, []);
 
   const weekEnd = addDays(weekStart, 6);
 
@@ -114,22 +159,39 @@ function RealisasiSesiTab() {
     const startISO = toISODate(weekStart);
     const endISO = toISODate(weekEnd);
 
-    const { data } = await supabase
-      .from('attendance')
-      .select(`
-        id, session_date, status, sesi_status, note, catatan_admin, locked_at, checkin_at,
-        schedule:schedules!schedule_id(
-          id, hari, jam_mulai, jam_selesai, materi,
-          groups!group_id(id, nama, kode, warna, warna_text),
-          teacher:profiles!teacher_id(id, display_name)
-        )
-      `)
-      .eq('person_role', 'teacher')
-      .gte('session_date', startISO)
-      .lte('session_date', endISO)
-      .order('session_date');
+    const [{ data: schedData }, { data: attData }] = await Promise.all([
+      supabase
+        .from('schedules')
+        .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(id,display_name)')
+        .eq('week_start', startISO)
+        .order('jam_mulai'),
+      supabase
+        .from('attendance')
+        .select('id, schedule_id, session_date, sesi_status, note, catatan_admin, locked_at, checkin_at')
+        .eq('person_role', 'teacher')
+        .gte('session_date', startISO)
+        .lte('session_date', endISO),
+    ]);
 
-    setRows((data ?? []) as unknown as RealisasiRow[]);
+    const attMap: Record<string, TeacherAttRow> = {};
+    (attData ?? []).forEach((r: any) => { attMap[r.schedule_id] = r as TeacherAttRow; });
+
+    const schedules = (schedData ?? []) as unknown as ScheduleRow[];
+    const merged: MergedRow[] = [];
+
+    for (const s of schedules) {
+      const sessDate = getSessionDate(s.week_start, s.hari);
+      if (!hasPassed(sessDate, s.jam_selesai)) continue; // skip sessions not yet finished
+      merged.push({ schedule: s, att: attMap[s.id] ?? null, session_date: sessDate });
+    }
+
+    // Sort by session_date then jam_mulai
+    merged.sort((a, b) => {
+      if (a.session_date !== b.session_date) return a.session_date < b.session_date ? -1 : 1;
+      return a.schedule.jam_mulai < b.schedule.jam_mulai ? -1 : 1;
+    });
+
+    setRows(merged);
     setLoading(false);
   }, [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -142,16 +204,24 @@ function RealisasiSesiTab() {
   }, []);
 
   const displayed = rows.filter(r => {
-    if (filterGroup && r.schedule?.groups?.id !== filterGroup) return false;
-    if (filterStatus === 'belum' && r.sesi_status) return false;
-    if (filterStatus && filterStatus !== 'belum' && r.sesi_status !== filterStatus) return false;
+    if (filterGroup && r.schedule.groups?.id !== filterGroup) return false;
+    const isBelum = r.att === null || r.att.sesi_status === null;
+    if (filterStatus === 'belum' && !isBelum) return false;
+    if (filterStatus && filterStatus !== 'belum' && r.att?.sesi_status !== filterStatus) return false;
     return true;
   });
 
+  const belumCount = rows.filter(r => r.att === null || r.att.sesi_status === null).length;
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <WeekPicker weekStart={weekStart} onChange={setWeekStart} />
+        {!loading && belumCount > 0 && (
+          <span style={{ padding: '3px 10px', borderRadius: '6px', fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, background: '#FEF9C3', color: '#A16207' }}>
+            {belumCount} belum diisi
+          </span>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
@@ -172,7 +242,9 @@ function RealisasiSesiTab() {
         <p style={muted}>Memuat...</p>
       ) : displayed.length === 0 ? (
         <div style={emptyCard}>
-          <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0 }}>Tidak ada data realisasi untuk filter ini.</p>
+          <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0 }}>
+            {rows.length === 0 ? 'Tidak ada sesi yang sudah selesai minggu ini.' : 'Tidak ada data untuk filter ini.'}
+          </p>
         </div>
       ) : (
         <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'auto' }}>
@@ -190,38 +262,41 @@ function RealisasiSesiTab() {
             </thead>
             <tbody>
               {displayed.map((r, i) => {
-                const sched = r.schedule;
-                const statusInfo = r.sesi_status ? SESI_STATUS_LABELS[r.sesi_status] : null;
+                const s = r.schedule;
+                const isBelum = r.att === null || r.att.sesi_status === null;
+                const statusInfo = r.att?.sesi_status ? SESI_STATUS_LABELS[r.att.sesi_status] : null;
                 const dateObj = new Date(r.session_date + 'T00:00:00');
                 const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
 
                 return (
-                  <tr key={r.id} style={{ borderBottom: i < displayed.length - 1 ? '1px solid #F3F2EE' : 'none' }}>
-                    <td style={td}><span style={{ color: '#0D0D0D', fontWeight: 500 }}>{dateLabel}</span></td>
+                  <tr key={`${s.id}-${r.session_date}`} style={{ borderBottom: i < displayed.length - 1 ? '1px solid #F3F2EE' : 'none' }}>
+                    <td style={td}><span style={{ color: '#0D0D0D', fontWeight: 500, whiteSpace: 'nowrap' }}>{dateLabel}</span></td>
                     <td style={td}>
-                      {sched?.groups && <GrupBadge kode={sched.groups.kode} warna={sched.groups.warna} warna_text={sched.groups.warna_text} />}
+                      {s.groups && <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />}
                     </td>
                     <td style={td}>
-                      <div style={{ color: '#0D0D0D' }}>{sched?.materi ?? '-'}</div>
-                      <div style={{ color: '#888', fontSize: '0.78rem' }}>
-                        {sched ? `${fmtTime(sched.jam_mulai)}-${fmtTime(sched.jam_selesai)} WITA` : ''}
+                      <div style={{ color: '#0D0D0D' }}>{s.materi ?? '-'}</div>
+                      <div style={{ color: '#888', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                        {fmtTime(s.jam_mulai)}-{fmtTime(s.jam_selesai)} WITA
                       </div>
                     </td>
-                    <td style={td}><span style={{ color: '#0D0D0D' }}>{sched?.teacher?.display_name ?? '-'}</span></td>
+                    <td style={td}><span style={{ color: '#0D0D0D' }}>{s.teacher?.display_name ?? '-'}</span></td>
                     <td style={td}>
-                      {statusInfo ? (
+                      {isBelum ? (
+                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: '#FEF9C3', color: '#A16207' }}>
+                          BELUM DIISI
+                        </span>
+                      ) : statusInfo ? (
                         <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: statusInfo.bg, color: statusInfo.color }}>
                           {statusInfo.label}
                         </span>
-                      ) : (
-                        <span style={{ color: '#999', fontSize: '0.8rem' }}>--</span>
-                      )}
+                      ) : null}
                     </td>
                     <td style={td}>
                       <div style={{ color: '#555', maxWidth: '160px' }}>
-                        {r.catatan_admin && <div style={{ color: '#0F1F6B', fontSize: '0.78rem', marginBottom: '2px' }}>Admin: {r.catatan_admin}</div>}
-                        {r.note && <div style={{ color: '#666', fontSize: '0.78rem' }}>Pengajar: {r.note}</div>}
-                        {!r.catatan_admin && !r.note && <span style={{ color: '#999' }}>-</span>}
+                        {r.att?.catatan_admin && <div style={{ color: '#0F1F6B', fontSize: '0.78rem', marginBottom: '2px' }}>Admin: {r.att.catatan_admin}</div>}
+                        {r.att?.note && <div style={{ color: '#666', fontSize: '0.78rem' }}>Pengajar: {r.att.note}</div>}
+                        {!r.att?.catatan_admin && !r.att?.note && <span style={{ color: '#999' }}>-</span>}
                       </div>
                     </td>
                     <td style={td}>
@@ -246,23 +321,41 @@ function RealisasiSesiTab() {
   );
 }
 
-function RealisasiEditModal({ row, onClose, onSaved }: { row: RealisasiRow; onClose: () => void; onSaved: () => void }) {
-  const sched = row.schedule;
+function RealisasiEditModal({ row, onClose, onSaved }: { row: MergedRow; onClose: () => void; onSaved: () => void }) {
+  const s = row.schedule;
   const dateObj = new Date(row.session_date + 'T00:00:00');
   const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
 
-  const [sesiStatus, setSesiStatus] = useState<string>(row.sesi_status ?? 'terlaksana');
-  const [catatanAdmin, setCatatanAdmin] = useState(row.catatan_admin ?? '');
+  const [sesiStatus, setSesiStatus] = useState<string>(row.att?.sesi_status ?? 'terlaksana');
+  const [catatanAdmin, setCatatanAdmin] = useState(row.att?.catatan_admin ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   async function handleSave() {
     setSaving(true);
     setError('');
-    const { error: err } = await supabase
-      .from('attendance')
-      .update({ sesi_status: sesiStatus, catatan_admin: catatanAdmin || null })
-      .eq('id', row.id);
+
+    let err;
+    if (row.att) {
+      // Update existing teacher row
+      ({ error: err } = await supabase
+        .from('attendance')
+        .update({ sesi_status: sesiStatus, catatan_admin: catatanAdmin || null })
+        .eq('id', row.att.id));
+    } else {
+      // No teacher row yet -- admin creates one on behalf
+      ({ error: err } = await supabase
+        .from('attendance')
+        .insert({
+          schedule_id: s.id,
+          session_date: row.session_date,
+          person_id: s.teacher.id,
+          person_role: 'teacher',
+          sesi_status: sesiStatus,
+          catatan_admin: catatanAdmin || null,
+        }));
+    }
+
     setSaving(false);
     if (err) { setError(err.message); return; }
     onSaved();
@@ -271,10 +364,27 @@ function RealisasiEditModal({ row, onClose, onSaved }: { row: RealisasiRow; onCl
   return (
     <Overlay>
       <div style={modalStyle}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', margin: '0 0 4px' }}>Edit Realisasi</h2>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: '#666', margin: '0 0 20px' }}>
-          {dateLabel} &mdash; {sched?.groups?.nama} &mdash; {sched?.materi ?? 'tanpa materi'}
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', margin: 0 }}>Edit Realisasi</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#666' }}>&#x2715;</button>
+        </div>
+
+        <div style={{ background: '#F9F9F7', borderRadius: '8px', padding: '10px 14px', marginBottom: '20px' }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', fontWeight: 600 }}>
+            {s.groups?.nama} &mdash; {s.materi ?? 'tanpa materi'}
+          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666' }}>
+            {dateLabel} &mdash; {fmtTime(s.jam_mulai)}&ndash;{fmtTime(s.jam_selesai)} WITA
+          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666' }}>
+            Pengajar: {s.teacher?.display_name}
+          </div>
+          {row.att?.checkin_at && (
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#047857', marginTop: '4px' }}>
+              Pengajar hadir: {fmtTimestampWITA(row.att.checkin_at, 'time')}
+            </div>
+          )}
+        </div>
 
         <div style={{ marginBottom: '16px' }}>
           <label style={labelStyle}>Status Sesi</label>
@@ -297,9 +407,9 @@ function RealisasiEditModal({ row, onClose, onSaved }: { row: RealisasiRow; onCl
             rows={3}
             style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
           />
-          {row.note && (
+          {row.att?.note && (
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666', margin: '4px 0 0' }}>
-              Catatan pengajar: {row.note}
+              Catatan pengajar: {row.att.note}
             </p>
           )}
         </div>
@@ -402,7 +512,6 @@ function AbsensiSiswaTab() {
         </select>
       </div>
 
-      {/* Summary chips */}
       {!loading && displayed.length > 0 && (
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
           {[
@@ -548,9 +657,7 @@ function StudentAttEditModal({ row, onClose, onSaved }: { row: StudentAttRow; on
           <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D', marginBottom: '2px' }}>
             {row.person?.display_name}
           </div>
-          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>
-            {dateLabel}
-          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{dateLabel}</div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>
             {row.schedule?.groups?.nama} &mdash; {row.schedule?.materi ?? 'tanpa materi'}
           </div>
