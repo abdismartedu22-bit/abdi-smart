@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { toISODate, fmtTime } from '../../lib/dates';
+import { toISODate, fmtTime, fmtTimestampWITA } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 
 type SessionToday = {
@@ -253,6 +253,9 @@ function SessionCard({
           <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
             {fmtTime(session.jam_mulai)} &ndash; {fmtTime(session.jam_selesai)}
           </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888', marginTop: '1px' }}>
+            {fmtTime(session.jam_mulai)}&ndash;{fmtTime(session.jam_selesai)} WITA
+          </div>
           {session.materi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>{session.materi}</div>}
           {session.lokasi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '1px' }}>@ {session.lokasi}</div>}
         </div>
@@ -266,7 +269,7 @@ function SessionCard({
           <p style={sectionLabel}>Kehadiran Saya</p>
           {teacherRow?.status === 'hadir' ? (
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#047857', margin: 0, fontWeight: 500 }}>
-              Sudah hadir {teacherRow.checkin_at ? `(${new Date(teacherRow.checkin_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })})` : ''}
+              Sudah hadir {teacherRow.checkin_at ? `(${fmtTimestampWITA(teacherRow.checkin_at, 'time')})` : ''}
             </p>
           ) : (
             !locked && (
@@ -326,7 +329,7 @@ function SessionCard({
                         </span>
                         {sAtt?.checkin_at && (
                           <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666', marginLeft: '6px' }}>
-                            check-in {new Date(sAtt.checkin_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+                            check-in {fmtTimestampWITA(sAtt.checkin_at, 'time')}
                           </span>
                         )}
                       </div>

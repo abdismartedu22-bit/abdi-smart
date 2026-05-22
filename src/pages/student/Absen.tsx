@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { toISODate, fmtTime } from '../../lib/dates';
+import { toISODate, fmtTime, fmtTimestampWITA, nowWITAMinutes } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 
 type SessionToday = {
@@ -23,15 +23,37 @@ type AttendanceRow = {
   locked_at: string | null;
 };
 
+type HistoryRow = {
+  id: string;
+  session_date: string;
+  status: string | null;
+  note: string | null;
+  checkin_at: string | null;
+  locked_at: string | null;
+  schedule: {
+    hari: string;
+    jam_mulai: string;
+    jam_selesai: string;
+    materi: string | null;
+    groups: { nama: string; kode: string; warna: string; warna_text: string };
+  } | null;
+};
+
+// Uses WITA (UTC+8) for strict timezone-correct comparison
 function getWindowState(jamMulai: string): 'before' | 'open' | 'closed' {
-  const now = new Date();
   const [h, m] = jamMulai.split(':').map(Number);
-  const start = new Date(now);
-  start.setHours(h, m, 0, 0);
-  const end = new Date(start.getTime() + 15 * 60 * 1000);
-  if (now < start) return 'before';
-  if (now <= end) return 'open';
+  const startMin = h * 60 + m;
+  const endMin = startMin + 15;
+  const nowMin = nowWITAMinutes();
+  if (nowMin < startMin) return 'before';
+  if (nowMin <= endMin) return 'open';
   return 'closed';
+}
+
+function addMinutes(timeStr: string, mins: number): string {
+  const [h, m] = timeStr.split(':').map(Number);
+  const total = h * 60 + m + mins;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 function getTodayHari(): string {
@@ -46,13 +68,50 @@ function getWeekStartISO(): string {
   return toISODate(d);
 }
 
-function addMinutes(timeStr: string, mins: number): string {
-  const [h, m] = timeStr.split(':').map(Number);
-  const total = h * 60 + m + mins;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
-}
+type Tab = 'hari-ini' | 'riwayat';
 
 export default function StudentAbsen() {
+  const [tab, setTab] = useState<Tab>('hari-ini');
+
+  return (
+    <div>
+      <div style={{ marginBottom: '20px' }}>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 4px', color: '#0D0D0D' }}>
+          Absensi
+        </h1>
+      </div>
+
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '2px solid #E2E1DC' }}>
+        {(['hari-ini', 'riwayat'] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              padding: '8px 20px',
+              fontFamily: 'var(--font-body)',
+              fontWeight: 600,
+              fontSize: '0.88rem',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: tab === t ? '#0F1F6B' : '#666',
+              borderBottom: tab === t ? '2px solid #0F1F6B' : '2px solid transparent',
+              marginBottom: '-2px',
+            }}
+          >
+            {t === 'hari-ini' ? 'Hari Ini' : 'Riwayat'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'hari-ini' ? <HariIniTab /> : <RiwayatTab />}
+    </div>
+  );
+}
+
+/* ===================== HARI INI TAB ===================== */
+
+function HariIniTab() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<SessionToday[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>({});
@@ -136,12 +195,10 @@ export default function StudentAbsen() {
 
   return (
     <div>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 4px', color: '#0D0D0D' }}>
-          Absen Hari Ini
-        </h1>
-        <p style={mutedStyle}>{dateLabel}</p>
-      </div>
+      <p style={mutedStyle}>{dateLabel}</p>
+      <p style={{ ...mutedStyle, fontSize: '0.75rem', color: '#999', marginBottom: '16px' }}>
+        Semua waktu dalam WITA (UTC+8)
+      </p>
 
       {loading ? (
         <p style={mutedStyle}>Memuat...</p>
@@ -162,7 +219,7 @@ export default function StudentAbsen() {
                   <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
-                      {fmtTime(s.jam_mulai)} &ndash; {fmtTime(s.jam_selesai)}
+                      {fmtTime(s.jam_mulai)} &ndash; {fmtTime(s.jam_selesai)} WITA
                     </div>
                     {s.materi && (
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>
@@ -177,18 +234,28 @@ export default function StudentAbsen() {
 
                 <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '12px' }}>
                   <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666', margin: '0 0 10px' }}>
-                    Waktu absen: {fmtTime(s.jam_mulai)} &ndash; {endWindow}
+                    Waktu absen: {fmtTime(s.jam_mulai)} &ndash; {endWindow} WITA
                   </p>
 
                   {att?.locked_at ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>Absen dikunci</span>
                       {att.status && <span style={finalBadge(att.status)}>{att.status.toUpperCase()}</span>}
+                      {att.checkin_at && (
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>
+                          check-in {fmtTimestampWITA(att.checkin_at, 'time')}
+                        </span>
+                      )}
                     </div>
                   ) : att?.checkin_at ? (
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#047857', margin: 0, fontWeight: 500 }}>
-                      Absen tercatat &mdash; menunggu verifikasi pengajar
-                    </p>
+                    <div>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#047857', margin: '0 0 4px', fontWeight: 500 }}>
+                        Absen tercatat &mdash; menunggu verifikasi pengajar
+                      </p>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', margin: 0 }}>
+                        check-in {fmtTimestampWITA(att.checkin_at, 'time')}
+                      </p>
+                    </div>
                   ) : winState === 'before' ? (
                     <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: 0 }}>
                       Belum waktunya absen
@@ -216,6 +283,135 @@ export default function StudentAbsen() {
   );
 }
 
+/* ===================== RIWAYAT TAB ===================== */
+
+function RiwayatTab() {
+  const { user } = useAuth();
+  const [rows, setRows] = useState<HistoryRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    load();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function load() {
+    setLoading(true);
+    const { data } = await supabase
+      .from('attendance')
+      .select(`
+        id, session_date, status, note, checkin_at, locked_at,
+        schedule:schedules!schedule_id(
+          hari, jam_mulai, jam_selesai, materi,
+          groups!group_id(nama, kode, warna, warna_text)
+        )
+      `)
+      .eq('person_id', user!.id)
+      .eq('person_role', 'student')
+      .not('status', 'is', null)
+      .order('session_date', { ascending: false })
+      .limit(100);
+    setRows((data ?? []) as unknown as HistoryRow[]);
+    setLoading(false);
+  }
+
+  const statusInfo = (status: string | null) => {
+    if (!status) return null;
+    const map: Record<string, { label: string; bg: string; color: string }> = {
+      hadir: { label: 'HADIR', bg: '#DCFCE7', color: '#15803D' },
+      absen: { label: 'ABSEN', bg: '#FEE2E2', color: '#DC0A1E' },
+      izin:  { label: 'IZIN',  bg: '#FEF9C3', color: '#A16207' },
+    };
+    return map[status] ?? null;
+  };
+
+  const total = rows.length;
+  const hadir = rows.filter(r => r.status === 'hadir').length;
+  const pct = total > 0 ? Math.round((hadir / total) * 100) : null;
+
+  return (
+    <div>
+      {loading ? (
+        <p style={mutedStyle}>Memuat...</p>
+      ) : rows.length === 0 ? (
+        <div style={emptyCard}>
+          <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0 }}>Belum ada riwayat absensi.</p>
+        </div>
+      ) : (
+        <>
+          {/* Summary */}
+          <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '14px 18px', marginBottom: '16px', display: 'flex', gap: '24px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+              <span style={{ color: '#22C55E', fontWeight: 700 }}>{hadir}</span>
+              <span style={{ color: '#666' }}> hadir</span>
+            </div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+              <span style={{ color: '#DC0A1E', fontWeight: 700 }}>{rows.filter(r => r.status === 'absen').length}</span>
+              <span style={{ color: '#666' }}> absen</span>
+            </div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+              <span style={{ color: '#A16207', fontWeight: 700 }}>{rows.filter(r => r.status === 'izin').length}</span>
+              <span style={{ color: '#666' }}> izin</span>
+            </div>
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', marginLeft: 'auto' }}>
+              <span style={{ fontWeight: 700, color: '#0D0D0D' }}>{pct}%</span>
+              <span style={{ color: '#666' }}> kehadiran ({total} sesi)</span>
+            </div>
+          </div>
+
+          {/* History list */}
+          <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden' }}>
+            {rows.map((r, i) => {
+              const s = r.schedule;
+              const si = statusInfo(r.status);
+              const dateObj = new Date(r.session_date + 'T00:00:00');
+              const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+
+              return (
+                <div key={r.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+                  borderBottom: i < rows.length - 1 ? '1px solid #F3F2EE' : 'none',
+                  flexWrap: 'wrap',
+                }}>
+                  {s?.groups && (
+                    <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem', color: '#0D0D0D' }}>
+                      {dateLabel}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
+                      {s ? `${fmtTime(s.jam_mulai)}–${fmtTime(s.jam_selesai)} WITA` : ''}
+                      {s?.materi ? ` · ${s.materi}` : ''}
+                    </div>
+                    {r.checkin_at && (
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#999' }}>
+                        check-in {fmtTimestampWITA(r.checkin_at, 'time')}
+                      </div>
+                    )}
+                    {r.note && (
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#A16207', marginTop: '1px' }}>
+                        {r.note}
+                      </div>
+                    )}
+                  </div>
+                  {si && (
+                    <span style={{ padding: '3px 10px', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, background: si.bg, color: si.color, flexShrink: 0 }}>
+                      {si.label}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ===================== SHARED STYLES ===================== */
+
 function finalBadge(status: string): React.CSSProperties {
   const colors: Record<string, { bg: string; color: string }> = {
     hadir: { bg: '#DCFCE7', color: '#15803D' },
@@ -239,7 +435,7 @@ const emptyCard: React.CSSProperties = {
   display: 'flex', alignItems: 'center', justifyContent: 'center',
 };
 
-const mutedStyle: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: 0 };
+const mutedStyle: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: '0 0 8px' };
 
 const btnAbsen: React.CSSProperties = {
   padding: '10px 28px', background: '#0F1F6B', color: '#fff',

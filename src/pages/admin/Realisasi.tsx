@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getWeekStart, toISODate, fmtTime } from '../../lib/dates';
+import { getWeekStart, toISODate, fmtTime, fmtTimestampWITA } from '../../lib/dates';
 import { addDays } from 'date-fns';
 import WeekPicker from '../../components/shared/WeekPicker';
 import GrupBadge from '../../components/shared/GrupBadge';
@@ -27,13 +27,78 @@ type RealisasiRow = {
   };
 };
 
+type StudentAttRow = {
+  id: string;
+  session_date: string;
+  status: string | null;
+  note: string | null;
+  catatan_admin: string | null;
+  checkin_at: string | null;
+  locked_at: string | null;
+  person: { id: string; display_name: string };
+  schedule: {
+    hari: string;
+    jam_mulai: string;
+    jam_selesai: string;
+    materi: string | null;
+    groups: Group;
+  };
+};
+
 const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
   terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
   tidak:      { label: 'TIDAK',      bg: '#FEE2E2', color: '#DC0A1E' },
   ditunda:    { label: 'DITUNDA',    bg: '#FEF9C3', color: '#A16207' },
 };
 
+const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
+  hadir: { label: 'HADIR', bg: '#DCFCE7', color: '#15803D' },
+  absen: { label: 'ABSEN', bg: '#FEE2E2', color: '#DC0A1E' },
+  izin:  { label: 'IZIN',  bg: '#FEF9C3', color: '#A16207' },
+};
+
+type Tab = 'realisasi' | 'siswa';
+
 export default function AdminRealisasi() {
+  const [tab, setTab] = useState<Tab>('realisasi');
+
+  return (
+    <div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 20px', color: '#0D0D0D' }}>
+        Realisasi &amp; Absensi
+      </h1>
+
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '2px solid #E2E1DC' }}>
+        {(['realisasi', 'siswa'] as Tab[]).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{
+              padding: '8px 20px',
+              fontFamily: 'var(--font-body)',
+              fontWeight: 600,
+              fontSize: '0.88rem',
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              color: tab === t ? '#0F1F6B' : '#666',
+              borderBottom: tab === t ? '2px solid #0F1F6B' : '2px solid transparent',
+              marginBottom: '-2px',
+            }}
+          >
+            {t === 'realisasi' ? 'Realisasi Sesi' : 'Absensi Siswa'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'realisasi' ? <RealisasiSesiTab /> : <AbsensiSiswaTab />}
+    </div>
+  );
+}
+
+/* ===================== REALISASI SESI TAB (existing) ===================== */
+
+function RealisasiSesiTab() {
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
   const [rows, setRows] = useState<RealisasiRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -85,30 +150,16 @@ export default function AdminRealisasi() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: 0, color: '#0D0D0D' }}>
-          Realisasi Sesi
-        </h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <WeekPicker weekStart={weekStart} onChange={setWeekStart} />
       </div>
 
-      {/* Filters */}
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <select
-          value={filterGroup}
-          onChange={e => setFilterGroup(e.target.value)}
-          style={selectStyle}
-        >
+        <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} style={selectStyle}>
           <option value="">Semua Grup</option>
-          {groups.map(g => (
-            <option key={g.id} value={g.id}>[{g.kode}] {g.nama}</option>
-          ))}
+          {groups.map(g => <option key={g.id} value={g.id}>[{g.kode}] {g.nama}</option>)}
         </select>
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          style={selectStyle}
-        >
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="">Semua Status</option>
           <option value="terlaksana">Terlaksana</option>
           <option value="tidak">Tidak</option>
@@ -121,12 +172,10 @@ export default function AdminRealisasi() {
         <p style={muted}>Memuat...</p>
       ) : displayed.length === 0 ? (
         <div style={emptyCard}>
-          <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0 }}>
-            Tidak ada data realisasi untuk filter ini.
-          </p>
+          <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0 }}>Tidak ada data realisasi untuk filter ini.</p>
         </div>
       ) : (
-        <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden' }}>
+        <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ background: '#F9F9F7', borderBottom: '1px solid #E2E1DC' }}>
@@ -150,13 +199,13 @@ export default function AdminRealisasi() {
                   <tr key={r.id} style={{ borderBottom: i < displayed.length - 1 ? '1px solid #F3F2EE' : 'none' }}>
                     <td style={td}><span style={{ color: '#0D0D0D', fontWeight: 500 }}>{dateLabel}</span></td>
                     <td style={td}>
-                      {sched?.groups && (
-                        <GrupBadge kode={sched.groups.kode} warna={sched.groups.warna} warna_text={sched.groups.warna_text} />
-                      )}
+                      {sched?.groups && <GrupBadge kode={sched.groups.kode} warna={sched.groups.warna} warna_text={sched.groups.warna_text} />}
                     </td>
                     <td style={td}>
                       <div style={{ color: '#0D0D0D' }}>{sched?.materi ?? '-'}</div>
-                      <div style={{ color: '#888', fontSize: '0.78rem' }}>{sched ? `${fmtTime(sched.jam_mulai)}-${fmtTime(sched.jam_selesai)}` : ''}</div>
+                      <div style={{ color: '#888', fontSize: '0.78rem' }}>
+                        {sched ? `${fmtTime(sched.jam_mulai)}-${fmtTime(sched.jam_selesai)} WITA` : ''}
+                      </div>
                     </td>
                     <td style={td}><span style={{ color: '#0D0D0D' }}>{sched?.teacher?.display_name ?? '-'}</span></td>
                     <td style={td}>
@@ -187,7 +236,7 @@ export default function AdminRealisasi() {
       )}
 
       {editing && (
-        <EditModal
+        <RealisasiEditModal
           row={editing}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); load(); }}
@@ -197,7 +246,7 @@ export default function AdminRealisasi() {
   );
 }
 
-function EditModal({ row, onClose, onSaved }: { row: RealisasiRow; onClose: () => void; onSaved: () => void }) {
+function RealisasiEditModal({ row, onClose, onSaved }: { row: RealisasiRow; onClose: () => void; onSaved: () => void }) {
   const sched = row.schedule;
   const dateObj = new Date(row.session_date + 'T00:00:00');
   const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -220,8 +269,8 @@ function EditModal({ row, onClose, onSaved }: { row: RealisasiRow; onClose: () =
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
-      <div style={{ background: '#fff', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '440px', margin: '16px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+    <Overlay>
+      <div style={modalStyle}>
         <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', margin: '0 0 4px' }}>Edit Realisasi</h2>
         <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: '#666', margin: '0 0 20px' }}>
           {dateLabel} &mdash; {sched?.groups?.nama} &mdash; {sched?.materi ?? 'tanpa materi'}
@@ -262,6 +311,318 @@ function EditModal({ row, onClose, onSaved }: { row: RealisasiRow; onClose: () =
           <button onClick={handleSave} disabled={saving} style={btnPrimary}>{saving ? 'Menyimpan...' : 'Simpan'}</button>
         </div>
       </div>
+    </Overlay>
+  );
+}
+
+/* ===================== ABSENSI SISWA TAB ===================== */
+
+function AbsensiSiswaTab() {
+  const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
+  const [rows, setRows] = useState<StudentAttRow[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterGroup, setFilterGroup] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [search, setSearch] = useState('');
+  const [editing, setEditing] = useState<StudentAttRow | null>(null);
+
+  const weekEnd = addDays(weekStart, 6);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const startISO = toISODate(weekStart);
+    const endISO = toISODate(weekEnd);
+
+    const { data } = await supabase
+      .from('attendance')
+      .select(`
+        id, session_date, status, note, catatan_admin, checkin_at, locked_at,
+        person:profiles!person_id(id, display_name),
+        schedule:schedules!schedule_id(
+          hari, jam_mulai, jam_selesai, materi,
+          groups!group_id(id, nama, kode, warna, warna_text)
+        )
+      `)
+      .eq('person_role', 'student')
+      .gte('session_date', startISO)
+      .lte('session_date', endISO)
+      .order('session_date');
+
+    setRows((data ?? []) as unknown as StudentAttRow[]);
+    setLoading(false);
+  }, [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    supabase.from('groups').select('id, nama, kode, warna, warna_text').order('nama').then(({ data }) => {
+      setGroups((data ?? []) as Group[]);
+    });
+  }, []);
+
+  const displayed = rows.filter(r => {
+    if (filterGroup && r.schedule?.groups?.id !== filterGroup) return false;
+    if (filterStatus === 'belum' && r.status) return false;
+    if (filterStatus && filterStatus !== 'belum' && r.status !== filterStatus) return false;
+    if (search && !r.person?.display_name?.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  const summary = {
+    hadir: displayed.filter(r => r.status === 'hadir').length,
+    absen: displayed.filter(r => r.status === 'absen').length,
+    izin:  displayed.filter(r => r.status === 'izin').length,
+    belum: displayed.filter(r => !r.status).length,
+  };
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+        <WeekPicker weekStart={weekStart} onChange={setWeekStart} />
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Cari nama siswa..."
+          style={{ ...selectStyle, minWidth: '180px' }}
+        />
+        <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} style={selectStyle}>
+          <option value="">Semua Grup</option>
+          {groups.map(g => <option key={g.id} value={g.id}>[{g.kode}] {g.nama}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
+          <option value="">Semua Status</option>
+          <option value="hadir">Hadir</option>
+          <option value="absen">Absen</option>
+          <option value="izin">Izin</option>
+          <option value="belum">Belum dikunci</option>
+        </select>
+      </div>
+
+      {/* Summary chips */}
+      {!loading && displayed.length > 0 && (
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+          {[
+            { label: 'hadir', val: summary.hadir, color: '#15803D', bg: '#DCFCE7' },
+            { label: 'absen', val: summary.absen, color: '#DC0A1E', bg: '#FEE2E2' },
+            { label: 'izin',  val: summary.izin,  color: '#A16207', bg: '#FEF9C3' },
+            { label: 'belum dikunci', val: summary.belum, color: '#666', bg: '#F3F2EE' },
+          ].map(c => (
+            <span key={c.label} style={{ padding: '3px 10px', borderRadius: '6px', fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, background: c.bg, color: c.color }}>
+              {c.val} {c.label}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <p style={muted}>Memuat...</p>
+      ) : displayed.length === 0 ? (
+        <div style={emptyCard}>
+          <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0 }}>Tidak ada data absensi untuk filter ini.</p>
+        </div>
+      ) : (
+        <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ background: '#F9F9F7', borderBottom: '1px solid #E2E1DC' }}>
+                <th style={th}>Tanggal</th>
+                <th style={th}>Siswa</th>
+                <th style={th}>Grup</th>
+                <th style={th}>Sesi</th>
+                <th style={th}>Check-in</th>
+                <th style={th}>Status</th>
+                <th style={th}>Catatan</th>
+                <th style={th}>Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayed.map((r, i) => {
+                const si = r.status ? STATUS_LABELS[r.status] : null;
+                const dateObj = new Date(r.session_date + 'T00:00:00');
+                const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short' });
+
+                return (
+                  <tr key={r.id} style={{ borderBottom: i < displayed.length - 1 ? '1px solid #F3F2EE' : 'none' }}>
+                    <td style={td}>
+                      <span style={{ color: '#0D0D0D', fontWeight: 500, whiteSpace: 'nowrap' }}>{dateLabel}</span>
+                    </td>
+                    <td style={td}>
+                      <span style={{ color: '#0D0D0D', fontWeight: 600 }}>{r.person?.display_name ?? '-'}</span>
+                    </td>
+                    <td style={td}>
+                      {r.schedule?.groups && (
+                        <GrupBadge kode={r.schedule.groups.kode} warna={r.schedule.groups.warna} warna_text={r.schedule.groups.warna_text} />
+                      )}
+                    </td>
+                    <td style={td}>
+                      <div style={{ color: '#0D0D0D' }}>{r.schedule?.materi ?? '-'}</div>
+                      <div style={{ color: '#888', fontSize: '0.78rem', whiteSpace: 'nowrap' }}>
+                        {r.schedule ? `${fmtTime(r.schedule.jam_mulai)}-${fmtTime(r.schedule.jam_selesai)} WITA` : ''}
+                      </div>
+                    </td>
+                    <td style={td}>
+                      {r.checkin_at ? (
+                        <span style={{ color: '#047857', fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                          {fmtTimestampWITA(r.checkin_at, 'time')}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.82rem' }}>-</span>
+                      )}
+                    </td>
+                    <td style={td}>
+                      {si ? (
+                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: si.bg, color: si.color, whiteSpace: 'nowrap' }}>
+                          {si.label}
+                        </span>
+                      ) : (
+                        <span style={{ color: '#999', fontSize: '0.8rem' }}>
+                          {r.locked_at ? 'terkunci' : '--'}
+                        </span>
+                      )}
+                    </td>
+                    <td style={td}>
+                      <div style={{ maxWidth: '140px' }}>
+                        {r.catatan_admin && <div style={{ color: '#0F1F6B', fontSize: '0.75rem', marginBottom: '1px' }}>Admin: {r.catatan_admin}</div>}
+                        {r.note && <div style={{ color: '#666', fontSize: '0.75rem' }}>{r.note}</div>}
+                        {!r.catatan_admin && !r.note && <span style={{ color: '#999' }}>-</span>}
+                      </div>
+                    </td>
+                    <td style={td}>
+                      <button onClick={() => setEditing(r)} style={editBtn}>Edit</button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {editing && (
+        <StudentAttEditModal
+          row={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); load(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+function StudentAttEditModal({ row, onClose, onSaved }: { row: StudentAttRow; onClose: () => void; onSaved: () => void }) {
+  const dateObj = new Date(row.session_date + 'T00:00:00');
+  const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  const [status, setStatus] = useState<string>(row.status ?? 'absen');
+  const [note, setNote] = useState(row.note ?? '');
+  const [catatanAdmin, setCatatanAdmin] = useState(row.catatan_admin ?? '');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  async function handleSave(e: FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    const { error: err } = await supabase
+      .from('attendance')
+      .update({ status, note: note || null, catatan_admin: catatanAdmin || null })
+      .eq('id', row.id);
+    setSaving(false);
+    if (err) { setError(err.message); return; }
+    onSaved();
+  }
+
+  return (
+    <Overlay>
+      <div style={modalStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', margin: 0 }}>Edit Absensi Siswa</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: '#666' }}>&#x2715;</button>
+        </div>
+
+        <div style={{ background: '#F9F9F7', borderRadius: '8px', padding: '12px 14px', marginBottom: '20px' }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D', marginBottom: '2px' }}>
+            {row.person?.display_name}
+          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>
+            {dateLabel}
+          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>
+            {row.schedule?.groups?.nama} &mdash; {row.schedule?.materi ?? 'tanpa materi'}
+          </div>
+          {row.checkin_at && (
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#047857', marginTop: '4px' }}>
+              Check-in: {fmtTimestampWITA(row.checkin_at, 'full')}
+            </div>
+          )}
+          {row.locked_at && (
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginTop: '2px' }}>
+              Dikunci: {fmtTimestampWITA(row.locked_at, 'full')}
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div>
+            <label style={labelStyle}>Status Kehadiran</label>
+            <div style={{ display: 'flex', gap: '14px', marginTop: '6px', flexWrap: 'wrap' }}>
+              {(['hadir', 'absen', 'izin'] as const).map(s => {
+                const si = STATUS_LABELS[s];
+                return (
+                  <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
+                    <input type="radio" name="status" value={s} checked={status === s} onChange={() => setStatus(s)} />
+                    <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: status === s ? si.bg : '#F3F2EE', color: status === s ? si.color : '#888' }}>
+                      {si.label}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Catatan Siswa / Alasan</label>
+            <input
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              placeholder="misal: sakit, izin keluarga..."
+              style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Catatan Admin (override)</label>
+            <textarea
+              value={catatanAdmin}
+              onChange={e => setCatatanAdmin(e.target.value)}
+              placeholder="Catatan tambahan dari admin (opsional)"
+              rows={2}
+              style={{ ...inputStyle, width: '100%', boxSizing: 'border-box', resize: 'vertical' }}
+            />
+          </div>
+
+          {error && <p style={{ fontFamily: 'var(--font-body)', color: '#DC0A1E', fontSize: '0.85rem', margin: 0 }}>{error}</p>}
+
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button type="button" onClick={onClose} style={btnSecondary}>Batal</button>
+            <button type="submit" disabled={saving} style={btnPrimary}>{saving ? 'Menyimpan...' : 'Simpan'}</button>
+          </div>
+        </form>
+      </div>
+    </Overlay>
+  );
+}
+
+/* ===================== SHARED UI ===================== */
+
+function Overlay({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' }}>
+      {children}
     </div>
   );
 }
@@ -274,8 +635,9 @@ const emptyCard: React.CSSProperties = {
 const th: React.CSSProperties = {
   padding: '10px 14px', textAlign: 'left', fontFamily: 'var(--font-body)',
   fontSize: '0.75rem', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.04em',
+  whiteSpace: 'nowrap',
 };
-const td: React.CSSProperties = { padding: '12px 14px', verticalAlign: 'middle' };
+const td: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'middle' };
 const selectStyle: React.CSSProperties = {
   padding: '8px 12px', border: '1.5px solid #E2E1DC', borderRadius: '8px',
   fontFamily: 'var(--font-body)', fontSize: '0.85rem', background: '#fff', color: '#0D0D0D', outline: 'none', cursor: 'pointer',
@@ -293,6 +655,11 @@ const inputStyle: React.CSSProperties = {
   padding: '9px 11px', border: '1.5px solid #E2E1DC', borderRadius: '8px',
   fontFamily: 'var(--font-body)', fontSize: '0.88rem', outline: 'none',
   color: '#0D0D0D', background: '#fff',
+};
+const modalStyle: React.CSSProperties = {
+  background: '#fff', borderRadius: '12px', padding: '28px 32px',
+  width: '100%', maxWidth: '480px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+  maxHeight: '90vh', overflowY: 'auto',
 };
 const btnPrimary: React.CSSProperties = {
   flex: 1, padding: '10px', background: '#0F1F6B', color: '#fff',
