@@ -308,25 +308,23 @@ function RiwayatTab() {
       `)
       .eq('person_id', user!.id)
       .eq('person_role', 'student')
-      .not('status', 'is', null)
       .order('session_date', { ascending: false })
       .limit(100);
     setRows((data ?? []) as unknown as HistoryRow[]);
     setLoading(false);
   }
 
-  const statusInfo = (status: string | null) => {
-    if (!status) return null;
-    const map: Record<string, { label: string; bg: string; color: string }> = {
-      hadir: { label: 'HADIR', bg: '#DCFCE7', color: '#15803D' },
-      absen: { label: 'ABSEN', bg: '#FEE2E2', color: '#DC0A1E' },
-      izin:  { label: 'IZIN',  bg: '#FEF9C3', color: '#A16207' },
-    };
-    return map[status] ?? null;
+  const statusInfo = (row: HistoryRow): { label: string; bg: string; color: string } => {
+    if (row.status === 'hadir') return { label: 'HADIR', bg: '#DCFCE7', color: '#15803D' };
+    if (row.status === 'absen') return { label: 'ABSEN', bg: '#FEE2E2', color: '#DC0A1E' };
+    if (row.status === 'izin')  return { label: 'IZIN',  bg: '#FEF9C3', color: '#A16207' };
+    if (row.checkin_at)         return { label: 'MENUNGGU', bg: '#EFF6FF', color: '#1D4ED8' };
+    return { label: 'BELUM', bg: '#F3F2EE', color: '#888' };
   };
 
-  const total = rows.length;
-  const hadir = rows.filter(r => r.status === 'hadir').length;
+  const finalized = rows.filter(r => r.status !== null);
+  const total = finalized.length;
+  const hadir = finalized.filter(r => r.status === 'hadir').length;
   const pct = total > 0 ? Math.round((hadir / total) * 100) : null;
 
   return (
@@ -346,16 +344,22 @@ function RiwayatTab() {
               <span style={{ color: '#666' }}> hadir</span>
             </div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-              <span style={{ color: '#DC0A1E', fontWeight: 700 }}>{rows.filter(r => r.status === 'absen').length}</span>
+              <span style={{ color: '#DC0A1E', fontWeight: 700 }}>{finalized.filter(r => r.status === 'absen').length}</span>
               <span style={{ color: '#666' }}> absen</span>
             </div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-              <span style={{ color: '#A16207', fontWeight: 700 }}>{rows.filter(r => r.status === 'izin').length}</span>
+              <span style={{ color: '#A16207', fontWeight: 700 }}>{finalized.filter(r => r.status === 'izin').length}</span>
               <span style={{ color: '#666' }}> izin</span>
             </div>
+            {rows.filter(r => !r.status).length > 0 && (
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+                <span style={{ color: '#1D4ED8', fontWeight: 700 }}>{rows.filter(r => !r.status).length}</span>
+                <span style={{ color: '#666' }}> menunggu</span>
+              </div>
+            )}
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', marginLeft: 'auto' }}>
-              <span style={{ fontWeight: 700, color: '#0D0D0D' }}>{pct}%</span>
-              <span style={{ color: '#666' }}> kehadiran ({total} sesi)</span>
+              <span style={{ fontWeight: 700, color: '#0D0D0D' }}>{pct !== null ? `${pct}%` : '-'}</span>
+              <span style={{ color: '#666' }}> hadir ({total} sesi dikunci)</span>
             </div>
           </div>
 
@@ -363,7 +367,7 @@ function RiwayatTab() {
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden' }}>
             {rows.map((r, i) => {
               const s = r.schedule;
-              const si = statusInfo(r.status);
+              const si = statusInfo(r);
               const dateObj = new Date(r.session_date + 'T00:00:00');
               const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -395,11 +399,9 @@ function RiwayatTab() {
                       </div>
                     )}
                   </div>
-                  {si && (
-                    <span style={{ padding: '3px 10px', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, background: si.bg, color: si.color, flexShrink: 0 }}>
-                      {si.label}
-                    </span>
-                  )}
+                  <span style={{ padding: '3px 10px', borderRadius: '4px', fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, background: si.bg, color: si.color, flexShrink: 0 }}>
+                    {si.label}
+                  </span>
                 </div>
               );
             })}
