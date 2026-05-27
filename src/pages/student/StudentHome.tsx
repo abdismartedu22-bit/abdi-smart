@@ -5,7 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 
-type Group = { id: string; nama: string; kode: string; warna: string; warna_text: string };
+type Group = { id: string; nama: string; kode: string; warna: string; warna_text: string; paket: number | null };
 type NextSession = {
   id: string;
   hari: string;
@@ -13,8 +13,9 @@ type NextSession = {
   jam_selesai: string;
   materi: string | null;
   lokasi: string | null;
+  ruangan: string | null;
   week_start: string;
-  groups: Group;
+  groups: Omit<Group, 'paket'>;
   teacher: { display_name: string } | null;
 };
 type TOResult = {
@@ -35,11 +36,6 @@ const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
   'TKA-Saintek': [{ key: 'mat', label: 'Mat' }, { key: 'fis', label: 'Fis' }, { key: 'kim', label: 'Kim' }, { key: 'bio', label: 'Bio' }],
   'TKA-Soshum': [{ key: 'geo', label: 'Geo' }, { key: 'sej', label: 'Sej' }, { key: 'sos', label: 'Sos' }, { key: 'eko', label: 'Eko' }],
 };
-const TYPE_STYLE: Record<string, { bg: string; color: string }> = {
-  SNBT: { bg: '#EFF6FF', color: '#1D4ED8' },
-  'TKA-Saintek': { bg: '#F0FDF4', color: '#15803D' },
-  'TKA-Soshum': { bg: '#FFF7ED', color: '#C2410C' },
-};
 
 function getWeekStartISO(date = new Date()): string {
   const d = new Date(date);
@@ -57,6 +53,7 @@ export default function StudentHome() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [groups, setGroups] = useState<Group[]>([]);
+  const [realisasiByGroup, setRealisasiByGroup] = useState<Record<string, number>>({});
   const [nextSession, setNextSession] = useState<NextSession | null>(null);
   const [attendance, setAttendance] = useState({ hadir: 0, absen: 0, izin: 0 });
   const [latestTO, setLatestTO] = useState<TOResult | null>(null);
@@ -75,10 +72,9 @@ export default function StudentHome() {
     const todayHari = getTodayHari();
     const todayHariIdx = HARI_ORDER.indexOf(todayHari);
 
-    // Get student's groups
     const { data: sg } = await supabase
       .from('student_groups')
-      .select('group_id, groups!group_id(id, nama, kode, warna, warna_text)')
+      .select('group_id, groups!group_id(id, nama, kode, warna, warna_text, paket)')
       .eq('student_id', user!.id);
 
     const myGroups = ((sg ?? []).map(r => r.groups)).filter(Boolean) as unknown as Group[];
@@ -86,11 +82,40 @@ export default function StudentHome() {
     const groupIds = myGroups.map(g => g.id);
 
     if (groupIds.length > 0) {
-      // Next session: look in current week and next week
+      // Compute realisasi per group
+      const { data: allSchedules } = await supabase
+        .from('schedules')
+        .select('id, group_id')
+        .in('group_id', groupIds);
+
+      const schedsByGroup: Record<string, string[]> = {};
+      (allSchedules ?? []).forEach((s: any) => {
+        if (!schedsByGroup[s.group_id]) schedsByGroup[s.group_id] = [];
+        schedsByGroup[s.group_id].push(s.id);
+      });
+
+      const allSchedIds = (allSchedules ?? []).map((s: any) => s.id);
+      if (allSchedIds.length > 0) {
+        const { data: realisedRows } = await supabase
+          .from('attendance')
+          .select('schedule_id')
+          .eq('person_role', 'teacher')
+          .eq('sesi_status', 'terlaksana')
+          .in('schedule_id', allSchedIds);
+
+        const realisedSet = new Set((realisedRows ?? []).map((r: any) => r.schedule_id));
+        const rMap: Record<string, number> = {};
+        Object.entries(schedsByGroup).forEach(([gid, sids]) => {
+          rMap[gid] = sids.filter(sid => realisedSet.has(sid)).length;
+        });
+        setRealisasiByGroup(rMap);
+      }
+
+      // Next session
       const weekStart = getWeekStartISO();
       const { data: schedWeek } = await supabase
         .from('schedules')
-        .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(display_name)')
+        .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(display_name)')
         .in('group_id', groupIds)
         .eq('week_start', weekStart)
         .order('jam_mulai');
@@ -98,11 +123,9 @@ export default function StudentHome() {
       const weekSessions = (schedWeek ?? []) as unknown as NextSession[];
       let found: NextSession | null = null;
 
-      // Find next session from today onwards (same week)
       for (const hari of HARI_ORDER.slice(todayHariIdx)) {
         const sessions = weekSessions.filter(s => s.hari === hari);
         if (sessions.length > 0) {
-          // If today, pick the earliest session that hasn't ended yet (or just first)
           if (hari === todayHari) {
             const now = new Date();
             const upcoming = sessions.find(s => {
@@ -118,12 +141,11 @@ export default function StudentHome() {
         }
       }
 
-      // If nothing found this week, try next week
       if (!found) {
-        const nextWeekStart = getWeekStartISO(new Date(new Date().setDate(new Date().getDate() + 7)));
+        const nextWeekStart = getWeekStartISO(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
         const { data: nextWeekData } = await supabase
           .from('schedules')
-          .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(display_name)')
+          .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(display_name)')
           .in('group_id', groupIds)
           .eq('week_start', nextWeekStart)
           .order('jam_mulai')
@@ -169,81 +191,122 @@ export default function StudentHome() {
   const pctHadir = totalSessions > 0 ? Math.round((attendance.hadir / totalSessions) * 100) : null;
   const monthName = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
+  const firstName = profile?.display_name?.split(' ')[0] ?? '...';
+
   return (
-    <div>
+    <div style={{ maxWidth: '640px' }}>
+
+      {/* Header */}
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 4px', color: '#0D0D0D' }}>
-          Hai, {profile?.display_name ?? '...'}!
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', margin: '0 0 4px', color: '#0D0D0D', letterSpacing: '-0.02em' }}>
+          Hai, {firstName}!
         </h1>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: 0 }}>
-          {dateLabel}
-          {groups.length > 0 && (
-            <span> &mdash; {groups.map(g => `${g.nama} (${g.kode})`).join(', ')}</span>
-          )}
-        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#888', margin: 0 }}>{dateLabel}</p>
       </div>
 
       {loading ? (
         <p style={muted}>Memuat...</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-          {/* Attendance Card */}
+          {/* Paket card per group */}
+          {groups.map(g => {
+            const realisasi = realisasiByGroup[g.id] ?? 0;
+            const paket = g.paket ?? 0;
+            const sisa = paket - realisasi;
+            const pct = paket > 0 ? Math.round((realisasi / paket) * 100) : 0;
+            return (
+              <div key={g.id} style={card}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <GrupBadge kode={g.kode} warna={g.warna} warna_text={g.warna_text} />
+                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{g.nama}</span>
+                  <span style={chip}>Paket Bimbel</span>
+                </div>
+                {paket > 0 ? (
+                  <>
+                    <div style={{ position: 'relative', height: '8px', background: '#F3F2EE', borderRadius: '99px', marginBottom: '12px', overflow: 'hidden' }}>
+                      <div style={{
+                        position: 'absolute', left: 0, top: 0, height: '100%',
+                        width: `${pct}%`,
+                        background: 'linear-gradient(90deg, #FFE500, #22C55E)',
+                        borderRadius: '99px',
+                        transition: 'width 0.6s ease',
+                      }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
+                      <StatPill label="Dibeli" value={paket} color="#0F1F6B" />
+                      <StatPill label="Terlaksana" value={realisasi} color="#22C55E" />
+                      <StatPill label="Sisa" value={sisa} color={sisa < 10 ? '#DC0A1E' : '#A16207'} highlight={sisa < 10} />
+                    </div>
+                  </>
+                ) : (
+                  <p style={muted}>Paket belum diatur.</p>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Kehadiran */}
           <div style={card}>
-            <p style={sectionLabel}>Kehadiran &mdash; {monthName}</p>
+            <p style={label}>Kehadiran &mdash; {monthName}</p>
             {totalSessions === 0 ? (
-              <p style={muted}>Belum ada sesi tercatat bulan ini.</p>
+              <p style={muted}>Belum ada sesi bulan ini.</p>
             ) : (
               <>
-                <div style={{ position: 'relative', height: '8px', background: '#F3F2EE', borderRadius: '99px', marginBottom: '10px', overflow: 'hidden' }}>
-                  <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${pctHadir}%`, background: '#22C55E', borderRadius: '99px', transition: 'width 0.5s ease' }} />
+                <div style={{ position: 'relative', height: '8px', background: '#F3F2EE', borderRadius: '99px', marginBottom: '12px', overflow: 'hidden' }}>
+                  <div style={{
+                    position: 'absolute', left: 0, top: 0, height: '100%',
+                    width: `${pctHadir}%`,
+                    background: pctHadir! >= 80 ? 'linear-gradient(90deg, #22C55E, #16A34A)' : 'linear-gradient(90deg, #FFE500, #EAB308)',
+                    borderRadius: '99px',
+                    transition: 'width 0.6s ease',
+                  }} />
                 </div>
-                <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
-                    <span style={{ color: '#22C55E', fontWeight: 700 }}>{attendance.hadir}</span>
-                    <span style={{ color: '#666' }}> hadir</span>
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
-                    <span style={{ color: '#DC0A1E', fontWeight: 700 }}>{attendance.absen}</span>
-                    <span style={{ color: '#666' }}> absen</span>
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
-                    <span style={{ color: '#A16207', fontWeight: 700 }}>{attendance.izin}</span>
-                    <span style={{ color: '#666' }}> izin</span>
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', marginLeft: 'auto' }}>
-                    <span style={{ fontWeight: 700, color: '#0D0D0D' }}>{pctHadir}%</span>
-                    <span style={{ color: '#666' }}> hadir</span>
+                <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <StatPill label="Hadir" value={attendance.hadir} color="#15803D" />
+                  <StatPill label="Absen" value={attendance.absen} color="#DC0A1E" />
+                  <StatPill label="Izin" value={attendance.izin} color="#A16207" />
+                  <div style={{ marginLeft: 'auto', fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: '#0F1F6B', lineHeight: 1 }}>
+                    {pctHadir}%
                   </div>
                 </div>
               </>
             )}
           </div>
 
-          {/* Next Session Card */}
-          <div style={card}>
-            <p style={sectionLabel}>Sesi Berikutnya</p>
+          {/* Sesi Berikutnya */}
+          <div style={{ ...card, borderLeft: nextSession ? '3px solid #FFE500' : '3px solid #E2E1DC' }}>
+            <p style={label}>Sesi Berikutnya</p>
             {nextSession ? (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                <GrupBadge kode={nextSession.groups.kode} warna={nextSession.groups.warna} warna_text={nextSession.groups.warna_text} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
-                    {nextSession.hari} &mdash; {fmtTime(nextSession.jam_mulai)}&ndash;{fmtTime(nextSession.jam_selesai)}
-                  </div>
-                  {nextSession.materi && (
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>
-                      {nextSession.materi}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <GrupBadge kode={nextSession.groups.kode} warna={nextSession.groups.warna} warna_text={nextSession.groups.warna_text} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem', color: '#0D0D0D' }}>
+                      {nextSession.hari} &nbsp;{fmtTime(nextSession.jam_mulai)}&ndash;{fmtTime(nextSession.jam_selesai)}
                     </div>
-                  )}
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>
-                    {nextSession.teacher?.display_name ?? 'Pengajar'}{nextSession.lokasi ? ` @ ${nextSession.lokasi}` : ''}
+                    {nextSession.materi && (
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#444', marginTop: '2px' }}>
+                        {nextSession.materi}
+                      </div>
+                    )}
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888', marginTop: '4px' }}>
+                      {nextSession.teacher?.display_name ?? 'Pengajar'}
+                      {nextSession.lokasi ? ` @ ${nextSession.lokasi}` : ''}
+                      {nextSession.ruangan ? ` / ${nextSession.ruangan}` : ''}
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={() => navigate('/student/absen')}
-                  style={{ padding: '7px 14px', background: '#0F1F6B', color: '#fff', border: 'none', borderRadius: '7px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.82rem', flexShrink: 0 }}
+                  style={{
+                    marginTop: '14px', width: '100%', padding: '10px', background: '#0F1F6B', color: '#fff',
+                    border: 'none', borderRadius: '10px', cursor: 'pointer',
+                    fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem',
+                    letterSpacing: '0.01em',
+                  }}
                 >
-                  Absen
+                  Absen Sekarang
                 </button>
               </div>
             ) : (
@@ -251,54 +314,69 @@ export default function StudentHome() {
             )}
           </div>
 
-          {/* Latest TO Card */}
+          {/* TO Terakhir */}
           <div style={card}>
-            <p style={sectionLabel}>Hasil TO Terakhir</p>
+            <p style={label}>Hasil TO Terakhir</p>
             {latestTO ? (
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                    <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem', color: '#0D0D0D', marginBottom: '2px' }}>
                       {latestTO.nama_to}
-                    </span>
-                    {(() => {
-                      const s = TYPE_STYLE[latestTO.type] ?? { bg: '#F3F2EE', color: '#666' };
-                      return (
-                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: s.bg, color: s.color }}>
-                          {TYPE_LABELS[latestTO.type] ?? latestTO.type}
-                        </span>
-                      );
-                    })()}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginBottom: '10px' }}>
+                      {new Date(latestTO.tanggal_to + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      &nbsp;&middot;&nbsp;{TYPE_LABELS[latestTO.type] ?? latestTO.type}
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      {(TYPE_FIELDS[latestTO.type] ?? []).map(f => (
+                        <div key={f.key} style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>
+                          <span style={{ color: '#aaa' }}>{f.label}&nbsp;</span>
+                          <span style={{ color: '#0D0D0D', fontWeight: 700 }}>{latestTO.scores?.[f.key] ?? '-'}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666', margin: '0 0 8px' }}>
-                    {new Date(latestTO.tanggal_to + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </p>
-                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                    {(TYPE_FIELDS[latestTO.type] ?? []).map(f => (
-                      <div key={f.key} style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem' }}>
-                        <span style={{ color: '#888' }}>{f.label} </span>
-                        <span style={{ color: '#0D0D0D', fontWeight: 600 }}>{latestTO.scores?.[f.key] ?? '-'}</span>
-                      </div>
-                    ))}
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0F1F6B', lineHeight: 1 }}>
+                      {typeof latestTO.total_score === 'number' ? latestTO.total_score.toFixed(0) : '-'}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#aaa' }}>total</div>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: '#0F1F6B', lineHeight: 1 }}>
-                    {typeof latestTO.total_score === 'number' ? latestTO.total_score.toFixed(2) : '-'}
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', marginTop: '2px' }}>total</div>
-                  <button
-                    onClick={() => navigate('/student/hasil-to')}
-                    style={{ marginTop: '8px', padding: '5px 12px', background: 'none', color: '#0F1F6B', border: '1px solid #0F1F6B', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' }}
-                  >
-                    Lihat Semua
-                  </button>
-                </div>
+                <button
+                  onClick={() => navigate('/student/hasil-to')}
+                  style={{
+                    marginTop: '12px', width: '100%', padding: '9px', background: '#F3F2EE', color: '#0F1F6B',
+                    border: 'none', borderRadius: '8px', cursor: 'pointer',
+                    fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.85rem',
+                  }}
+                >
+                  Lihat Semua Hasil TO
+                </button>
               </div>
             ) : (
               <p style={muted}>Belum ada hasil TO.</p>
             )}
           </div>
+
+          {/* Buka TO Abdi Smart */}
+          <a
+            href="https://abdismart.web.id/toAS/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '14px 18px', background: '#0F1F6B', color: '#FFE500',
+              borderRadius: '12px', textDecoration: 'none', gap: '10px',
+            }}
+          >
+            <div>
+              <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem' }}>Kerjakan TO Online</div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(255,229,0,0.7)', marginTop: '2px' }}>abdismart.web.id</div>
+            </div>
+            <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>&#8599;</span>
+          </a>
 
         </div>
       )}
@@ -306,11 +384,21 @@ export default function StudentHome() {
   );
 }
 
-const muted: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: 0 };
-const card: React.CSSProperties = {
-  background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '18px',
-};
-const sectionLabel: React.CSSProperties = {
-  fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 700, color: '#666',
-  margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em',
-};
+function StatPill({ label, value, color, highlight }: { label: string; value: number; color: string; highlight?: boolean }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      padding: '8px 16px', marginRight: '4px', marginBottom: '4px',
+      background: highlight ? '#FFF0F1' : '#F9F9F7',
+      borderRadius: '10px', minWidth: '72px',
+    }}>
+      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color, lineHeight: 1, fontWeight: 900 }}>{value}</span>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#888', marginTop: '2px' }}>{label}</span>
+    </div>
+  );
+}
+
+const muted: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#888', margin: 0 };
+const card: React.CSSProperties = { background: '#fff', border: '1px solid #EBEBEB', borderRadius: '14px', padding: '18px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' };
+const label: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 700, color: '#aaa', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em' };
+const chip: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: '#0F1F6B', background: '#EEF1FF', padding: '2px 8px', borderRadius: '99px', letterSpacing: '0.04em' };

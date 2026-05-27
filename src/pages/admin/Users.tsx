@@ -14,6 +14,7 @@ type UserRow = {
 
 type Tab = 'users' | 'groups';
 
+const PAGE_SIZE = 10;
 const ROLES: Role[] = ['admin', 'staff', 'teacher', 'student'];
 const roleLabel: Record<Role, string> = { admin: 'Admin', staff: 'Staff', teacher: 'Pengajar', student: 'Siswa' };
 const roleBg: Record<Role, string> = { admin: '#DC0A1E', staff: '#0F1F6B', teacher: '#047857', student: '#4B5563' };
@@ -76,6 +77,7 @@ function UsersTab() {
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
@@ -105,17 +107,24 @@ function UsersTab() {
     return true;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  // Reset to page 1 when filter changes
+  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
+  const handleRole = (v: Role | 'all') => { setRoleFilter(v); setPage(1); };
+
   return (
     <>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => handleSearch(e.target.value)}
             placeholder="Cari username / nama..."
             style={inputStyle}
           />
-          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value as Role | 'all')} style={selectStyle}>
+          <select value={roleFilter} onChange={e => handleRole(e.target.value as Role | 'all')} style={selectStyle}>
             <option value="all">Semua role</option>
             {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
           </select>
@@ -128,35 +137,38 @@ function UsersTab() {
       ) : filtered.length === 0 ? (
         <p style={mutedStyle}>Tidak ada user.</p>
       ) : (
-        <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden' }}>
-          {filtered.map((u, i) => (
-            <div key={u.id} style={{
-              display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
-              borderBottom: i < filtered.length - 1 ? '1px solid #E2E1DC' : 'none',
-              flexWrap: 'wrap',
-            }}>
-              <span style={{ ...roleBadgeStyle, background: roleBg[u.role] }}>{roleLabel[u.role]}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>
-                  {u.display_name}
+        <>
+          <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
+            {paginated.map((u, i) => (
+              <div key={u.id} style={{
+                display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+                borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none',
+                flexWrap: 'wrap',
+              }}>
+                <span style={{ ...roleBadgeStyle, background: roleBg[u.role] }}>{roleLabel[u.role]}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>
+                    {u.display_name}
+                  </div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
+                    @{u.username}
+                    {u.role === 'student' && u.groups && u.groups.length > 0 && (
+                      <span> &middot; {u.groups.map(g => g.groups?.kode ?? '').join(', ')}</span>
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
-                  @{u.username}
-                  {u.role === 'student' && u.groups && u.groups.length > 0 && (
-                    <span> &middot; {u.groups.map(g => g.groups?.kode ?? '').join(', ')}</span>
+                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                  <button onClick={() => { setEditTarget(u); setShowEdit(true); }} style={btnEdit}>Edit</button>
+                  <button onClick={() => { setResetTarget(u); setShowResetPw(true); }} style={btnGhost}>Reset PW</button>
+                  {u.id !== me?.id && (
+                    <button onClick={() => setDeleteTarget(u)} style={{ ...btnGhost, color: '#DC0A1E', borderColor: '#FECACA' }}>Hapus</button>
                   )}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                <button onClick={() => { setEditTarget(u); setShowEdit(true); }} style={btnEdit}>Edit</button>
-                <button onClick={() => { setResetTarget(u); setShowResetPw(true); }} style={btnGhost}>Reset PW</button>
-                {u.id !== me?.id && (
-                  <button onClick={() => setDeleteTarget(u)} style={{ ...btnGhost, color: '#DC0A1E', borderColor: '#FECACA' }}>Hapus</button>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+          <PaginationBar page={page} totalPages={totalPages} total={filtered.length} onChange={setPage} />
+        </>
       )}
 
       {showCreate && (
@@ -462,6 +474,7 @@ function GroupsTab() {
   const [deleteTarget, setDeleteTarget] = useState<Group | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
+  const [page, setPage] = useState(1);
 
   useEffect(() => { load(); }, []);
 
@@ -483,6 +496,9 @@ function GroupsTab() {
     load();
   }
 
+  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const paginated = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
@@ -494,26 +510,41 @@ function GroupsTab() {
       ) : groups.length === 0 ? (
         <p style={mutedStyle}>Belum ada grup.</p>
       ) : (
-        <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden' }}>
-          {groups.map((g, i) => (
-            <div key={g.id} style={{
-              display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
-              borderBottom: i < groups.length - 1 ? '1px solid #E2E1DC' : 'none',
-            }}>
-              <span style={{ background: g.warna, color: g.warna_text, padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'var(--font-body)', letterSpacing: '0.05em' }}>
-                {g.kode}
-              </span>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{g.nama}</div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>{g.tipe}</div>
-              </div>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={() => setEditTarget(g)} style={btnEdit}>Edit</button>
-                <button onClick={() => { setDeleteTarget(g); setDeleteError(''); }} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
-              </div>
-            </div>
-          ))}
-        </div>
+        <>
+          <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
+            {paginated.map((g, i) => {
+              const sisa = (g.paket ?? 0) > 0 ? (g.paket! - 0) : null; // realisasi not available here
+              return (
+                <div key={g.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+                  borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none',
+                  flexWrap: 'wrap',
+                }}>
+                  <span style={{ background: g.warna, color: g.warna_text, padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'var(--font-body)', letterSpacing: '0.05em', flexShrink: 0 }}>
+                    {g.kode}
+                  </span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{g.nama}</div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
+                      {g.tipe}
+                      {g.sekolah && <span> &middot; {g.sekolah}</span>}
+                    </div>
+                  </div>
+                  {g.paket != null && g.paket > 0 && (
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0F1F6B', flexShrink: 0 }}>
+                      Paket {g.paket} sesi
+                    </span>
+                  )}
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <button onClick={() => setEditTarget(g)} style={btnEdit}>Edit</button>
+                    <button onClick={() => { setDeleteTarget(g); setDeleteError(''); }} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <PaginationBar page={page} totalPages={totalPages} total={groups.length} onChange={setPage} />
+        </>
       )}
 
       {showCreate && (
@@ -553,6 +584,8 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
     tipe: group?.tipe ?? 'reguler',
     warna: group?.warna ?? WARNA_PRESETS[0].warna,
     warna_text: group?.warna_text ?? WARNA_PRESETS[0].warna_text,
+    paket: group?.paket?.toString() ?? '',
+    sekolah: group?.sekolah ?? '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -562,7 +595,15 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
     setError('');
     if (!form.nama || !form.kode) { setError('Nama dan kode wajib diisi'); return; }
     setSubmitting(true);
-    const payload = { nama: form.nama, kode: form.kode.toUpperCase(), tipe: form.tipe, warna: form.warna, warna_text: form.warna_text };
+    const payload = {
+      nama: form.nama,
+      kode: form.kode.toUpperCase(),
+      tipe: form.tipe,
+      warna: form.warna,
+      warna_text: form.warna_text,
+      paket: form.paket ? parseInt(form.paket) : null,
+      sekolah: form.sekolah || null,
+    };
     const { error: err } = group
       ? await supabase.from('groups').update(payload).eq('id', group.id)
       : await supabase.from('groups').insert({ ...payload, active: true });
@@ -580,10 +621,16 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
       <Modal title={group ? `Edit Grup: ${group.nama}` : 'Tambah Grup'} onClose={onClose}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <FieldRow label="Nama Grup">
-            <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} required placeholder="cth. Grup Merah" />
+            <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} required placeholder="cth. 12IPA26001" />
           </FieldRow>
-          <FieldRow label="Kode (2-3 huruf)">
+          <FieldRow label="Kode (2-4 huruf)">
             <input style={inputStyle} value={form.kode} onChange={e => setForm(f => ({ ...f, kode: e.target.value.toUpperCase().slice(0, 4) }))} required placeholder="cth. GR" maxLength={4} />
+          </FieldRow>
+          <FieldRow label="Sekolah Asal (opsional)">
+            <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
+          </FieldRow>
+          <FieldRow label="Paket (jumlah sesi dibeli)">
+            <input style={inputStyle} type="number" min="0" value={form.paket} onChange={e => setForm(f => ({ ...f, paket: e.target.value }))} placeholder="cth. 80" />
           </FieldRow>
           <FieldRow label="Tipe">
             <div style={{ display: 'flex', gap: '16px' }}>
@@ -628,6 +675,33 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
         </form>
       </Modal>
     </Overlay>
+  );
+}
+
+function PaginationBar({ page, totalPages, total, onChange }: { page: number; totalPages: number; total: number; onChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666' }}>
+        {total} total &middot; Halaman {page} dari {totalPages}
+      </span>
+      <div style={{ display: 'flex', gap: '6px' }}>
+        <button
+          onClick={() => onChange(page - 1)}
+          disabled={page === 1}
+          style={{ ...btnGhost, opacity: page === 1 ? 0.4 : 1 }}
+        >
+          &larr; Prev
+        </button>
+        <button
+          onClick={() => onChange(page + 1)}
+          disabled={page === totalPages}
+          style={{ ...btnGhost, opacity: page === totalPages ? 0.4 : 1 }}
+        >
+          Next &rarr;
+        </button>
+      </div>
+    </div>
   );
 }
 

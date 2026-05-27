@@ -22,6 +22,8 @@ export interface Group {
   warna_text: string;
   tipe: 'reguler' | 'privat';
   active: boolean;
+  paket: number | null;
+  sekolah: string | null;
   created_by: string | null;
   created_at: string;
 }
@@ -42,6 +44,8 @@ export interface Schedule {
   jam_selesai: string;
   materi: string | null;
   lokasi: string | null;
+  ruangan: string | null;
+  pertemuan_ke: number | null;
   week_start: string;
   created_by: string | null;
   created_at: string;
@@ -73,5 +77,14 @@ export interface TryoutResult {
   scores: Record<string, number> | null;
   total_score: number | null;
   entered_by: string | null;
+  created_at: string;
+}
+
+export interface Gedung {
+  id: string;
+  nama: string;
+  ruangan: string;
+  kapasitas: number | null;
+  status: 'aktif' | 'nonaktif';
   created_at: string;
 }

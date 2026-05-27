@@ -136,75 +136,62 @@ export default function AdminRealisasi() {
 
 /* ===================== REALISASI SESI TAB ===================== */
 
+function getWeekStartForDate(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return toISODate(d);
+}
+
+function getHariForDate(date: Date): string {
+  return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()];
+}
+
 function RealisasiSesiTab() {
-  const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
+  const todayISO = toISODate(new Date());
+  const [dateFilter, setDateFilter] = useState(todayISO);
   const [rows, setRows] = useState<MergedRow[]>([]);
-  const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterGroup, setFilterGroup] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [editing, setEditing] = useState<MergedRow | null>(null);
-  const [, setTick] = useState(0);
-
-  // Re-check "has passed" every minute so the list updates without a page refresh
-  useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 60_000);
-    return () => clearInterval(t);
-  }, []);
-
-  const weekEnd = addDays(weekStart, 6);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const startISO = toISODate(weekStart);
-    const endISO = toISODate(weekEnd);
+    const selectedDate = new Date(dateFilter + 'T00:00:00');
+    const weekStartISO = getWeekStartForDate(selectedDate);
+    const hariTarget = getHariForDate(selectedDate);
 
     const [{ data: schedData }, { data: attData }] = await Promise.all([
       supabase
         .from('schedules')
         .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(id,display_name)')
-        .eq('week_start', startISO)
+        .eq('week_start', weekStartISO)
+        .eq('hari', hariTarget)
         .order('jam_mulai'),
       supabase
         .from('attendance')
         .select('id, schedule_id, session_date, sesi_status, note, catatan_admin, locked_at, checkin_at')
         .eq('person_role', 'teacher')
-        .gte('session_date', startISO)
-        .lte('session_date', endISO),
+        .eq('session_date', dateFilter),
     ]);
 
     const attMap: Record<string, TeacherAttRow> = {};
     (attData ?? []).forEach((r: any) => { attMap[r.schedule_id] = r as TeacherAttRow; });
 
     const schedules = (schedData ?? []) as unknown as ScheduleRow[];
-    const merged: MergedRow[] = [];
+    const merged: MergedRow[] = schedules
+      .filter(s => hasPassed(dateFilter, s.jam_selesai))
+      .map(s => ({ schedule: s, att: attMap[s.id] ?? null, session_date: dateFilter }));
 
-    for (const s of schedules) {
-      const sessDate = getSessionDate(s.week_start, s.hari);
-      if (!hasPassed(sessDate, s.jam_selesai)) continue; // skip sessions not yet finished
-      merged.push({ schedule: s, att: attMap[s.id] ?? null, session_date: sessDate });
-    }
-
-    // Sort by session_date then jam_mulai
-    merged.sort((a, b) => {
-      if (a.session_date !== b.session_date) return a.session_date < b.session_date ? -1 : 1;
-      return a.schedule.jam_mulai < b.schedule.jam_mulai ? -1 : 1;
-    });
-
+    merged.sort((a, b) => a.schedule.jam_mulai < b.schedule.jam_mulai ? -1 : 1);
     setRows(merged);
     setLoading(false);
-  }, [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dateFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
-  useEffect(() => {
-    supabase.from('groups').select('id, nama, kode, warna, warna_text').order('nama').then(({ data }) => {
-      setGroups((data ?? []) as Group[]);
-    });
-  }, []);
-
   const displayed = rows.filter(r => {
-    if (filterGroup && r.schedule.groups?.id !== filterGroup) return false;
     const isBelum = r.att === null || r.att.sesi_status === null;
     if (filterStatus === 'belum' && !isBelum) return false;
     if (filterStatus && filterStatus !== 'belum' && r.att?.sesi_status !== filterStatus) return false;
@@ -212,11 +199,22 @@ function RealisasiSesiTab() {
   });
 
   const belumCount = rows.filter(r => r.att === null || r.att.sesi_status === null).length;
+  const dateObj = new Date(dateFilter + 'T00:00:00');
+  const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '16px', flexWrap: 'wrap' }}>
-        <WeekPicker weekStart={weekStart} onChange={setWeekStart} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 600, color: '#2E2E2E' }}>Tanggal</label>
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+            style={selectStyle}
+          />
+        </div>
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>{dateLabel}</span>
         {!loading && belumCount > 0 && (
           <span style={{ padding: '3px 10px', borderRadius: '6px', fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, background: '#FEF9C3', color: '#A16207' }}>
             {belumCount} belum diisi
@@ -225,10 +223,6 @@ function RealisasiSesiTab() {
       </div>
 
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
-        <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} style={selectStyle}>
-          <option value="">Semua Grup</option>
-          {groups.map(g => <option key={g.id} value={g.id}>[{g.kode}] {g.nama}</option>)}
-        </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="">Semua Status</option>
           <option value="terlaksana">Terlaksana</option>

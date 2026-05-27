@@ -22,10 +22,36 @@ type RecentUser = {
   created_at: string;
 };
 
+type GroupSisa = {
+  id: string;
+  nama: string;
+  kode: string;
+  warna: string;
+  warna_text: string;
+  paket: number;
+  realisasi: number;
+};
+
+type InactiveGroup = {
+  id: string;
+  nama: string;
+  kode: string;
+  warna: string;
+  warna_text: string;
+  last_session: string | null;
+};
+
 const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
   terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
   tidak:      { label: 'TIDAK',      bg: '#FEE2E2', color: '#DC0A1E' },
   ditunda:    { label: 'DITUNDA',    bg: '#FEF9C3', color: '#A16207' },
+};
+
+const ROLE_BADGE: Record<string, { label: string; bg: string; color: string }> = {
+  admin:   { label: 'ADMIN', bg: '#DC0A1E', color: '#fff' },
+  staff:   { label: 'STAFF', bg: '#0F1F6B', color: '#fff' },
+  teacher: { label: 'PENGAJAR', bg: '#047857', color: '#fff' },
+  student: { label: 'SISWA', bg: '#4B5563', color: '#fff' },
 };
 
 function getWeekStartISO(): string {
@@ -56,6 +82,8 @@ export default function AdminHome() {
   const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<Record<string, string | null>>({});
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
+  const [sisaAlert, setSisaAlert] = useState<GroupSisa[]>([]);
+  const [inactiveGroups, setInactiveGroups] = useState<InactiveGroup[]>([]);
 
   const dateLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -68,7 +96,9 @@ export default function AdminHome() {
     const weekStart = getWeekStartISO();
     const weekEnd = getWeekEndISO();
 
-    const [sessionsRes, teachersRes, studentsRes, todaySchedRes, recentRes] = await Promise.all([
+    const thirtyDaysAgo = toISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+
+    const [sessionsRes, teachersRes, studentsRes, todaySchedRes, recentRes, groupsRes, inactiveRes] = await Promise.all([
       supabase.from('schedules').select('id', { count: 'exact', head: true }).gte('week_start', weekStart).lte('week_start', weekEnd),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student'),
@@ -77,7 +107,13 @@ export default function AdminHome() {
         .eq('week_start', weekStart)
         .eq('hari', todayHari)
         .order('jam_mulai'),
-      supabase.from('profiles').select('id, display_name, role, created_at').order('created_at', { ascending: false }).limit(5),
+      supabase.from('profiles')
+        .select('id, display_name, role, created_at')
+        .gte('created_at', thirtyDaysAgo)
+        .order('created_at', { ascending: false })
+        .limit(10),
+      supabase.rpc('get_groups_with_realisasi'),
+      supabase.rpc('get_inactive_groups'),
     ]);
 
     setStats({
@@ -89,6 +125,11 @@ export default function AdminHome() {
     const sessions = ((todaySchedRes.data ?? []) as unknown as TodaySession[]);
     setTodaySessions(sessions);
     setRecentUsers((recentRes.data ?? []) as RecentUser[]);
+
+    // Groups with sisa < 10
+    const allGroups = (groupsRes.data ?? []) as GroupSisa[];
+    setSisaAlert(allGroups.filter(g => g.paket != null && g.paket > 0 && (g.paket - g.realisasi) < 10));
+    setInactiveGroups((inactiveRes.data ?? []) as InactiveGroup[]);
 
     if (sessions.length > 0) {
       const { data: att } = await supabase
@@ -106,13 +147,6 @@ export default function AdminHome() {
     setLoading(false);
   }
 
-  const ROLE_BADGE: Record<string, { label: string; bg: string; color: string }> = {
-    admin:   { label: 'ADMIN', bg: '#DC0A1E', color: '#fff' },
-    staff:   { label: 'STAFF', bg: '#0F1F6B', color: '#fff' },
-    teacher: { label: 'PENGAJAR', bg: '#047857', color: '#fff' },
-    student: { label: 'SISWA', bg: '#4B5563', color: '#fff' },
-  };
-
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>
@@ -127,19 +161,61 @@ export default function AdminHome() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-          {/* Stats row */}
+          {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
             {[
               { val: stats.sessions, label: 'Sesi minggu ini' },
               { val: stats.teachers, label: 'Pengajar aktif' },
               { val: stats.students, label: 'Siswa terdaftar' },
             ].map((s, i) => (
-              <div key={i} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px' }}>
+              <div key={i} style={statCard}>
                 <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0F1F6B', lineHeight: 1 }}>{s.val}</div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>{s.label}</div>
               </div>
             ))}
           </div>
+
+          {/* Sisa < 10 alert */}
+          {sisaAlert.length > 0 && (
+            <div style={{ ...card, borderLeft: '3px solid #DC0A1E' }}>
+              <p style={{ ...sectionLabel, color: '#DC0A1E' }}>Sisa Sesi &lt; 10 &mdash; Perlu Follow Up</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {sisaAlert.map(g => {
+                  const sisa = g.paket - g.realisasi;
+                  return (
+                    <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: '#FFF0F1', borderRadius: '7px', flexWrap: 'wrap' }}>
+                      <GrupBadge kode={g.kode} warna={g.warna} warna_text={g.warna_text} />
+                      <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{g.nama}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{g.realisasi}/{g.paket} sesi</span>
+                      <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: '#DC0A1E', color: '#fff' }}>
+                        Sisa {sisa}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Inactive groups */}
+          {inactiveGroups.length > 0 && (
+            <div style={{ ...card, borderLeft: '3px solid #A16207' }}>
+              <p style={{ ...sectionLabel, color: '#A16207' }}>Grup Tidak Les &gt;7 Hari</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {inactiveGroups.map(g => (
+                  <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: '#FEFCE8', borderRadius: '7px', flexWrap: 'wrap' }}>
+                    <GrupBadge kode={g.kode} warna={g.warna} warna_text={g.warna_text} />
+                    <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{g.nama}</span>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#A16207' }}>
+                      {g.last_session
+                        ? `Terakhir ${new Date(g.last_session + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`
+                        : 'Belum pernah les'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Today's sessions */}
           <div style={card}>
@@ -174,27 +250,31 @@ export default function AdminHome() {
             )}
           </div>
 
-          {/* Recent users */}
+          {/* Recent users (last 30 days) */}
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <p style={sectionLabel}>User Terbaru</p>
+              <p style={sectionLabel}>User Terbaru (30 hari)</p>
               <button onClick={() => navigate('/admin/users')} style={linkBtn}>Kelola Users</button>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              {recentUsers.map(u => {
-                const badge = ROLE_BADGE[u.role] ?? { label: u.role, bg: '#666', color: '#fff' };
-                const dateLabel = new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-                return (
-                  <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: '#F9F9F7', borderRadius: '7px', flexWrap: 'wrap' }}>
-                    <span style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: badge.bg, color: badge.color, flexShrink: 0 }}>
-                      {badge.label}
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{u.display_name}</span>
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>{dateLabel}</span>
-                  </div>
-                );
-              })}
-            </div>
+            {recentUsers.length === 0 ? (
+              <p style={muted}>Tidak ada user baru dalam 30 hari terakhir.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {recentUsers.map(u => {
+                  const badge = ROLE_BADGE[u.role] ?? { label: u.role, bg: '#666', color: '#fff' };
+                  const dl = new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+                  return (
+                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: '#F9F9F7', borderRadius: '7px', flexWrap: 'wrap' }}>
+                      <span style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.68rem', fontWeight: 700, background: badge.bg, color: badge.color, flexShrink: 0 }}>
+                        {badge.label}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{u.display_name}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>{dl}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
         </div>
@@ -204,14 +284,7 @@ export default function AdminHome() {
 }
 
 const muted: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: 0 };
-const card: React.CSSProperties = {
-  background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '18px',
-};
-const sectionLabel: React.CSSProperties = {
-  fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 700, color: '#666',
-  margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em',
-};
-const linkBtn: React.CSSProperties = {
-  background: 'none', border: 'none', cursor: 'pointer',
-  fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0F1F6B', fontWeight: 600, padding: 0,
-};
+const statCard: React.CSSProperties = { background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px' };
+const card: React.CSSProperties = { background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '18px' };
+const sectionLabel: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 700, color: '#666', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' };
+const linkBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0F1F6B', fontWeight: 600, padding: 0 };

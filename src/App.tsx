@@ -12,6 +12,7 @@ import AdminHome from './pages/admin/AdminHome';
 import AdminRealisasi from './pages/admin/Realisasi';
 import AdminUsers from './pages/admin/Users';
 import AdminDownload from './pages/admin/Download';
+import AdminGedung from './pages/admin/Gedung';
 
 import StaffHome from './pages/staff/StaffHome';
 import InputJadwal from './pages/staff/InputJadwal';
@@ -49,6 +50,7 @@ export default function App() {
               <Route path="/admin/realisasi" element={<AdminRealisasi />} />
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/download" element={<AdminDownload />} />
+              <Route path="/admin/gedung" element={<AdminGedung />} />
             </Route>
           </Route>
 
@@ -59,6 +61,7 @@ export default function App() {
               <Route path="/staff/jadwal" element={<InputJadwal />} />
               <Route path="/staff/hasil-to" element={<StaffHasilTO />} />
               <Route path="/staff/download" element={<StaffDownload />} />
+              <Route path="/staff/gedung" element={<AdminGedung />} />
             </Route>
           </Route>
 

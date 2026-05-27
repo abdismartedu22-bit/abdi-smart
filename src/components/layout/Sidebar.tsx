@@ -6,6 +6,7 @@ import type { Role } from '../../types';
 interface NavItem {
   label: string;
   href: string;
+  external?: boolean;
 }
 
 const navByRole: Record<Role, NavItem[]> = {
@@ -14,11 +15,13 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Jadwal', href: '/staff/jadwal' },
     { label: 'Realisasi', href: '/admin/realisasi' },
     { label: 'Users', href: '/admin/users' },
+    { label: 'Gedung', href: '/admin/gedung' },
     { label: 'Download', href: '/admin/download' },
   ],
   staff: [
     { label: 'Beranda', href: '/staff' },
     { label: 'Jadwal', href: '/staff/jadwal' },
+    { label: 'Gedung', href: '/staff/gedung' },
     { label: 'Hasil TO', href: '/staff/hasil-to' },
     { label: 'Download', href: '/staff/download' },
   ],
@@ -32,6 +35,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Jadwal', href: '/student/jadwal' },
     { label: 'Absen', href: '/student/absen' },
     { label: 'Hasil TO', href: '/student/hasil-to' },
+    { label: 'Buka TO', href: 'https://abdismart.web.id/toAS/', external: true },
   ],
 };
 
@@ -58,7 +62,7 @@ export default function Sidebar({ open, onClose }: Props) {
 
   const inner = (
     <div style={{ width: '220px', minWidth: '220px', height: '100%', background: '#0F1F6B', display: 'flex', flexDirection: 'column' }}>
-      {/* Logo row + close button */}
+      {/* Logo row */}
       <div style={{
         padding: '0 16px 0 20px',
         borderBottom: '1px solid rgba(255,255,255,0.1)',
@@ -98,34 +102,61 @@ export default function Sidebar({ open, onClose }: Props) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 0', overflowY: 'auto' }}>
-        {items.map((item) => (
-          <NavLink
-            key={item.href}
-            to={item.href}
-            end={['/', '/admin', '/staff', '/teacher', '/student'].includes(item.href)}
-            onClick={!isDesktop ? onClose : undefined}
-            style={({ isActive }) => ({
-              display: 'block',
-              padding: '11px 20px',
-              fontFamily: 'var(--font-body)',
-              fontWeight: isActive ? 700 : 500,
-              fontSize: '0.9rem',
-              color: isActive ? '#FFE500' : 'rgba(255,255,255,0.75)',
-              borderLeft: isActive ? '3px solid #FFE500' : '3px solid transparent',
-              textDecoration: 'none',
-              background: isActive ? 'rgba(255,229,0,0.08)' : 'transparent',
-              transition: 'all 0.15s',
-            })}
-          >
-            {item.label}
-          </NavLink>
-        ))}
+        {items.map((item) => {
+          if (item.external) {
+            return (
+              <a
+                key={item.href}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '11px 20px',
+                  fontFamily: 'var(--font-body)',
+                  fontWeight: 500,
+                  fontSize: '0.9rem',
+                  color: 'rgba(255,255,255,0.75)',
+                  borderLeft: '3px solid transparent',
+                  textDecoration: 'none',
+                  background: 'transparent',
+                }}
+              >
+                {item.label}
+                <span style={{ fontSize: '0.7rem', opacity: 0.5 }}>↗</span>
+              </a>
+            );
+          }
+          return (
+            <NavLink
+              key={item.href}
+              to={item.href}
+              end={['/', '/admin', '/staff', '/teacher', '/student'].includes(item.href)}
+              onClick={!isDesktop ? onClose : undefined}
+              style={({ isActive }) => ({
+                display: 'block',
+                padding: '11px 20px',
+                fontFamily: 'var(--font-body)',
+                fontWeight: isActive ? 700 : 500,
+                fontSize: '0.9rem',
+                color: isActive ? '#FFE500' : 'rgba(255,255,255,0.75)',
+                borderLeft: isActive ? '3px solid #FFE500' : '3px solid transparent',
+                textDecoration: 'none',
+                background: isActive ? 'rgba(255,229,0,0.08)' : 'transparent',
+                transition: 'all 0.15s',
+              })}
+            >
+              {item.label}
+            </NavLink>
+          );
+        })}
       </nav>
     </div>
   );
 
   if (isDesktop) {
-    /* Desktop: part of flex layout, no overlay */
     return (
       <div style={{
         width: open ? '220px' : '0',
@@ -140,7 +171,6 @@ export default function Sidebar({ open, onClose }: Props) {
     );
   }
 
-  /* Mobile: fixed overlay */
   return (
     <>
       {open && (
