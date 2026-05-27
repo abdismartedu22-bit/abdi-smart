@@ -64,11 +64,11 @@ const HARI_IDX: Record<string, number> = {
   Senin: 0, Selasa: 1, Rabu: 2, Kamis: 3, Jumat: 4, Sabtu: 5, Minggu: 6,
 };
 
-function getSessionDate(weekStartISO: string, hari: string): string {
-  const [y, mo, d] = weekStartISO.split('-').map(Number);
-  const date = new Date(y, mo - 1, d + (HARI_IDX[hari] ?? 0));
-  return toISODate(date);
-}
+// function getSessionDate(weekStartISO: string, hari: string): string {
+//   const [y, mo, d] = weekStartISO.split('-').map(Number);
+//   const date = new Date(y, mo - 1, d + (HARI_IDX[hari] ?? 0));
+//   return toISODate(date);
+// }
 
 function todayWITA(): string {
   const now = new Date();

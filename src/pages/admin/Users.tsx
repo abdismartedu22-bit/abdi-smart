@@ -513,7 +513,7 @@ function GroupsTab() {
         <>
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
             {paginated.map((g, i) => {
-              const sisa = (g.paket ?? 0) > 0 ? (g.paket! - 0) : null; // realisasi not available here
+              // const sisa = (g.paket ?? 0) > 0 ? (g.paket! - 0) : null; // realisasi not available here
               return (
                 <div key={g.id} style={{
                   display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
