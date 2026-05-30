@@ -18,7 +18,7 @@ type SessionToday = {
 type AttendanceRow = {
   id: string;
   schedule_id: string;
-  status: 'hadir' | 'absen' | 'izin' | null;
+  status: 'hadir' | 'absen' | 'izin' | 'tidak_hadir' | null;
   checkin_at: string | null;
   locked_at: string | null;
 };
