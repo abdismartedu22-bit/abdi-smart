@@ -1,7 +1,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { HARI, getWeekStart, getWeekDays, toISODate, formatDayLabel, fmtTime } from '../../lib/dates';
+import { HARI, getWeekStart, getWeekDays, toISODate, formatDayLabel, getDateForHari, fmtTime } from '../../lib/dates';
 import WeekPicker from '../../components/shared/WeekPicker';
 import GrupBadge from '../../components/shared/GrupBadge';
 import type { Group } from '../../types';
@@ -201,7 +201,7 @@ export default function InputJadwal() {
           style={{
             padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
             fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.82rem',
-            background: !showAll ? '#0F1F6B' : '#F3F2EE',
+            background: !showAll ? '#0D5C3A' : '#F3F2EE',
             color: !showAll ? '#fff' : '#444',
             border: 'none',
           }}
@@ -213,7 +213,7 @@ export default function InputJadwal() {
           style={{
             padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
             fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.82rem',
-            background: showAll ? '#0F1F6B' : '#F3F2EE',
+            background: showAll ? '#0D5C3A' : '#F3F2EE',
             color: showAll ? '#fff' : '#444',
             border: 'none',
           }}
@@ -298,7 +298,9 @@ export default function InputJadwal() {
 
               <Field label="Hari">
                 <select value={form.hari} onChange={e => setForm(f => ({ ...f, hari: e.target.value }))} style={select}>
-                  {HARI.map(h => <option key={h} value={h}>{h}</option>)}
+                  {HARI.map((h, i) => (
+                    <option key={h} value={h}>{h}, {formatDayLabel(weekDays[i])}</option>
+                  ))}
                 </select>
               </Field>
 
@@ -386,10 +388,10 @@ function SessionCard({ s, isAdmin, onEdit, onDelete }: { s: ScheduleRow; isAdmin
           </span>
         )}
         {s.pertemuan_ke != null && (
-          <span style={{ ...mutedText, color: '#0F1F6B', fontWeight: 600 }}>Sesi ke-{s.pertemuan_ke}</span>
+          <span style={{ ...mutedText, color: '#0D5C3A', fontWeight: 600 }}>Sesi ke-{s.pertemuan_ke}</span>
         )}
         <span style={{ ...mutedText, color: '#bbb', fontSize: '0.75rem', marginLeft: 'auto' }}>
-          {s.hari}
+          {s.hari}, {formatDayLabel(getDateForHari(new Date(s.week_start + 'T00:00:00'), s.hari))}
         </span>
       </div>
       <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
@@ -477,7 +479,7 @@ const modal: React.CSSProperties = { background: '#fff', borderRadius: '12px', p
 const modalTitle: React.CSSProperties = { fontFamily: 'var(--font-display)', fontSize: '1.2rem', margin: '0 0 20px', color: '#0D0D0D' };
 const input: React.CSSProperties = { padding: '9px 11px', border: '1.5px solid #E2E1DC', borderRadius: '7px', fontFamily: 'var(--font-body)', fontSize: '0.88rem', outline: 'none', color: '#0D0D0D', background: '#fff', width: '100%', boxSizing: 'border-box' };
 const select: React.CSSProperties = { ...input };
-const btnPrimary: React.CSSProperties = { flex: 1, padding: '10px 16px', background: '#0F1F6B', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem' };
+const btnPrimary: React.CSSProperties = { flex: 1, padding: '10px 16px', background: '#0D5C3A', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem' };
 const btnSecondary: React.CSSProperties = { flex: 1, padding: '10px 16px', background: '#F3F2EE', color: '#2E2E2E', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem' };
-const btnEdit: React.CSSProperties = { padding: '5px 12px', background: '#E6EAF8', color: '#0F1F6B', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' };
+const btnEdit: React.CSSProperties = { padding: '5px 12px', background: '#E6EAF8', color: '#0D5C3A', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' };
 const btnDelete: React.CSSProperties = { padding: '5px 12px', background: '#FFF0F1', color: '#DC0A1E', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' };

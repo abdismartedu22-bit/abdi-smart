@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
+import DashboardBanner from '../../components/shared/DashboardBanner';
+import BannerManager from '../../components/shared/BannerManager';
 
 type TodaySession = {
   id: string;
@@ -30,6 +32,7 @@ type GroupSisa = {
   warna_text: string;
   paket: number;
   realisasi: number;
+  wa_group_link?: string | null;
 };
 
 type InactiveGroup = {
@@ -49,7 +52,7 @@ const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: str
 
 const ROLE_BADGE: Record<string, { label: string; bg: string; color: string }> = {
   admin:   { label: 'ADMIN', bg: '#DC0A1E', color: '#fff' },
-  staff:   { label: 'STAFF', bg: '#0F1F6B', color: '#fff' },
+  staff:   { label: 'STAFF', bg: '#1E4D8C', color: '#fff' },
   teacher: { label: 'PENGAJAR', bg: '#047857', color: '#fff' },
   student: { label: 'SISWA', bg: '#4B5563', color: '#fff' },
 };
@@ -98,7 +101,7 @@ export default function AdminHome() {
 
     const thirtyDaysAgo = toISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
-    const [sessionsRes, teachersRes, studentsRes, todaySchedRes, recentRes, groupsRes, inactiveRes] = await Promise.all([
+    const [sessionsRes, teachersRes, studentsRes, todaySchedRes, recentRes, groupsRes, inactiveRes, waLinksRes] = await Promise.all([
       supabase.from('schedules').select('id', { count: 'exact', head: true }).gte('week_start', weekStart).lte('week_start', weekEnd),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student'),
@@ -114,6 +117,7 @@ export default function AdminHome() {
         .limit(10),
       supabase.rpc('get_groups_with_realisasi'),
       supabase.rpc('get_inactive_groups'),
+      supabase.from('groups').select('id, wa_group_link'),
     ]);
 
     setStats({
@@ -126,9 +130,15 @@ export default function AdminHome() {
     setTodaySessions(sessions);
     setRecentUsers((recentRes.data ?? []) as RecentUser[]);
 
-    // Groups with sisa < 10
+    // Groups with sisa < 10 -- merge in wa_group_link
+    const waMap: Record<string, string | null> = {};
+    ((waLinksRes.data ?? []) as { id: string; wa_group_link: string | null }[]).forEach(r => { waMap[r.id] = r.wa_group_link; });
     const allGroups = (groupsRes.data ?? []) as GroupSisa[];
-    setSisaAlert(allGroups.filter(g => g.paket != null && g.paket > 0 && (g.paket - g.realisasi) < 10));
+    setSisaAlert(
+      allGroups
+        .filter(g => g.paket != null && g.paket > 0 && (g.paket - g.realisasi) < 10)
+        .map(g => ({ ...g, wa_group_link: waMap[g.id] ?? null }))
+    );
     setInactiveGroups((inactiveRes.data ?? []) as InactiveGroup[]);
 
     if (sessions.length > 0) {
@@ -161,6 +171,9 @@ export default function AdminHome() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
+          <DashboardBanner />
+          <BannerManager />
+
           {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
             {[
@@ -169,7 +182,7 @@ export default function AdminHome() {
               { val: stats.students, label: 'Siswa terdaftar' },
             ].map((s, i) => (
               <div key={i} style={statCard}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0F1F6B', lineHeight: 1 }}>{s.val}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0D5C3A', lineHeight: 1 }}>{s.val}</div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>{s.label}</div>
               </div>
             ))}
@@ -190,6 +203,16 @@ export default function AdminHome() {
                       <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: '#DC0A1E', color: '#fff' }}>
                         Sisa {sisa}
                       </span>
+                      {g.wa_group_link && (
+                        <a
+                          href={g.wa_group_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ padding: '3px 10px', background: '#25D366', color: '#fff', borderRadius: '5px', fontSize: '0.72rem', fontWeight: 700, fontFamily: 'var(--font-body)', textDecoration: 'none', flexShrink: 0 }}
+                        >
+                          WA Grup
+                        </a>
+                      )}
                     </div>
                   );
                 })}
@@ -287,4 +310,4 @@ const muted: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '
 const statCard: React.CSSProperties = { background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px' };
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '18px' };
 const sectionLabel: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 700, color: '#666', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.05em' };
-const linkBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0F1F6B', fontWeight: 600, padding: 0 };
+const linkBtn: React.CSSProperties = { background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0D5C3A', fontWeight: 600, padding: 0 };

@@ -43,7 +43,7 @@ type HistoryRow = {
 function getWindowState(jamMulai: string): 'before' | 'open' | 'closed' {
   const [h, m] = jamMulai.split(':').map(Number);
   const startMin = h * 60 + m;
-  const endMin = startMin + 15;
+  const endMin = startMin + 45;
   const nowMin = nowWITAMinutes();
   if (nowMin < startMin) return 'before';
   if (nowMin <= endMin) return 'open';
@@ -94,8 +94,8 @@ export default function StudentAbsen() {
               border: 'none',
               background: 'none',
               cursor: 'pointer',
-              color: tab === t ? '#0F1F6B' : '#666',
-              borderBottom: tab === t ? '2px solid #0F1F6B' : '2px solid transparent',
+              color: tab === t ? '#0D5C3A' : '#666',
+              borderBottom: tab === t ? '2px solid #0D5C3A' : '2px solid transparent',
               marginBottom: '-2px',
             }}
           >
@@ -211,7 +211,7 @@ function HariIniTab() {
           {sessions.map(s => {
             const att = attendance[s.id];
             const winState = getWindowState(s.jam_mulai);
-            const endWindow = addMinutes(fmtTime(s.jam_mulai), 15);
+            const endWindow = addMinutes(fmtTime(s.jam_mulai), 45);
 
             return (
               <div key={s.id} style={card}>
@@ -240,7 +240,11 @@ function HariIniTab() {
                   {att?.locked_at ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>Absen dikunci</span>
-                      {att.status && <span style={finalBadge(att.status)}>{att.status.toUpperCase()}</span>}
+                      {att.status && (
+                        <span style={finalBadge(att.status)}>
+                          {att.status === 'tidak_hadir' || att.status === 'absen' ? 'TIDAK HADIR' : att.status.toUpperCase()}
+                        </span>
+                      )}
                       {att.checkin_at && (
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>
                           check-in {fmtTimestampWITA(att.checkin_at, 'time')}
@@ -316,7 +320,7 @@ function RiwayatTab() {
 
   const statusInfo = (row: HistoryRow): { label: string; bg: string; color: string } => {
     if (row.status === 'hadir') return { label: 'HADIR', bg: '#DCFCE7', color: '#15803D' };
-    if (row.status === 'absen') return { label: 'ABSEN', bg: '#FEE2E2', color: '#DC0A1E' };
+    if (row.status === 'tidak_hadir' || row.status === 'absen') return { label: 'TIDAK HADIR', bg: '#FEE2E2', color: '#DC0A1E' };
     if (row.status === 'izin')  return { label: 'IZIN',  bg: '#FEF9C3', color: '#A16207' };
     if (row.checkin_at)         return { label: 'MENUNGGU', bg: '#EFF6FF', color: '#1D4ED8' };
     return { label: 'BELUM', bg: '#F3F2EE', color: '#888' };
@@ -325,6 +329,7 @@ function RiwayatTab() {
   const finalized = rows.filter(r => r.status !== null);
   const total = finalized.length;
   const hadir = finalized.filter(r => r.status === 'hadir').length;
+  const tidakHadir = finalized.filter(r => r.status === 'tidak_hadir' || r.status === 'absen' || r.status === 'izin').length;
   const pct = total > 0 ? Math.round((hadir / total) * 100) : null;
 
   return (
@@ -344,12 +349,8 @@ function RiwayatTab() {
               <span style={{ color: '#666' }}> hadir</span>
             </div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-              <span style={{ color: '#DC0A1E', fontWeight: 700 }}>{finalized.filter(r => r.status === 'absen').length}</span>
-              <span style={{ color: '#666' }}> absen</span>
-            </div>
-            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-              <span style={{ color: '#A16207', fontWeight: 700 }}>{finalized.filter(r => r.status === 'izin').length}</span>
-              <span style={{ color: '#666' }}> izin</span>
+              <span style={{ color: '#DC0A1E', fontWeight: 700 }}>{tidakHadir}</span>
+              <span style={{ color: '#666' }}> tidak hadir</span>
             </div>
             {rows.filter(r => !r.status).length > 0 && (
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
@@ -416,9 +417,10 @@ function RiwayatTab() {
 
 function finalBadge(status: string): React.CSSProperties {
   const colors: Record<string, { bg: string; color: string }> = {
-    hadir: { bg: '#DCFCE7', color: '#15803D' },
-    absen: { bg: '#FEE2E2', color: '#DC0A1E' },
-    izin:  { bg: '#FEF9C3', color: '#A16207' },
+    hadir:       { bg: '#DCFCE7', color: '#15803D' },
+    tidak_hadir: { bg: '#FEE2E2', color: '#DC0A1E' },
+    absen:       { bg: '#FEE2E2', color: '#DC0A1E' },
+    izin:        { bg: '#FEF9C3', color: '#A16207' },
   };
   const c = colors[status] ?? { bg: '#F3F2EE', color: '#666' };
   return {
@@ -440,7 +442,7 @@ const emptyCard: React.CSSProperties = {
 const mutedStyle: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: '0 0 8px' };
 
 const btnAbsen: React.CSSProperties = {
-  padding: '10px 28px', background: '#0F1F6B', color: '#fff',
+  padding: '10px 28px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '8px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem',
 };

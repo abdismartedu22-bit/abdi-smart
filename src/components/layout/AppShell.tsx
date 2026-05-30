@@ -8,7 +8,7 @@ import type { Role } from '../../types';
 
 const roleBadge: Record<Role, { label: string; bg: string; color: string }> = {
   admin:   { label: 'ADMIN',    bg: '#DC0A1E', color: '#fff' },
-  staff:   { label: 'STAFF',    bg: '#0F1F6B', color: '#fff' },
+  staff:   { label: 'STAFF',    bg: '#1E4D8C', color: '#fff' },
   teacher: { label: 'PENGAJAR', bg: '#047857', color: '#fff' },
   student: { label: 'SISWA',    bg: '#4B5563', color: '#fff' },
 };
@@ -248,7 +248,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 const btnPrimary: React.CSSProperties = {
-  flex: 1, padding: '10px', background: '#0F1F6B', color: '#fff',
+  flex: 1, padding: '10px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '8px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem',
 };

@@ -33,6 +33,11 @@ export function formatDayLabel(date: Date): string {
   return format(date, 'd MMM', { locale: id });
 }
 
+export function getDateForHari(weekStart: Date, hari: string): Date {
+  const idx = HARI.indexOf(hari as Hari);
+  return addDays(weekStart, idx === -1 ? 0 : idx);
+}
+
 export function fmtTime(t: string): string {
   return t.substring(0, 5);
 }

@@ -69,7 +69,7 @@ export default function Login() {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '28px', gap: '12px' }}>
           <div style={{
             width: '56px', height: '56px',
-            background: '#0F1F6B',
+            background: '#0D5C3A',
             borderRadius: '50%',
             display: 'flex',
             alignItems: 'center',
@@ -79,7 +79,7 @@ export default function Login() {
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '1.1rem', letterSpacing: '-0.02em', color: '#0D0D0D' }}>
-              Abdi Smart Education
+              Abdi Smart
             </div>
             <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', marginTop: '2px' }}>
               Masuk ke Sistem
@@ -144,7 +144,7 @@ export default function Login() {
             disabled={submitting}
             style={{
               padding: '13px',
-              background: submitting ? '#3a57b5' : '#0F1F6B',
+              background: submitting ? '#3a57b5' : '#0D5C3A',
               color: '#fff',
               border: 'none',
               borderRadius: '10px',
@@ -166,7 +166,7 @@ export default function Login() {
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               fontFamily: 'var(--font-body)', fontSize: '0.85rem',
-              color: '#0F1F6B', textDecoration: 'underline',
+              color: '#0D5C3A', textDecoration: 'underline',
             }}
           >
             Lupa password?
@@ -301,7 +301,7 @@ const inputStyle: React.CSSProperties = {
 
 const btnPrimary: React.CSSProperties = {
   flex: 1, padding: '10px 16px',
-  background: '#0F1F6B', color: '#fff',
+  background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '8px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem',
 };

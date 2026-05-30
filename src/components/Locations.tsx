@@ -4,21 +4,21 @@ const branches = [
     name: 'Badak Agung',
     note: 'x Harka Coffee',
     city: 'Denpasar',
-    mapsUrl: 'https://maps.app.goo.gl/PpehkvmsqS5dXqe6A',
+    mapsUrl: 'https://maps.app.goo.gl/xX5pa8A42c3XexKVA',
   },
   {
     code: '02',
     name: 'Trijata',
     note: 'Denpasar Barat',
     city: 'Denpasar',
-    mapsUrl: 'https://maps.app.goo.gl/ARiHnZ2xR79L7UPE6',
+    mapsUrl: 'https://maps.app.goo.gl/y53JviYgZH8fzU2u5',
   },
   {
     code: '03',
     name: 'Mahendradata',
     note: 'Denpasar Barat',
     city: 'Denpasar',
-    mapsUrl: 'https://maps.app.goo.gl/S6UzHfbKtRBrZ4X36',
+    mapsUrl: 'https://maps.app.goo.gl/XksdQXwHPWtp8uBL7',
   },
 ];
 

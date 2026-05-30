@@ -61,7 +61,7 @@ export default function Sidebar({ open, onClose }: Props) {
   const items = navByRole[role];
 
   const inner = (
-    <div style={{ width: '220px', minWidth: '220px', height: '100%', background: '#0F1F6B', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ width: '220px', minWidth: '220px', height: '100%', background: '#0D5C3A', display: 'flex', flexDirection: 'column' }}>
       {/* Logo row */}
       <div style={{
         padding: '0 16px 0 20px',

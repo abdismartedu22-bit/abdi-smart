@@ -60,9 +60,9 @@ type StudentAttRow = {
 
 /* ---- Helpers ---- */
 
-const HARI_IDX: Record<string, number> = {
-  Senin: 0, Selasa: 1, Rabu: 2, Kamis: 3, Jumat: 4, Sabtu: 5, Minggu: 6,
-};
+// const HARI_IDX: Record<string, number> = {
+//   Senin: 0, Selasa: 1, Rabu: 2, Kamis: 3, Jumat: 4, Sabtu: 5, Minggu: 6,
+// };
 
 // function getSessionDate(weekStartISO: string, hari: string): string {
 //   const [y, mo, d] = weekStartISO.split('-').map(Number);
@@ -90,9 +90,10 @@ const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: str
 };
 
 const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
-  hadir: { label: 'HADIR', bg: '#DCFCE7', color: '#15803D' },
-  absen: { label: 'ABSEN', bg: '#FEE2E2', color: '#DC0A1E' },
-  izin:  { label: 'IZIN',  bg: '#FEF9C3', color: '#A16207' },
+  hadir:       { label: 'HADIR',       bg: '#DCFCE7', color: '#15803D' },
+  tidak_hadir: { label: 'TIDAK HADIR', bg: '#FEE2E2', color: '#DC0A1E' },
+  absen:       { label: 'TIDAK HADIR', bg: '#FEE2E2', color: '#DC0A1E' },
+  izin:        { label: 'IZIN',        bg: '#FEF9C3', color: '#A16207' },
 };
 
 type Tab = 'realisasi' | 'siswa';
@@ -119,8 +120,8 @@ export default function AdminRealisasi() {
               border: 'none',
               background: 'none',
               cursor: 'pointer',
-              color: tab === t ? '#0F1F6B' : '#666',
-              borderBottom: tab === t ? '2px solid #0F1F6B' : '2px solid transparent',
+              color: tab === t ? '#0D5C3A' : '#666',
+              borderBottom: tab === t ? '2px solid #0D5C3A' : '2px solid transparent',
               marginBottom: '-2px',
             }}
           >
@@ -288,7 +289,7 @@ function RealisasiSesiTab() {
                     </td>
                     <td style={td}>
                       <div style={{ color: '#555', maxWidth: '160px' }}>
-                        {r.att?.catatan_admin && <div style={{ color: '#0F1F6B', fontSize: '0.78rem', marginBottom: '2px' }}>Admin: {r.att.catatan_admin}</div>}
+                        {r.att?.catatan_admin && <div style={{ color: '#0D5C3A', fontSize: '0.78rem', marginBottom: '2px' }}>Admin: {r.att.catatan_admin}</div>}
                         {r.att?.note && <div style={{ color: '#666', fontSize: '0.78rem' }}>Pengajar: {r.att.note}</div>}
                         {!r.att?.catatan_admin && !r.att?.note && <span style={{ color: '#999' }}>-</span>}
                       </div>
@@ -465,19 +466,21 @@ function AbsensiSiswaTab() {
     });
   }, []);
 
+  const isTidakHadir = (s: string | null) => s === 'absen' || s === 'tidak_hadir' || s === 'izin';
+
   const displayed = rows.filter(r => {
     if (filterGroup && r.schedule?.groups?.id !== filterGroup) return false;
     if (filterStatus === 'belum' && r.status) return false;
-    if (filterStatus && filterStatus !== 'belum' && r.status !== filterStatus) return false;
+    if (filterStatus === 'tidak_hadir' && !isTidakHadir(r.status)) return false;
+    if (filterStatus && filterStatus !== 'belum' && filterStatus !== 'tidak_hadir' && r.status !== filterStatus) return false;
     if (search && !r.person?.display_name?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
 
   const summary = {
-    hadir: displayed.filter(r => r.status === 'hadir').length,
-    absen: displayed.filter(r => r.status === 'absen').length,
-    izin:  displayed.filter(r => r.status === 'izin').length,
-    belum: displayed.filter(r => !r.status).length,
+    hadir:       displayed.filter(r => r.status === 'hadir').length,
+    tidak_hadir: displayed.filter(r => isTidakHadir(r.status)).length,
+    belum:       displayed.filter(r => !r.status).length,
   };
 
   return (
@@ -500,8 +503,7 @@ function AbsensiSiswaTab() {
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="">Semua Status</option>
           <option value="hadir">Hadir</option>
-          <option value="absen">Absen</option>
-          <option value="izin">Izin</option>
+          <option value="tidak_hadir">Tidak Hadir</option>
           <option value="belum">Belum dikunci</option>
         </select>
       </div>
@@ -509,10 +511,9 @@ function AbsensiSiswaTab() {
       {!loading && displayed.length > 0 && (
         <div style={{ display: 'flex', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
           {[
-            { label: 'hadir', val: summary.hadir, color: '#15803D', bg: '#DCFCE7' },
-            { label: 'absen', val: summary.absen, color: '#DC0A1E', bg: '#FEE2E2' },
-            { label: 'izin',  val: summary.izin,  color: '#A16207', bg: '#FEF9C3' },
-            { label: 'belum dikunci', val: summary.belum, color: '#666', bg: '#F3F2EE' },
+            { label: 'hadir',        val: summary.hadir,       color: '#15803D', bg: '#DCFCE7' },
+            { label: 'tidak hadir',  val: summary.tidak_hadir, color: '#DC0A1E', bg: '#FEE2E2' },
+            { label: 'belum dikunci', val: summary.belum,      color: '#666',    bg: '#F3F2EE' },
           ].map(c => (
             <span key={c.label} style={{ padding: '3px 10px', borderRadius: '6px', fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, background: c.bg, color: c.color }}>
               {c.val} {c.label}
@@ -589,7 +590,7 @@ function AbsensiSiswaTab() {
                     </td>
                     <td style={td}>
                       <div style={{ maxWidth: '140px' }}>
-                        {r.catatan_admin && <div style={{ color: '#0F1F6B', fontSize: '0.75rem', marginBottom: '1px' }}>Admin: {r.catatan_admin}</div>}
+                        {r.catatan_admin && <div style={{ color: '#0D5C3A', fontSize: '0.75rem', marginBottom: '1px' }}>Admin: {r.catatan_admin}</div>}
                         {r.note && <div style={{ color: '#666', fontSize: '0.75rem' }}>{r.note}</div>}
                         {!r.catatan_admin && !r.note && <span style={{ color: '#999' }}>-</span>}
                       </div>
@@ -620,7 +621,9 @@ function StudentAttEditModal({ row, onClose, onSaved }: { row: StudentAttRow; on
   const dateObj = new Date(row.session_date + 'T00:00:00');
   const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
-  const [status, setStatus] = useState<string>(row.status ?? 'absen');
+  const [status, setStatus] = useState<string>(
+    row.status === 'hadir' ? 'hadir' : 'tidak_hadir'
+  );
   const [note, setNote] = useState(row.note ?? '');
   const [catatanAdmin, setCatatanAdmin] = useState(row.catatan_admin ?? '');
   const [saving, setSaving] = useState(false);
@@ -671,7 +674,7 @@ function StudentAttEditModal({ row, onClose, onSaved }: { row: StudentAttRow; on
           <div>
             <label style={labelStyle}>Status Kehadiran</label>
             <div style={{ display: 'flex', gap: '14px', marginTop: '6px', flexWrap: 'wrap' }}>
-              {(['hadir', 'absen', 'izin'] as const).map(s => {
+              {(['hadir', 'tidak_hadir'] as const).map(s => {
                 const si = STATUS_LABELS[s];
                 return (
                   <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
@@ -744,7 +747,7 @@ const selectStyle: React.CSSProperties = {
   fontFamily: 'var(--font-body)', fontSize: '0.85rem', background: '#fff', color: '#0D0D0D', outline: 'none', cursor: 'pointer',
 };
 const editBtn: React.CSSProperties = {
-  padding: '5px 12px', background: '#0F1F6B', color: '#fff',
+  padding: '5px 12px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '6px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.8rem',
 };
@@ -763,7 +766,7 @@ const modalStyle: React.CSSProperties = {
   maxHeight: '90vh', overflowY: 'auto',
 };
 const btnPrimary: React.CSSProperties = {
-  flex: 1, padding: '10px', background: '#0F1F6B', color: '#fff',
+  flex: 1, padding: '10px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '8px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem',
 };

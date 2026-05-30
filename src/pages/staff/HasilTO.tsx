@@ -17,9 +17,12 @@ type TOResult = {
 
 const TYPE_LABELS: Record<string, string> = {
   SNBT: 'SNBT',
-  'TKA-Saintek': 'TKA Saintek',
-  'TKA-Soshum': 'TKA Soshum',
+  TKA: 'TKA',
+  'TKA-Saintek': 'TKA',
+  'TKA-Soshum': 'TKA',
 };
+
+const INPUT_TYPES = ['SNBT', 'TKA'] as const;
 
 const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
   SNBT: [
@@ -30,6 +33,16 @@ const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
     { key: 'lbi', label: 'LBI' },
     { key: 'lbe', label: 'LBE' },
     { key: 'pm', label: 'PM' },
+  ],
+  TKA: [
+    { key: 'mat', label: 'Mat' },
+    { key: 'fis', label: 'Fis' },
+    { key: 'kim', label: 'Kim' },
+    { key: 'bio', label: 'Bio' },
+    { key: 'geo', label: 'Geo' },
+    { key: 'sej', label: 'Sej' },
+    { key: 'sos', label: 'Sos' },
+    { key: 'eko', label: 'Eko' },
   ],
   'TKA-Saintek': [
     { key: 'mat', label: 'Mat' },
@@ -47,8 +60,9 @@ const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
 
 const TYPE_BG: Record<string, { bg: string; color: string }> = {
   SNBT: { bg: '#EFF6FF', color: '#1D4ED8' },
+  TKA: { bg: '#F0FDF4', color: '#15803D' },
   'TKA-Saintek': { bg: '#F0FDF4', color: '#15803D' },
-  'TKA-Soshum': { bg: '#FFF7ED', color: '#C2410C' },
+  'TKA-Soshum': { bg: '#F0FDF4', color: '#15803D' },
 };
 
 export default function StaffHasilTO() {
@@ -82,7 +96,8 @@ export default function StaffHasilTO() {
   }, []);
 
   const displayed = results.filter(r => {
-    if (filterType && r.type !== filterType) return false;
+    if (filterType === 'TKA' && r.type !== 'TKA' && r.type !== 'TKA-Saintek' && r.type !== 'TKA-Soshum') return false;
+    if (filterType && filterType !== 'TKA' && r.type !== filterType) return false;
     if (filterSearch && !r.student?.display_name?.toLowerCase().includes(filterSearch.toLowerCase()) &&
         !r.nama_to.toLowerCase().includes(filterSearch.toLowerCase())) return false;
     return true;
@@ -108,9 +123,8 @@ export default function StaffHasilTO() {
         />
         <select value={filterType} onChange={e => setFilterType(e.target.value)} style={selectStyle}>
           <option value="">Semua Jenis</option>
-          {Object.entries(TYPE_LABELS).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
-          ))}
+          <option value="SNBT">SNBT</option>
+          <option value="TKA">TKA</option>
         </select>
       </div>
 
@@ -149,7 +163,7 @@ export default function StaffHasilTO() {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: '#0F1F6B', lineHeight: 1 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color: '#0D5C3A', lineHeight: 1 }}>
                       {typeof r.total_score === 'number' ? r.total_score.toFixed(2) : '-'}
                     </div>
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888' }}>total</div>
@@ -188,7 +202,8 @@ function TOModal({
   onSaved: () => void;
 }) {
   const { user } = useAuth();
-  const [type, setType] = useState<string>(editing?.type ?? 'SNBT');
+  const normalizeType = (t: string) => (t === 'TKA-Saintek' || t === 'TKA-Soshum') ? 'TKA' : t;
+  const [type, setType] = useState<string>(normalizeType(editing?.type ?? 'SNBT'));
   const [namaTO, setNamaTO] = useState(editing?.nama_to ?? '');
   const [tanggalTO, setTanggalTO] = useState(editing?.tanggal_to ?? new Date().toISOString().substring(0, 10));
   const [studentId, setStudentId] = useState(editing?.student_id ?? '');
@@ -263,10 +278,10 @@ function TOModal({
         <div style={{ marginBottom: '14px' }}>
           <label style={labelStyle}>Jenis TO</label>
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-            {Object.entries(TYPE_LABELS).map(([k, v]) => (
+            {INPUT_TYPES.map(k => (
               <label key={k} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
                 <input type="radio" name="type" value={k} checked={type === k} onChange={() => { setType(k); setScores({}); }} />
-                {v}
+                {k}
               </label>
             ))}
           </div>
@@ -331,7 +346,7 @@ function TOModal({
               </div>
             ))}
           </div>
-          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0F1F6B', fontWeight: 600, marginTop: '8px' }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D5C3A', fontWeight: 600, marginTop: '8px' }}>
             Total (rata-rata): {total.toFixed(2)}
           </div>
         </div>
@@ -369,7 +384,7 @@ const labelStyle: React.CSSProperties = {
   display: 'block', marginBottom: '4px',
 };
 const btnPrimary: React.CSSProperties = {
-  flex: 1, padding: '10px', background: '#0F1F6B', color: '#fff',
+  flex: 1, padding: '10px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '8px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem',
 };

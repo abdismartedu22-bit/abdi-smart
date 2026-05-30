@@ -65,7 +65,7 @@ export default function AdminGedung() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           {Object.entries(grouped).map(([bldg, rooms]) => (
             <div key={bldg}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#0F1F6B' }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#0D5C3A' }}>
                 {bldg}
               </h2>
               <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden' }}>
@@ -80,7 +80,7 @@ export default function AdminGedung() {
                     }}
                   >
                     <span style={{
-                      background: '#0F1F6B', color: '#FFE500',
+                      background: '#0D5C3A', color: '#FFE500',
                       padding: '3px 10px', borderRadius: '6px',
                       fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.82rem',
                       letterSpacing: '0.05em', flexShrink: 0,
@@ -246,7 +246,7 @@ const errorText: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSiz
 const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px' };
 const modal: React.CSSProperties = { background: '#fff', borderRadius: '12px', padding: '28px 32px', width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)', maxHeight: '90vh', overflowY: 'auto' };
 const input: React.CSSProperties = { padding: '9px 11px', border: '1.5px solid #E2E1DC', borderRadius: '7px', fontFamily: 'var(--font-body)', fontSize: '0.88rem', outline: 'none', color: '#0D0D0D', background: '#fff', width: '100%', boxSizing: 'border-box' };
-const btnPrimary: React.CSSProperties = { flex: 1, padding: '10px 16px', background: '#0F1F6B', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem' };
+const btnPrimary: React.CSSProperties = { flex: 1, padding: '10px 16px', background: '#0D5C3A', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem' };
 const btnSecondary: React.CSSProperties = { flex: 1, padding: '10px 16px', background: '#F3F2EE', color: '#2E2E2E', border: 'none', borderRadius: '8px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem' };
-const btnEdit: React.CSSProperties = { padding: '5px 12px', background: '#E6EAF8', color: '#0F1F6B', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' };
+const btnEdit: React.CSSProperties = { padding: '5px 12px', background: '#E6EAF8', color: '#0D5C3A', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' };
 const btnDelete: React.CSSProperties = { padding: '5px 12px', background: '#FFF0F1', color: '#DC0A1E', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' };

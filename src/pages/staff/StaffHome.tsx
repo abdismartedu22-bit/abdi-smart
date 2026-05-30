@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
+import DashboardBanner from '../../components/shared/DashboardBanner';
 
 type TodaySession = {
   id: string;
@@ -119,6 +120,8 @@ export default function StaffHome() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
+          <DashboardBanner />
+
           {/* Today's sessions */}
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -156,7 +159,7 @@ export default function StaffHome() {
             <p style={sectionLabel}>Aksi Cepat</p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', marginTop: '4px' }}>
               {[
-                { label: '+ Tambah Jadwal', path: '/staff/jadwal', color: '#0F1F6B' },
+                { label: '+ Tambah Jadwal', path: '/staff/jadwal', color: '#0D5C3A' },
                 { label: '+ Input Hasil TO', path: '/staff/hasil-to', color: '#047857' },
                 { label: 'Download Laporan', path: '/staff/download', color: '#4B5563' },
               ].map(a => (
@@ -203,5 +206,5 @@ const sectionLabel: React.CSSProperties = {
 };
 const linkBtn: React.CSSProperties = {
   background: 'none', border: 'none', cursor: 'pointer',
-  fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0F1F6B', fontWeight: 600, padding: 0,
+  fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0D5C3A', fontWeight: 600, padding: 0,
 };

@@ -4,6 +4,206 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime, fmtTimestampWITA } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 
+/* ---- Riwayat types ---- */
+
+type RiwayatRow = {
+  id: string;
+  hari: string;
+  jam_mulai: string;
+  jam_selesai: string;
+  materi: string | null;
+  lokasi: string | null;
+  ruangan: string | null;
+  week_start: string;
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
+};
+
+type RiwayatAtt = {
+  schedule_id: string;
+  sesi_status: string | null;
+  note: string | null;
+  catatan_admin: string | null;
+  locked_at: string | null;
+};
+
+const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
+  terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
+  tidak:      { label: 'TIDAK',      bg: '#FEE2E2', color: '#DC0A1E' },
+  ditunda:    { label: 'DITUNDA',    bg: '#FEF9C3', color: '#A16207' },
+};
+
+function getWeekStartForDate(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return toISODate(d);
+}
+
+function getHariForDate(date: Date): string {
+  return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()];
+}
+
+/* ---- Riwayat Tab ---- */
+
+function RiwayatTab({ teacherId }: { teacherId: string }) {
+  const todayISO = toISODate(new Date());
+  const [dateFilter, setDateFilter] = useState(todayISO);
+  const [filterStatus, setFilterStatus] = useState('');
+  const [rows, setRows] = useState<{ sched: RiwayatRow; att: RiwayatAtt | null }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const selectedDate = new Date(dateFilter + 'T00:00:00');
+    const weekStartISO = getWeekStartForDate(selectedDate);
+    const hariTarget = getHariForDate(selectedDate);
+
+    const [{ data: schedData }, { data: attData }] = await Promise.all([
+      supabase
+        .from('schedules')
+        .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, week_start, groups!group_id(id,nama,kode,warna,warna_text)')
+        .eq('teacher_id', teacherId)
+        .eq('week_start', weekStartISO)
+        .eq('hari', hariTarget)
+        .order('jam_mulai'),
+      supabase
+        .from('attendance')
+        .select('schedule_id, sesi_status, note, catatan_admin, locked_at')
+        .eq('person_id', teacherId)
+        .eq('person_role', 'teacher')
+        .eq('session_date', dateFilter),
+    ]);
+
+    const attMap: Record<string, RiwayatAtt> = {};
+    (attData ?? []).forEach((r: any) => { attMap[r.schedule_id] = r as RiwayatAtt; });
+
+    const merged = (schedData ?? [] as unknown as RiwayatRow[]).map((s: any) => ({
+      sched: s as RiwayatRow,
+      att: attMap[s.id] ?? null,
+    }));
+
+    setRows(merged);
+    setLoading(false);
+  }, [teacherId, dateFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { load(); }, [load]);
+
+  const displayed = rows.filter(({ att }) => {
+    const isBelum = att === null || att.sesi_status === null;
+    if (filterStatus === 'belum' && !isBelum) return false;
+    if (filterStatus && filterStatus !== 'belum' && att?.sesi_status !== filterStatus) return false;
+    return true;
+  });
+
+  const dateObj = new Date(dateFilter + 'T00:00:00');
+  const dateLabel = dateObj.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  return (
+    <div>
+      {/* Filters */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 600, color: '#2E2E2E' }}>Tanggal</label>
+          <input
+            type="date"
+            value={dateFilter}
+            max={todayISO}
+            onChange={e => setDateFilter(e.target.value)}
+            style={filterInput}
+          />
+        </div>
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#888' }}>{dateLabel}</span>
+      </div>
+      <div style={{ marginBottom: '18px' }}>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={filterInput}>
+          <option value="">Semua Status</option>
+          <option value="terlaksana">Terlaksana</option>
+          <option value="tidak">Tidak</option>
+          <option value="ditunda">Ditunda</option>
+          <option value="belum">Belum diisi</option>
+        </select>
+      </div>
+
+      {loading ? (
+        <p style={mutedStyle}>Memuat...</p>
+      ) : displayed.length === 0 ? (
+        <div style={emptyCard}>
+          <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0, fontSize: '0.9rem' }}>
+            {rows.length === 0 ? 'Tidak ada sesi untuk tanggal ini.' : 'Tidak ada data untuk filter ini.'}
+          </p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {displayed.map(({ sched, att }) => {
+            const isBelum = att === null || att.sesi_status === null;
+            const statusInfo = att?.sesi_status ? SESI_STATUS_LABELS[att.sesi_status] : null;
+            return (
+              <div key={sched.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                  <GrupBadge kode={sched.groups.kode} warna={sched.groups.warna} warna_text={sched.groups.warna_text} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
+                      <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
+                        {fmtTime(sched.jam_mulai)} s/d {fmtTime(sched.jam_selesai)}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#aaa' }}>WITA</span>
+                    </div>
+                    {sched.materi && (
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', margin: '0 0 4px' }}>
+                        {sched.materi}
+                      </p>
+                    )}
+                    {(sched.lokasi || sched.ruangan) && (
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', margin: '0 0 6px' }}>
+                        {[sched.lokasi, sched.ruangan].filter(Boolean).join(' / ')}
+                      </p>
+                    )}
+                    {(att?.note || att?.catatan_admin) && (
+                      <div style={{ marginTop: '6px', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        {att.note && (
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
+                            Catatan: {att.note}
+                          </span>
+                        )}
+                        {att.catatan_admin && (
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0D5C3A', fontWeight: 600 }}>
+                            Admin: {att.catatan_admin}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                    {isBelum ? (
+                      <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, background: '#FEF9C3', color: '#A16207' }}>
+                        BELUM DIISI
+                      </span>
+                    ) : statusInfo ? (
+                      <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, background: statusInfo.bg, color: statusInfo.color }}>
+                        {statusInfo.label}
+                      </span>
+                    ) : null}
+                    {att?.locked_at && (
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', color: '#bbb', marginTop: '4px' }}>TERKUNCI</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const filterInput: React.CSSProperties = {
+  padding: '7px 10px', border: '1.5px solid #E2E1DC', borderRadius: '7px',
+  fontFamily: 'var(--font-body)', fontSize: '0.83rem', background: '#fff', color: '#0D0D0D',
+  outline: 'none', cursor: 'pointer',
+};
+
 type SessionToday = {
   id: string;
   hari: string;
@@ -147,15 +347,17 @@ function SessionCard({
   const teacherRow = attendance.find(a => a.person_role === 'teacher' && a.person_id === teacherId);
   const locked = !!teacherRow?.locked_at;
 
+  const hasSavedSesi = !!teacherRow?.sesi_status;
   const [saving, setSaving] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
+  const [editingSesi, setEditingSesi] = useState(false);
   const [sesiStatus, setSesiStatus] = useState<string>(teacherRow?.sesi_status ?? 'terlaksana');
   const [note, setNote] = useState<string>(teacherRow?.note ?? '');
   const [studentStatuses, setStudentStatuses] = useState<Record<string, { status: string; note: string }>>(() => {
     const init: Record<string, { status: string; note: string }> = {};
     sessionStudents.forEach(st => {
       const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
-      init[st.student_id] = { status: att?.status ?? 'absen', note: att?.note ?? '' };
+      init[st.student_id] = { status: att?.status ?? 'tidak_hadir', note: att?.note ?? '' };
     });
     return init;
   });
@@ -190,6 +392,7 @@ function SessionCard({
       });
     }
     setSaving(null);
+    setEditingSesi(false);
     onRefresh();
   }
 
@@ -226,7 +429,7 @@ function SessionCard({
     // Lock all student rows and set final statuses
     for (const st of sessionStudents) {
       const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
-      const finalStatus = studentStatuses[st.student_id]?.status ?? 'absen';
+      const finalStatus = studentStatuses[st.student_id]?.status ?? 'tidak_hadir';
       const finalNote = studentStatuses[st.student_id]?.note ?? '';
       if (att) {
         await supabase.from('attendance').update({ status: finalStatus, note: finalNote || null, locked_at: now, verified_by: teacherId, verified_at: now }).eq('id', att.id);
@@ -283,25 +486,62 @@ function SessionCard({
         {/* Sesi status */}
         <div>
           <p style={sectionLabel}>Status Sesi</p>
-          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-            {(['terlaksana', 'tidak', 'ditunda'] as const).map(s => (
-              <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: locked ? 'default' : 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-                <input type="radio" name={`sesi_${session.id}`} value={s} checked={sesiStatus === s} onChange={() => !locked && setSesiStatus(s)} disabled={locked} />
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </label>
-            ))}
-          </div>
-          <input
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            disabled={locked}
-            placeholder="Catatan (opsional)"
-            style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
-          />
-          {!locked && (
-            <button onClick={saveSesiInfo} disabled={saving === 'sesi'} style={{ ...btnSmall, marginTop: '8px' }}>
-              {saving === 'sesi' ? 'Menyimpan...' : 'Simpan Status Sesi'}
-            </button>
+          {locked ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {teacherRow?.sesi_status && (
+                <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
+                  background: teacherRow.sesi_status === 'terlaksana' ? '#DCFCE7' : teacherRow.sesi_status === 'tidak' ? '#FEE2E2' : '#FEF9C3',
+                  color: teacherRow.sesi_status === 'terlaksana' ? '#15803D' : teacherRow.sesi_status === 'tidak' ? '#DC0A1E' : '#A16207',
+                }}>
+                  {teacherRow.sesi_status.toUpperCase()}
+                </span>
+              )}
+              {teacherRow?.note && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{teacherRow.note}</span>}
+            </div>
+          ) : hasSavedSesi && !editingSesi ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
+                background: sesiStatus === 'terlaksana' ? '#DCFCE7' : sesiStatus === 'tidak' ? '#FEE2E2' : '#FEF9C3',
+                color: sesiStatus === 'terlaksana' ? '#15803D' : sesiStatus === 'tidak' ? '#DC0A1E' : '#A16207',
+              }}>
+                {sesiStatus.toUpperCase()}
+              </span>
+              {note && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{note}</span>}
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#047857', display: 'flex', alignItems: 'center', gap: '3px' }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
+                Tersimpan
+              </span>
+              <button onClick={() => setEditingSesi(true)} style={{ ...btnSmall, background: '#F3F2EE', color: '#0D0D0D', border: '1px solid #E2E1DC' }}>
+                Edit
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                {(['terlaksana', 'tidak', 'ditunda'] as const).map(s => (
+                  <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+                    <input type="radio" name={`sesi_${session.id}`} value={s} checked={sesiStatus === s} onChange={() => setSesiStatus(s)} />
+                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                  </label>
+                ))}
+              </div>
+              <input
+                value={note}
+                onChange={e => setNote(e.target.value)}
+                placeholder="Catatan (opsional)"
+                style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
+              />
+              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+                <button onClick={saveSesiInfo} disabled={saving === 'sesi'} style={btnSmall}>
+                  {saving === 'sesi' ? 'Menyimpan...' : 'Simpan Status Sesi'}
+                </button>
+                {editingSesi && (
+                  <button onClick={() => setEditingSesi(false)} style={{ ...btnSmall, background: '#F3F2EE', color: '#0D0D0D', border: '1px solid #E2E1DC' }}>
+                    Batal
+                  </button>
+                )}
+              </div>
+            </>
           )}
         </div>
 
@@ -336,11 +576,13 @@ function SessionCard({
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
                       {locked ? (
-                        <span style={statusBadge(cur.status)}>{cur.status.toUpperCase()}</span>
+                        <span style={statusBadge(cur.status)}>
+                          {cur.status === 'tidak_hadir' || cur.status === 'absen' ? 'TIDAK HADIR' : cur.status === 'izin' ? 'IZIN' : cur.status.toUpperCase()}
+                        </span>
                       ) : (
                         <>
                           <select
-                            value={cur.status}
+                            value={cur.status === 'absen' || cur.status === 'izin' ? 'tidak_hadir' : cur.status}
                             onChange={e => {
                               const val = e.target.value;
                               setStudentStatuses(prev => ({ ...prev, [st.student_id]: { ...prev[st.student_id], status: val } }));
@@ -349,18 +591,8 @@ function SessionCard({
                             style={selectSmall}
                           >
                             <option value="hadir">Hadir</option>
-                            <option value="absen">Absen</option>
-                            <option value="izin">Izin</option>
+                            <option value="tidak_hadir">Tidak Hadir</option>
                           </select>
-                          {cur.status === 'izin' && (
-                            <input
-                              value={cur.note}
-                              onChange={e => setStudentStatuses(prev => ({ ...prev, [st.student_id]: { ...prev[st.student_id], note: e.target.value } }))}
-                              onBlur={() => updateStudentStatus(st.student_id, cur.status, cur.note)}
-                              placeholder="alasan..."
-                              style={{ ...inputStyle, width: '120px' }}
-                            />
-                          )}
                         </>
                       )}
                     </div>
@@ -389,9 +621,10 @@ function SessionCard({
 
 function statusBadge(status: string): React.CSSProperties {
   const map: Record<string, { bg: string; color: string }> = {
-    hadir: { bg: '#DCFCE7', color: '#15803D' },
-    absen: { bg: '#FEE2E2', color: '#DC0A1E' },
-    izin:  { bg: '#FEF9C3', color: '#A16207' },
+    hadir:       { bg: '#DCFCE7', color: '#15803D' },
+    tidak_hadir: { bg: '#FEE2E2', color: '#DC0A1E' },
+    absen:       { bg: '#FEE2E2', color: '#DC0A1E' },
+    izin:        { bg: '#FEF9C3', color: '#A16207' },
   };
   const c = map[status] ?? { bg: '#F3F2EE', color: '#666' };
   return {
@@ -429,7 +662,7 @@ const selectSmall: React.CSSProperties = {
 };
 
 const btnSmall: React.CSSProperties = {
-  padding: '8px 16px', background: '#0F1F6B', color: '#fff',
+  padding: '8px 16px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '7px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.85rem',
 };

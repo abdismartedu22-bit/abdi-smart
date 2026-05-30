@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
+import DashboardBanner from '../../components/shared/DashboardBanner';
 
 type Group = { id: string; nama: string; kode: string; warna: string; warna_text: string; paket: number | null };
 type NextSession = {
@@ -29,10 +30,11 @@ type TOResult = {
 
 const HARI_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const TYPE_LABELS: Record<string, string> = {
-  SNBT: 'SNBT', 'TKA-Saintek': 'TKA Saintek', 'TKA-Soshum': 'TKA Soshum',
+  SNBT: 'SNBT', TKA: 'TKA', 'TKA-Saintek': 'TKA', 'TKA-Soshum': 'TKA',
 };
 const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
   SNBT: [{ key: 'pu', label: 'PU' }, { key: 'ppu', label: 'PPU' }, { key: 'pbm', label: 'PBM' }, { key: 'pk', label: 'PK' }, { key: 'lbi', label: 'LBI' }, { key: 'lbe', label: 'LBE' }, { key: 'pm', label: 'PM' }],
+  TKA: [{ key: 'mat', label: 'Mat' }, { key: 'fis', label: 'Fis' }, { key: 'kim', label: 'Kim' }, { key: 'bio', label: 'Bio' }, { key: 'geo', label: 'Geo' }, { key: 'sej', label: 'Sej' }, { key: 'sos', label: 'Sos' }, { key: 'eko', label: 'Eko' }],
   'TKA-Saintek': [{ key: 'mat', label: 'Mat' }, { key: 'fis', label: 'Fis' }, { key: 'kim', label: 'Kim' }, { key: 'bio', label: 'Bio' }],
   'TKA-Soshum': [{ key: 'geo', label: 'Geo' }, { key: 'sej', label: 'Sej' }, { key: 'sos', label: 'Sos' }, { key: 'eko', label: 'Eko' }],
 };
@@ -55,7 +57,7 @@ export default function StudentHome() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [realisasiByGroup, setRealisasiByGroup] = useState<Record<string, number>>({});
   const [nextSession, setNextSession] = useState<NextSession | null>(null);
-  const [attendance, setAttendance] = useState({ hadir: 0, absen: 0, izin: 0 });
+  const [attendance, setAttendance] = useState({ hadir: 0, tidak_hadir: 0 });
   const [latestTO, setLatestTO] = useState<TOResult | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -166,11 +168,10 @@ export default function StudentHome() {
         .lte('session_date', today)
         .not('status', 'is', null);
 
-      const counts = { hadir: 0, absen: 0, izin: 0 };
+      const counts = { hadir: 0, tidak_hadir: 0 };
       (att ?? []).forEach(a => {
         if (a.status === 'hadir') counts.hadir++;
-        else if (a.status === 'absen') counts.absen++;
-        else if (a.status === 'izin') counts.izin++;
+        else counts.tidak_hadir++;
       });
       setAttendance(counts);
     }
@@ -187,7 +188,7 @@ export default function StudentHome() {
     setLoading(false);
   }
 
-  const totalSessions = attendance.hadir + attendance.absen + attendance.izin;
+  const totalSessions = attendance.hadir + attendance.tidak_hadir;
   const pctHadir = totalSessions > 0 ? Math.round((attendance.hadir / totalSessions) * 100) : null;
   const monthName = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
@@ -208,6 +209,8 @@ export default function StudentHome() {
         <p style={muted}>Memuat...</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+
+          <DashboardBanner />
 
           {/* Paket card per group */}
           {groups.map(g => {
@@ -234,7 +237,7 @@ export default function StudentHome() {
                       }} />
                     </div>
                     <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
-                      <StatPill label="Dibeli" value={paket} color="#0F1F6B" />
+                      <StatPill label="Dibeli" value={paket} color="#0D5C3A" />
                       <StatPill label="Terlaksana" value={realisasi} color="#22C55E" />
                       <StatPill label="Sisa" value={sisa} color={sisa < 10 ? '#DC0A1E' : '#A16207'} highlight={sisa < 10} />
                     </div>
@@ -264,9 +267,8 @@ export default function StudentHome() {
                 </div>
                 <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap', alignItems: 'center' }}>
                   <StatPill label="Hadir" value={attendance.hadir} color="#15803D" />
-                  <StatPill label="Absen" value={attendance.absen} color="#DC0A1E" />
-                  <StatPill label="Izin" value={attendance.izin} color="#A16207" />
-                  <div style={{ marginLeft: 'auto', fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: '#0F1F6B', lineHeight: 1 }}>
+                  <StatPill label="Tidak Hadir" value={attendance.tidak_hadir} color="#DC0A1E" />
+                  <div style={{ marginLeft: 'auto', fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: '#0D5C3A', lineHeight: 1 }}>
                     {pctHadir}%
                   </div>
                 </div>
@@ -300,7 +302,7 @@ export default function StudentHome() {
                 <button
                   onClick={() => navigate('/student/absen')}
                   style={{
-                    marginTop: '14px', width: '100%', padding: '10px', background: '#0F1F6B', color: '#fff',
+                    marginTop: '14px', width: '100%', padding: '10px', background: '#0D5C3A', color: '#fff',
                     border: 'none', borderRadius: '10px', cursor: 'pointer',
                     fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem',
                     letterSpacing: '0.01em',
@@ -338,7 +340,7 @@ export default function StudentHome() {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0F1F6B', lineHeight: 1 }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0D5C3A', lineHeight: 1 }}>
                       {typeof latestTO.total_score === 'number' ? latestTO.total_score.toFixed(0) : '-'}
                     </div>
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#aaa' }}>total</div>
@@ -347,7 +349,7 @@ export default function StudentHome() {
                 <button
                   onClick={() => navigate('/student/hasil-to')}
                   style={{
-                    marginTop: '12px', width: '100%', padding: '9px', background: '#F3F2EE', color: '#0F1F6B',
+                    marginTop: '12px', width: '100%', padding: '9px', background: '#F3F2EE', color: '#0D5C3A',
                     border: 'none', borderRadius: '8px', cursor: 'pointer',
                     fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.85rem',
                   }}
@@ -367,7 +369,7 @@ export default function StudentHome() {
             rel="noopener noreferrer"
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 18px', background: '#0F1F6B', color: '#FFE500',
+              padding: '14px 18px', background: '#0D5C3A', color: '#FFE500',
               borderRadius: '12px', textDecoration: 'none', gap: '10px',
             }}
           >
@@ -401,4 +403,4 @@ function StatPill({ label, value, color, highlight }: { label: string; value: nu
 const muted: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#888', margin: 0 };
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #EBEBEB', borderRadius: '14px', padding: '18px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' };
 const label: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 700, color: '#aaa', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em' };
-const chip: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: '#0F1F6B', background: '#EEF1FF', padding: '2px 8px', borderRadius: '99px', letterSpacing: '0.04em' };
+const chip: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: '#0D5C3A', background: '#EEF1FF', padding: '2px 8px', borderRadius: '99px', letterSpacing: '0.04em' };

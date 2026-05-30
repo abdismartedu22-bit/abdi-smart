@@ -20,8 +20,9 @@ type LeaderboardEntry = {
 
 const TYPE_LABELS: Record<string, string> = {
   SNBT: 'SNBT',
-  'TKA-Saintek': 'TKA Saintek',
-  'TKA-Soshum': 'TKA Soshum',
+  TKA: 'TKA',
+  'TKA-Saintek': 'TKA',
+  'TKA-Soshum': 'TKA',
 };
 
 const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
@@ -33,6 +34,16 @@ const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
     { key: 'lbi', label: 'LBI' },
     { key: 'lbe', label: 'LBE' },
     { key: 'pm', label: 'PM' },
+  ],
+  TKA: [
+    { key: 'mat', label: 'Mat' },
+    { key: 'fis', label: 'Fis' },
+    { key: 'kim', label: 'Kim' },
+    { key: 'bio', label: 'Bio' },
+    { key: 'geo', label: 'Geo' },
+    { key: 'sej', label: 'Sej' },
+    { key: 'sos', label: 'Sos' },
+    { key: 'eko', label: 'Eko' },
   ],
   'TKA-Saintek': [
     { key: 'mat', label: 'Mat' },
@@ -50,8 +61,9 @@ const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
 
 const TYPE_STYLE: Record<string, { bg: string; color: string }> = {
   SNBT: { bg: '#EFF6FF', color: '#1D4ED8' },
+  TKA: { bg: '#F0FDF4', color: '#15803D' },
   'TKA-Saintek': { bg: '#F0FDF4', color: '#15803D' },
-  'TKA-Soshum': { bg: '#FFF7ED', color: '#C2410C' },
+  'TKA-Soshum': { bg: '#F0FDF4', color: '#15803D' },
 };
 
 const RANK_STYLE: Record<number, { bg: string; color: string }> = {
@@ -87,16 +99,16 @@ function ScoreChart({ results }: { results: TOResult[] }) {
       <svg width={W} height={H} style={{ overflow: 'visible', maxWidth: '100%', display: 'block' }}>
         <defs>
           <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#0F1F6B" stopOpacity="0.12" />
-            <stop offset="100%" stopColor="#0F1F6B" stopOpacity="0" />
+            <stop offset="0%" stopColor="#0D5C3A" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#0D5C3A" stopOpacity="0" />
           </linearGradient>
         </defs>
         <path d={areaD} fill="url(#chartGrad)" />
-        <path d={pathD} fill="none" stroke="#0F1F6B" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={pathD} fill="none" stroke="#0D5C3A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         {pts.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r={4} fill="#fff" stroke="#0F1F6B" strokeWidth="2" />
-            <text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="9" fill="#0F1F6B" fontFamily="var(--font-body)" fontWeight="700">
+            <circle cx={p.x} cy={p.y} r={4} fill="#fff" stroke="#0D5C3A" strokeWidth="2" />
+            <text x={p.x} y={p.y - 9} textAnchor="middle" fontSize="9" fill="#0D5C3A" fontFamily="var(--font-body)" fontWeight="700">
               {typeof p.r.total_score === 'number' ? p.r.total_score.toFixed(0) : '-'}
             </text>
           </g>
@@ -116,14 +128,14 @@ function ScoreChart({ results }: { results: TOResult[] }) {
 function TypeChips({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-      {Object.entries(TYPE_LABELS).map(([k, v]) => (
+      {(['SNBT', 'TKA'] as const).map(k => (
         <button key={k} onClick={() => onChange(k)} style={{
           padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer',
           fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 600,
-          background: value === k ? '#0F1F6B' : '#F3F2EE',
+          background: value === k ? '#0D5C3A' : '#F3F2EE',
           color: value === k ? '#fff' : '#555',
         }}>
-          {v}
+          {k}
         </button>
       ))}
     </div>
@@ -136,10 +148,12 @@ function LeaderboardTab({ results, userId }: { results: TOResult[]; userId: stri
   const [board, setBoard] = useState<LeaderboardEntry[]>([]);
   const [loadingBoard, setLoadingBoard] = useState(false);
 
+  const isTKA = (t: string) => t === 'TKA' || t === 'TKA-Saintek' || t === 'TKA-Soshum';
+
   const availableTO = useMemo(() => {
-    const forType = results.filter(r => r.type === filterType);
+    const forType = results.filter(r => filterType === 'TKA' ? isTKA(r.type) : r.type === filterType);
     return Array.from(new Set(forType.map(r => r.nama_to))).sort((a, b) => b.localeCompare(a));
-  }, [results, filterType]);
+  }, [results, filterType]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectedNamaTO = availableTO[namaTOIndex] ?? null;
 
@@ -172,9 +186,9 @@ function LeaderboardTab({ results, userId }: { results: TOResult[]; userId: stri
             {availableTO.map((nama, i) => (
               <button key={nama} onClick={() => setNamaTOIndex(i)} style={{
                 padding: '5px 12px', borderRadius: '8px', cursor: 'pointer',
-                border: `1.5px solid ${namaTOIndex === i ? '#0F1F6B' : '#E2E1DC'}`,
+                border: `1.5px solid ${namaTOIndex === i ? '#0D5C3A' : '#E2E1DC'}`,
                 background: namaTOIndex === i ? '#EFF6FF' : '#fff',
-                color: namaTOIndex === i ? '#0F1F6B' : '#666',
+                color: namaTOIndex === i ? '#0D5C3A' : '#666',
                 fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 600,
               }}>
                 {nama}
@@ -226,7 +240,7 @@ function LeaderboardTab({ results, userId }: { results: TOResult[]; userId: stri
                     </span>
                     <span style={{
                       fontFamily: 'var(--font-display)', fontSize: '1.1rem',
-                      color: rankNum === 1 ? '#DC0A1E' : '#0F1F6B',
+                      color: rankNum === 1 ? '#DC0A1E' : '#0D5C3A',
                     }}>
                       {typeof entry.total_score === 'number' ? entry.total_score.toFixed(2) : '-'}
                     </span>
@@ -261,10 +275,14 @@ export default function StudentHasilTO() {
       });
   }, [user]);
 
-  const displayed = filterType ? results.filter(r => r.type === filterType) : results;
-  const chartResults = (filterType ? results.filter(r => r.type === filterType) : results)
-    .slice()
-    .sort((a, b) => a.tanggal_to.localeCompare(b.tanggal_to));
+  const isTKAType = (t: string) => t === 'TKA' || t === 'TKA-Saintek' || t === 'TKA-Soshum';
+  const matchesFilter = (r: TOResult) => {
+    if (!filterType) return true;
+    if (filterType === 'TKA') return isTKAType(r.type);
+    return r.type === filterType;
+  };
+  const displayed = results.filter(matchesFilter);
+  const chartResults = results.filter(matchesFilter).slice().sort((a, b) => a.tanggal_to.localeCompare(b.tanggal_to));
 
   return (
     <div>
@@ -279,7 +297,7 @@ export default function StudentHasilTO() {
           style={{
             display: 'inline-flex', alignItems: 'center', gap: '6px',
             padding: '8px 16px', borderRadius: '8px',
-            background: '#0F1F6B', color: '#FFE500',
+            background: '#0D5C3A', color: '#FFE500',
             fontFamily: 'var(--font-body)', fontSize: '0.85rem', fontWeight: 700,
             textDecoration: 'none',
           }}
@@ -294,8 +312,8 @@ export default function StudentHasilTO() {
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
             padding: '10px 20px', border: 'none', background: 'none', cursor: 'pointer',
             fontFamily: 'var(--font-body)', fontSize: '0.88rem', fontWeight: 700,
-            color: activeTab === tab ? '#0F1F6B' : '#aaa',
-            borderBottom: activeTab === tab ? '2px solid #0F1F6B' : '2px solid transparent',
+            color: activeTab === tab ? '#0D5C3A' : '#aaa',
+            borderBottom: activeTab === tab ? '2px solid #0D5C3A' : '2px solid transparent',
             marginBottom: '-2px',
           }}>
             {tab === 'riwayat' ? 'Riwayat' : 'Leaderboard'}
@@ -311,11 +329,11 @@ export default function StudentHasilTO() {
         <>
           {/* Type filter chips */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-            {[['', 'Semua'], ['SNBT', 'SNBT'], ['TKA-Saintek', 'TKA Saintek'], ['TKA-Soshum', 'TKA Soshum']].map(([k, v]) => (
+            {[['', 'Semua'], ['SNBT', 'SNBT'], ['TKA', 'TKA']].map(([k, v]) => (
               <button key={k || 'all'} onClick={() => setFilterType(k)} style={{
                 padding: '6px 14px', borderRadius: '20px', border: 'none', cursor: 'pointer',
                 fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 600,
-                background: filterType === k ? '#0F1F6B' : '#F3F2EE',
+                background: filterType === k ? '#0D5C3A' : '#F3F2EE',
                 color: filterType === k ? '#fff' : '#555',
               }}>
                 {v}
@@ -371,7 +389,7 @@ export default function StudentHasilTO() {
                       </div>
 
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0F1F6B', lineHeight: 1 }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0D5C3A', lineHeight: 1 }}>
                           {typeof r.total_score === 'number' ? r.total_score.toFixed(2) : '-'}
                         </div>
                         <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#bbb', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>

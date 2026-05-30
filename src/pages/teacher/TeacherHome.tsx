@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
+import DashboardBanner from '../../components/shared/DashboardBanner';
 
 type Session = {
   id: string;
@@ -34,6 +35,7 @@ export default function TeacherHome() {
   const [todaySessions, setTodaySessions] = useState<Session[]>([]);
   const [weekSessions, setWeekSessions] = useState<Session[]>([]);
   const [attendanceCounts, setAttendanceCounts] = useState<Record<string, number>>({});
+  const [monthlyCount, setMonthlyCount] = useState(0);
 
   const dateLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const todayHari = getTodayHari();
@@ -48,6 +50,7 @@ export default function TeacherHome() {
     const weekStart = getWeekStartISO();
     const today = toISODate(new Date());
     const todayH = getTodayHari();
+    const monthStart = toISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
 
     const { data: weekData } = await supabase
       .from('schedules')
@@ -75,6 +78,16 @@ export default function TeacherHome() {
       (att ?? []).forEach((a: any) => { counts[a.schedule_id] = (counts[a.schedule_id] ?? 0) + 1; });
       setAttendanceCounts(counts);
     }
+
+    const { count: mc } = await supabase
+      .from('attendance')
+      .select('id', { count: 'exact', head: true })
+      .eq('person_id', user!.id)
+      .eq('person_role', 'teacher')
+      .eq('sesi_status', 'terlaksana')
+      .gte('session_date', monthStart)
+      .lte('session_date', today);
+    setMonthlyCount(mc ?? 0);
 
     setLoading(false);
   }
@@ -107,10 +120,31 @@ export default function TeacherHome() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
+          <DashboardBanner />
+
+          {/* Monthly teaching count */}
+          <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: '44px', height: '44px', borderRadius: '10px', background: '#E8F5EC', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0D5C3A" strokeWidth="2.2">
+                <rect x="3" y="4" width="18" height="18" rx="2" />
+                <line x1="16" y1="2" x2="16" y2="6" />
+                <line x1="8" y1="2" x2="8" y2="6" />
+                <line x1="3" y1="10" x2="21" y2="10" />
+                <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: '#0D5C3A', lineHeight: 1, fontWeight: 900 }}>{monthlyCount}</div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>
+                sesi terlaksana bulan {new Date().toLocaleDateString('id-ID', { month: 'long' })}
+              </div>
+            </div>
+          </div>
+
           {/* Today's sessions */}
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <p style={sectionLabel}>Sesi Kamu Hari Ini</p>
+              <p style={sectionLabel}>Sesi Hari Ini</p>
               <button onClick={() => navigate('/teacher/realisasi')} style={linkBtn}>Buka Realisasi</button>
             </div>
             {todaySessions.length === 0 ? (
@@ -132,7 +166,7 @@ export default function TeacherHome() {
                     </div>
                     <button
                       onClick={() => navigate('/teacher/realisasi')}
-                      style={{ padding: '6px 12px', background: '#0F1F6B', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.8rem', flexShrink: 0 }}
+                      style={{ padding: '6px 12px', background: '#0D5C3A', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.8rem', flexShrink: 0 }}
                     >
                       Buka
                     </button>
@@ -185,5 +219,5 @@ const sectionLabel: React.CSSProperties = {
 };
 const linkBtn: React.CSSProperties = {
   background: 'none', border: 'none', cursor: 'pointer',
-  fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0F1F6B', fontWeight: 600, padding: 0,
+  fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0D5C3A', fontWeight: 600, padding: 0,
 };

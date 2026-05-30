@@ -102,7 +102,7 @@ export default function ResetPassword() {
               disabled={loading}
               style={{
                 padding: '13px',
-                background: loading ? '#3a57b5' : '#0F1F6B',
+                background: loading ? '#3a57b5' : '#0D5C3A',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '10px',

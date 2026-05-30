@@ -24,6 +24,7 @@ export interface Group {
   active: boolean;
   paket: number | null;
   sekolah: string | null;
+  wa_group_link: string | null;
   created_by: string | null;
   created_at: string;
 }

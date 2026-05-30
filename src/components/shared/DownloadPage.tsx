@@ -175,29 +175,16 @@ export default function DownloadPage() {
 
         {/* Report type selector */}
         <div style={card}>
-          <p style={sectionLabel}>Jenis Laporan</p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {([
-              ['jadwal', 'Jadwal Mingguan', 'Daftar sesi satu minggu (Excel)'],
-              ['absensi', 'Rekap Absensi', 'Kehadiran siswa per rentang tanggal (Excel)'],
-              ['hasil-to', 'Hasil Tryout', 'Nilai TO semua siswa per rentang tanggal (Excel)'],
-            ] as const).map(([val, label, desc]) => (
-              <label key={val} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer', padding: '10px', borderRadius: '8px', background: reportType === val ? '#F0F4FF' : 'transparent', border: reportType === val ? '1.5px solid #0F1F6B' : '1.5px solid transparent' }}>
-                <input
-                  type="radio"
-                  name="report"
-                  value={val}
-                  checked={reportType === val}
-                  onChange={() => setReportType(val)}
-                  style={{ marginTop: '2px', flexShrink: 0 }}
-                />
-                <div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem', color: '#0D0D0D' }}>{label}</div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '1px' }}>{desc}</div>
-                </div>
-              </label>
-            ))}
-          </div>
+          <label style={labelStyle}>Jenis Laporan</label>
+          <select
+            value={reportType}
+            onChange={e => setReportType(e.target.value as ReportType)}
+            style={selectStyle}
+          >
+            <option value="absensi">Rekap Absensi</option>
+            <option value="jadwal">Jadwal Mingguan</option>
+            <option value="hasil-to">Hasil Tryout</option>
+          </select>
         </div>
 
         {/* Parameters */}
@@ -265,8 +252,7 @@ export default function DownloadPage() {
                 <select value={toType} onChange={e => setToType(e.target.value)} style={selectStyle}>
                   <option value="">Semua Jenis</option>
                   <option value="SNBT">SNBT</option>
-                  <option value="TKA-Saintek">TKA Saintek</option>
-                  <option value="TKA-Soshum">TKA Soshum</option>
+                  <option value="TKA">TKA</option>
                 </select>
               </div>
             </div>
@@ -282,7 +268,7 @@ export default function DownloadPage() {
         <button
           onClick={handleDownload}
           disabled={loading}
-          style={{ padding: '12px 24px', background: loading ? '#6B7280' : '#0F1F6B', color: '#fff', border: 'none', borderRadius: '9px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem' }}
+          style={{ padding: '12px 24px', background: loading ? '#6B7280' : '#0D5C3A', color: '#fff', border: 'none', borderRadius: '9px', cursor: loading ? 'not-allowed' : 'pointer', fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem' }}
         >
           {loading ? 'Menyiapkan...' : 'Download Excel'}
         </button>

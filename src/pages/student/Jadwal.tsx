@@ -92,14 +92,14 @@ export default function StudentJadwal() {
                 <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '10px' }}>
                   <h2 style={{
                     fontFamily: 'var(--font-display)', fontSize: '1.05rem', margin: 0,
-                    color: isToday ? '#0F1F6B' : '#0D0D0D',
+                    color: isToday ? '#0D5C3A' : '#0D0D0D',
                   }}>
                     {hari}
                   </h2>
                   {isToday && (
                     <span style={{
                       padding: '2px 9px', borderRadius: '20px', fontSize: '0.65rem', fontWeight: 700,
-                      background: '#FFE500', color: '#0F1F6B', letterSpacing: '0.04em',
+                      background: '#FFE500', color: '#0D5C3A', letterSpacing: '0.04em',
                     }}>
                       HARI INI
                     </span>
@@ -142,7 +142,7 @@ export default function StudentJadwal() {
                             {(s.lokasi || s.ruangan) && (
                               <span style={{
                                 fontFamily: 'var(--font-body)', fontSize: '0.78rem',
-                                color: '#0F1F6B', fontWeight: 600,
+                                color: '#0D5C3A', fontWeight: 600,
                               }}>
                                 {[s.lokasi, s.ruangan].filter(Boolean).join(' / ')}
                               </span>

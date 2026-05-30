@@ -9,6 +9,11 @@ type UserRow = {
   username: string;
   display_name: string;
   role: Role;
+  nama: string | null;
+  tempat_lahir: string | null;
+  tanggal_lahir: string | null;
+  sekolah: string | null;
+  jurusan: string | null;
   groups?: { group_id: string; groups: { id: string; nama: string; kode: string } }[];
 };
 
@@ -17,7 +22,7 @@ type Tab = 'users' | 'groups';
 const PAGE_SIZE = 10;
 const ROLES: Role[] = ['admin', 'staff', 'teacher', 'student'];
 const roleLabel: Record<Role, string> = { admin: 'Admin', staff: 'Staff', teacher: 'Pengajar', student: 'Siswa' };
-const roleBg: Record<Role, string> = { admin: '#DC0A1E', staff: '#0F1F6B', teacher: '#047857', student: '#4B5563' };
+const roleBg: Record<Role, string> = { admin: '#DC0A1E', staff: '#1E4D8C', teacher: '#047857', student: '#4B5563' };
 
 const WARNA_PRESETS = [
   { warna: '#EF4444', warna_text: '#fff', label: 'Merah' },
@@ -53,8 +58,8 @@ export default function AdminUsers() {
               border: 'none',
               background: 'none',
               cursor: 'pointer',
-              color: tab === t ? '#0F1F6B' : '#666',
-              borderBottom: tab === t ? '2px solid #0F1F6B' : '2px solid transparent',
+              color: tab === t ? '#0D5C3A' : '#666',
+              borderBottom: tab === t ? '2px solid #0D5C3A' : '2px solid transparent',
               marginBottom: '-2px',
             }}
           >
@@ -92,7 +97,7 @@ function UsersTab() {
     setLoading(true);
     const [{ data: u }, { data: g }] = await Promise.all([
       supabase.from('profiles')
-        .select('id, username, display_name, role, student_groups(group_id, groups(id, nama, kode))')
+        .select('id, username, display_name, role, nama, tempat_lahir, tanggal_lahir, sekolah, jurusan, student_groups(group_id, groups(id, nama, kode))')
         .order('role').order('display_name'),
       supabase.from('groups').select('*').eq('active', true).order('nama'),
     ]);
@@ -207,9 +212,10 @@ function UsersTab() {
 
 function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose: () => void; onDone: () => void }) {
   const [form, setForm] = useState({
-    display_name: '', username: '', email: '', password: '',
+    display_name: '', nama: '', username: '', email: '', password: '',
     role: 'student' as Role,
     group_id: '',
+    tempat_lahir: '', tanggal_lahir: '', sekolah: '', jurusan: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -244,8 +250,22 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       }),
     });
     const json = await res.json();
+    if (!res.ok) { setError(json.error ?? 'Gagal membuat user'); setSubmitting(false); return; }
+
+    // For students, update extra profile fields
+    if (form.role === 'student' && json.user?.id) {
+      const extras: Record<string, string | null> = {};
+      if (form.nama) extras.nama = form.nama;
+      if (form.tempat_lahir) extras.tempat_lahir = form.tempat_lahir;
+      if (form.tanggal_lahir) extras.tanggal_lahir = form.tanggal_lahir;
+      if (form.sekolah) extras.sekolah = form.sekolah;
+      if (form.jurusan) extras.jurusan = form.jurusan;
+      if (Object.keys(extras).length > 0) {
+        await supabase.from('profiles').update(extras).eq('id', json.user.id);
+      }
+    }
+
     setSubmitting(false);
-    if (!res.ok) { setError(json.error ?? 'Gagal membuat user'); return; }
     onDone();
   }
 
@@ -253,8 +273,8 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
     <Overlay>
       <Modal title="Tambah User Baru" onClose={onClose}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <FieldRow label="Nama Lengkap">
-            <input style={inputStyle} value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} required />
+          <FieldRow label="Nama Panggilan (display name)">
+            <input style={inputStyle} value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} required placeholder="cth. Budi" />
           </FieldRow>
           <FieldRow label="Username">
             <input style={inputStyle} value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value.toLowerCase().replace(/\s/g, '_') }))} required />
@@ -276,13 +296,32 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
             </div>
           </FieldRow>
           {form.role === 'student' && (
-            <FieldRow label="Grup">
-              {groups.length === 0 ? (
-                <p style={{ ...errorStyle, color: '#A16207' }}>Belum ada grup. Buat grup terlebih dahulu di tab Grup.</p>
-              ) : (
-                <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
-              )}
-            </FieldRow>
+            <>
+              <FieldRow label="Grup">
+                {groups.length === 0 ? (
+                  <p style={{ ...errorStyle, color: '#A16207' }}>Belum ada grup. Buat grup terlebih dahulu di tab Grup.</p>
+                ) : (
+                  <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
+                )}
+              </FieldRow>
+              <FieldRow label="Nama Lengkap (sesuai KTP/ijazah)">
+                <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" />
+              </FieldRow>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <FieldRow label="Tempat Lahir">
+                  <input style={inputStyle} value={form.tempat_lahir} onChange={e => setForm(f => ({ ...f, tempat_lahir: e.target.value }))} placeholder="cth. Denpasar" />
+                </FieldRow>
+                <FieldRow label="Tanggal Lahir">
+                  <input style={inputStyle} type="date" value={form.tanggal_lahir} onChange={e => setForm(f => ({ ...f, tanggal_lahir: e.target.value }))} />
+                </FieldRow>
+              </div>
+              <FieldRow label="Sekolah">
+                <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
+              </FieldRow>
+              <FieldRow label="Jurusan">
+                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" />
+              </FieldRow>
+            </>
           )}
           {error && <p style={errorStyle}>{error}</p>}
           <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
@@ -303,6 +342,11 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
     display_name: user.display_name,
     role: user.role,
     group_id: currentGroupId,
+    nama: user.nama ?? '',
+    tempat_lahir: user.tempat_lahir ?? '',
+    tanggal_lahir: user.tanggal_lahir ?? '',
+    sekolah: user.sekolah ?? '',
+    jurusan: user.jurusan ?? '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -312,9 +356,16 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
     setError('');
     setSubmitting(true);
 
-    const { error: profileErr } = await supabase.from('profiles')
-      .update({ display_name: form.display_name, role: form.role })
-      .eq('id', user.id);
+    const update: Record<string, unknown> = { display_name: form.display_name, role: form.role };
+    if (form.role === 'student') {
+      update.nama = form.nama || null;
+      update.tempat_lahir = form.tempat_lahir || null;
+      update.tanggal_lahir = form.tanggal_lahir || null;
+      update.sekolah = form.sekolah || null;
+      update.jurusan = form.jurusan || null;
+    }
+
+    const { error: profileErr } = await supabase.from('profiles').update(update).eq('id', user.id);
     if (profileErr) { setError(profileErr.message); setSubmitting(false); return; }
 
     if (form.role === 'student') {
@@ -332,7 +383,7 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
     <Overlay>
       <Modal title={`Edit: ${user.username}`} onClose={onClose}>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <FieldRow label="Nama Lengkap">
+          <FieldRow label="Nama Panggilan (display name)">
             <input style={inputStyle} value={form.display_name} onChange={e => setForm(f => ({ ...f, display_name: e.target.value }))} required />
           </FieldRow>
           <FieldRow label="Role">
@@ -346,13 +397,32 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
             </div>
           </FieldRow>
           {form.role === 'student' && (
-            <FieldRow label="Grup">
-              {groups.length === 0 ? (
-                <p style={{ ...errorStyle, color: '#A16207' }}>Belum ada grup aktif.</p>
-              ) : (
-                <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
-              )}
-            </FieldRow>
+            <>
+              <FieldRow label="Grup">
+                {groups.length === 0 ? (
+                  <p style={{ ...errorStyle, color: '#A16207' }}>Belum ada grup aktif.</p>
+                ) : (
+                  <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
+                )}
+              </FieldRow>
+              <FieldRow label="Nama Lengkap (sesuai KTP/ijazah)">
+                <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" />
+              </FieldRow>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <FieldRow label="Tempat Lahir">
+                  <input style={inputStyle} value={form.tempat_lahir} onChange={e => setForm(f => ({ ...f, tempat_lahir: e.target.value }))} placeholder="cth. Denpasar" />
+                </FieldRow>
+                <FieldRow label="Tanggal Lahir">
+                  <input style={inputStyle} type="date" value={form.tanggal_lahir} onChange={e => setForm(f => ({ ...f, tanggal_lahir: e.target.value }))} />
+                </FieldRow>
+              </div>
+              <FieldRow label="Sekolah">
+                <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
+              </FieldRow>
+              <FieldRow label="Jurusan">
+                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" />
+              </FieldRow>
+            </>
           )}
           {error && <p style={errorStyle}>{error}</p>}
           <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
@@ -466,8 +536,12 @@ function DeleteUserModal({ user, onClose, onDone }: { user: UserRow; onClose: ()
 
 /* ===================== GROUPS TAB ===================== */
 
+type GroupMember = { id: string; display_name: string; nama: string | null };
+
 function GroupsTab() {
   const [groups, setGroups] = useState<Group[]>([]);
+  const [members, setMembers] = useState<Record<string, GroupMember[]>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<Group | null>(null);
@@ -482,6 +556,20 @@ function GroupsTab() {
     setLoading(true);
     const { data } = await supabase.from('groups').select('*').order('nama');
     setGroups(data ?? []);
+
+    // Load all members per group
+    const { data: sg } = await supabase
+      .from('student_groups')
+      .select('group_id, profiles!student_id(id, display_name, nama)')
+      .order('group_id');
+
+    const map: Record<string, GroupMember[]> = {};
+    (sg ?? []).forEach((r: any) => {
+      const gid = r.group_id;
+      if (!map[gid]) map[gid] = [];
+      if (r.profiles) map[gid].push(r.profiles as GroupMember);
+    });
+    setMembers(map);
     setLoading(false);
   }
 
@@ -513,32 +601,57 @@ function GroupsTab() {
         <>
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
             {paginated.map((g, i) => {
-              // const sisa = (g.paket ?? 0) > 0 ? (g.paket! - 0) : null; // realisasi not available here
+              const groupMembers = members[g.id] ?? [];
+              const isExpanded = expanded[g.id] ?? false;
               return (
-                <div key={g.id} style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
-                  borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none',
-                  flexWrap: 'wrap',
-                }}>
-                  <span style={{ background: g.warna, color: g.warna_text, padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'var(--font-body)', letterSpacing: '0.05em', flexShrink: 0 }}>
-                    {g.kode}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{g.nama}</div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
-                      {g.tipe}
-                      {g.sekolah && <span> &middot; {g.sekolah}</span>}
+                <div key={g.id} style={{ borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none' }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+                    flexWrap: 'wrap',
+                  }}>
+                    <span style={{ background: g.warna, color: g.warna_text, padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'var(--font-body)', letterSpacing: '0.05em', flexShrink: 0 }}>
+                      {g.kode}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{g.nama}</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
+                        {g.tipe}
+                        {g.sekolah && <span> &middot; {g.sekolah}</span>}
+                        {g.wa_group_link && <span style={{ color: '#25D366' }}> &middot; WA</span>}
+                        <span> &middot; {groupMembers.length} siswa</span>
+                      </div>
+                    </div>
+                    {g.paket != null && g.paket > 0 && (
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0D5C3A', flexShrink: 0 }}>
+                        Paket {g.paket} sesi
+                      </span>
+                    )}
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                      {groupMembers.length > 0 && (
+                        <button
+                          onClick={() => setExpanded(ex => ({ ...ex, [g.id]: !ex[g.id] }))}
+                          style={{ ...btnGhost, fontSize: '0.75rem' }}
+                        >
+                          {isExpanded ? 'Tutup' : 'Anggota'}
+                        </button>
+                      )}
+                      <button onClick={() => setEditTarget(g)} style={btnEdit}>Edit</button>
+                      <button onClick={() => { setDeleteTarget(g); setDeleteError(''); }} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
                     </div>
                   </div>
-                  {g.paket != null && g.paket > 0 && (
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0F1F6B', flexShrink: 0 }}>
-                      Paket {g.paket} sesi
-                    </span>
+                  {isExpanded && groupMembers.length > 0 && (
+                    <div style={{ padding: '0 16px 12px 16px', background: '#F9F9F7' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        {groupMembers.map((m, mi) => (
+                          <div key={m.id} style={{ display: 'flex', alignItems: 'baseline', gap: '8px', padding: '5px 8px', background: '#fff', borderRadius: '6px' }}>
+                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#aaa', minWidth: '18px' }}>{mi + 1}.</span>
+                            <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.82rem', color: '#0D0D0D' }}>{m.display_name}</span>
+                            {m.nama && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>{m.nama}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   )}
-                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button onClick={() => setEditTarget(g)} style={btnEdit}>Edit</button>
-                    <button onClick={() => { setDeleteTarget(g); setDeleteError(''); }} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
-                  </div>
                 </div>
               );
             })}
@@ -586,6 +699,7 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
     warna_text: group?.warna_text ?? WARNA_PRESETS[0].warna_text,
     paket: group?.paket?.toString() ?? '',
     sekolah: group?.sekolah ?? '',
+    wa_group_link: group?.wa_group_link ?? '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -603,6 +717,7 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
       warna_text: form.warna_text,
       paket: form.paket ? parseInt(form.paket) : null,
       sekolah: form.sekolah || null,
+      wa_group_link: form.wa_group_link || null,
     };
     const { error: err } = group
       ? await supabase.from('groups').update(payload).eq('id', group.id)
@@ -631,6 +746,9 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
           </FieldRow>
           <FieldRow label="Paket (jumlah sesi dibeli)">
             <input style={inputStyle} type="number" min="0" value={form.paket} onChange={e => setForm(f => ({ ...f, paket: e.target.value }))} placeholder="cth. 80" />
+          </FieldRow>
+          <FieldRow label="Link Grup WhatsApp (opsional)">
+            <input style={inputStyle} type="url" value={form.wa_group_link} onChange={e => setForm(f => ({ ...f, wa_group_link: e.target.value }))} placeholder="https://chat.whatsapp.com/..." />
           </FieldRow>
           <FieldRow label="Tipe">
             <div style={{ display: 'flex', gap: '16px' }}>
@@ -803,7 +921,7 @@ const roleBadgeStyle: React.CSSProperties = {
 };
 
 const btnPrimary: React.CSSProperties = {
-  flex: 1, padding: '10px 16px', background: '#0F1F6B', color: '#fff',
+  flex: 1, padding: '10px 16px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '8px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem',
 };
@@ -815,7 +933,7 @@ const btnSecondary: React.CSSProperties = {
 };
 
 const btnEdit: React.CSSProperties = {
-  padding: '5px 12px', background: '#E6EAF8', color: '#0F1F6B',
+  padding: '5px 12px', background: '#D6EEE2', color: '#0D5C3A',
   border: 'none', borderRadius: '6px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem',
 };
