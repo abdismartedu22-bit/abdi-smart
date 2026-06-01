@@ -100,6 +100,8 @@ CREATE POLICY "tryout_results: delete (admin)"
 --   p_nama_to text  -- exact nama_to value
 -- ----------------------------------------------------------------
 
+DROP FUNCTION IF EXISTS public.get_to_leaderboard(text, text);
+
 CREATE OR REPLACE FUNCTION public.get_to_leaderboard(
   p_type    text,
   p_nama_to text
