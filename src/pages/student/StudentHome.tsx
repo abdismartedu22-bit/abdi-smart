@@ -194,16 +194,35 @@ export default function StudentHome() {
 
   const firstName = profile?.display_name?.split(' ')[0] ?? '...';
 
+  const isBirthday = (() => {
+    if (!profile?.tanggal_lahir) return false;
+    const now = new Date();
+    const parts = profile.tanggal_lahir.split('-');
+    return now.getMonth() + 1 === Number(parts[1]) && now.getDate() === Number(parts[2]);
+  })();
+
   return (
     <div style={{ maxWidth: '640px' }}>
 
       {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
+      <div style={{ marginBottom: isBirthday ? '16px' : '24px' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', margin: '0 0 4px', color: '#0D0D0D', letterSpacing: '-0.02em' }}>
-          Hai, {firstName}!
+          {isBirthday ? `Selamat Ulang Tahun, ${firstName}!` : `Hai, ${firstName}!`}
         </h1>
         <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#888', margin: 0 }}>{dateLabel}</p>
       </div>
+
+      {/* Birthday banner */}
+      {isBirthday && (
+        <div style={{ background: 'linear-gradient(135deg, #FFE500 0%, #FFC107 100%)', borderRadius: '14px', padding: '18px 22px', marginBottom: '20px', border: '1.5px solid #F59E0B' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.05rem', color: '#0D0D0D', marginBottom: '4px' }}>
+            Hari spesialmu, semangat belajarnya!
+          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#4B3800' }}>
+            Semoga perjalanan belajarmu penuh pencapaian dan kamu berhasil meraih kampus impian.
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p style={muted}>Memuat...</p>
