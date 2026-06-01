@@ -31,6 +31,8 @@ import StudentJadwal from './pages/student/Jadwal';
 import StudentAbsen from './pages/student/Absen';
 import StudentHasilTO from './pages/student/HasilTO';
 import StudentQuiz from './pages/student/Quiz';
+import StudentQuizDo from './pages/student/QuizDo';
+import StudentQuizReview from './pages/student/QuizReview';
 
 export default function App() {
   return (
@@ -89,6 +91,8 @@ export default function App() {
               <Route path="/student/absen" element={<StudentAbsen />} />
               <Route path="/student/hasil-to" element={<StudentHasilTO />} />
               <Route path="/student/quiz" element={<StudentQuiz />} />
+              <Route path="/student/quiz/do" element={<StudentQuizDo />} />
+              <Route path="/student/quiz/review/:sessionId" element={<StudentQuizReview />} />
             </Route>
           </Route>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
-import { getWeekStart, toISODate, fmtTime, fmtTimestampWITA, nowWITAMinutes } from '../../lib/dates';
+import { getWeekStart, toISODate, fmtTime, fmtTimestampWITA } from '../../lib/dates';
 import { addDays } from 'date-fns';
 import WeekPicker from '../../components/shared/WeekPicker';
 import GrupBadge from '../../components/shared/GrupBadge';
@@ -70,18 +70,6 @@ type StudentAttRow = {
 //   return toISODate(date);
 // }
 
-function todayWITA(): string {
-  const now = new Date();
-  return new Date(now.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-function hasPassed(sessionDateISO: string, jamSelesai: string): boolean {
-  const today = todayWITA();
-  if (sessionDateISO < today) return true;
-  if (sessionDateISO > today) return false;
-  const [h, m] = jamSelesai.split(':').map(Number);
-  return nowWITAMinutes() > h * 60 + m;
-}
 
 const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
   terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
@@ -182,7 +170,6 @@ function RealisasiSesiTab({ readOnly = false }: { readOnly?: boolean }) {
 
     const schedules = (schedData ?? []) as unknown as ScheduleRow[];
     const merged: MergedRow[] = schedules
-      .filter(s => hasPassed(dateFilter, s.jam_selesai))
       .map(s => ({ schedule: s, att: attMap[s.id] ?? null, session_date: dateFilter }));
 
     merged.sort((a, b) => a.schedule.jam_mulai < b.schedule.jam_mulai ? -1 : 1);

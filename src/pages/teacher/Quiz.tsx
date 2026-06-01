@@ -5,6 +5,22 @@ import { toISODate, getWeekStart, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 import type { Quiz } from '../../types';
 
+type Tab = 'aktifkan' | 'riwayat';
+
+type ClosedSession = {
+  id: string;
+  quiz_id: string;
+  group_id: string;
+  session_date: string;
+  activated_at: string;
+  closed_at: string;
+  quiz: { nomor: number; judul: string };
+  group: { nama: string; kode: string; warna: string; warna_text: string };
+  student_count: number;
+  avg_skor: number;
+  max_poin: number;
+};
+
 type TodaySession = {
   id: string;
   hari: string;
@@ -31,6 +47,7 @@ function getTodayHari(): string {
 
 export default function TeacherQuiz() {
   const { user } = useAuth();
+  const [tab, setTab] = useState<Tab>('aktifkan');
   const [loading, setLoading] = useState(true);
   const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
@@ -39,6 +56,11 @@ export default function TeacherQuiz() {
   const [selectedQuiz, setSelectedQuiz] = useState<Record<string, string>>({});
   const [activating, setActivating] = useState<string | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
+
+  // Riwayat state
+  const [riwayat, setRiwayat] = useState<ClosedSession[]>([]);
+  const [riwayatLoading, setRiwayatLoading] = useState(false);
+  const [riwayatLoaded, setRiwayatLoaded] = useState(false);
 
   const today = toISODate(new Date());
   const todayHari = getTodayHari();
@@ -139,7 +161,76 @@ export default function TeacherQuiz() {
     const groupIds = [...new Set(todaySessions.map(s => s.group_id))];
     await loadActiveSessions(groupIds);
     setClosing(null);
+    // Auto-switch to riwayat and reload
+    setRiwayatLoaded(false);
+    setTab('riwayat');
   }
+
+  async function loadRiwayat() {
+    if (!user) return;
+    setRiwayatLoading(true);
+    const { data: sessions } = await supabase
+      .from('quiz_sessions')
+      .select('id, quiz_id, group_id, session_date, activated_at, closed_at, quiz:quizzes!quiz_id(nomor,judul), group:groups!group_id(nama,kode,warna,warna_text)')
+      .eq('activated_by', user.id)
+      .not('closed_at', 'is', null)
+      .order('session_date', { ascending: false })
+      .order('closed_at', { ascending: false })
+      .limit(30);
+
+    const sessionList = (sessions ?? []) as any[];
+    if (sessionList.length === 0) { setRiwayat([]); setRiwayatLoading(false); setRiwayatLoaded(true); return; }
+
+    const { data: answers } = await supabase
+      .from('quiz_answers')
+      .select('quiz_session_id, student_id, skor')
+      .in('quiz_session_id', sessionList.map(s => s.id));
+
+    const sessMap: Record<string, { students: Set<string>; total_skor: number }> = {};
+    sessionList.forEach(s => { sessMap[s.id] = { students: new Set(), total_skor: 0 }; });
+    (answers ?? []).forEach((a: any) => {
+      if (sessMap[a.quiz_session_id]) {
+        sessMap[a.quiz_session_id].students.add(a.student_id);
+        sessMap[a.quiz_session_id].total_skor += a.skor ?? 0;
+      }
+    });
+
+    const { data: allQs } = await supabase
+      .from('quiz_questions')
+      .select('quiz_id, poin')
+      .in('quiz_id', [...new Set(sessionList.map(s => s.quiz_id))]);
+
+    const poinMap: Record<string, number> = {};
+    (allQs ?? []).forEach((q: any) => { poinMap[q.quiz_id] = (poinMap[q.quiz_id] ?? 0) + q.poin; });
+
+    const rows: ClosedSession[] = sessionList.map(s => {
+      const stats = sessMap[s.id];
+      const count = stats.students.size;
+      return {
+        id: s.id,
+        quiz_id: s.quiz_id,
+        group_id: s.group_id,
+        session_date: s.session_date,
+        activated_at: s.activated_at,
+        closed_at: s.closed_at,
+        quiz: s.quiz,
+        group: s.group,
+        student_count: count,
+        avg_skor: count > 0 ? stats.total_skor / count : 0,
+        max_poin: poinMap[s.quiz_id] ?? 0,
+      };
+    });
+
+    setRiwayat(rows);
+    setRiwayatLoading(false);
+    setRiwayatLoaded(true);
+  }
+
+  useEffect(() => {
+    if (tab === 'riwayat' && !riwayatLoaded && !riwayatLoading) {
+      loadRiwayat();
+    }
+  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groupedSessions: Record<string, TodaySession[]> = {};
   todaySessions.forEach(s => {
@@ -149,16 +240,71 @@ export default function TeacherQuiz() {
 
   return (
     <div>
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 4px', color: '#0D0D0D' }}>
-          Aktifkan Quiz
-        </h1>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: 0 }}>
-          {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-        </p>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 20px', color: '#0D0D0D' }}>Quiz</h1>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '2px solid #E2E1DC' }}>
+        {([['aktifkan', 'Aktifkan Quiz'], ['riwayat', 'Riwayat Quiz']] as [Tab, string][]).map(([t, label]) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            style={{ padding: '8px 20px', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem', border: 'none', background: 'none', cursor: 'pointer', color: tab === t ? '#0D5C3A' : '#666', borderBottom: tab === t ? '2px solid #0D5C3A' : '2px solid transparent', marginBottom: '-2px' }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {loading ? (
+      {tab === 'riwayat' ? (
+        <div>
+          {riwayatLoading ? (
+            <p style={muted}>Memuat riwayat...</p>
+          ) : riwayat.length === 0 ? (
+            <div style={card}><p style={muted}>Belum ada riwayat quiz.</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {riwayat.map(r => {
+                const dateLabel = new Date(r.session_date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+                const avgPct = r.max_poin > 0 ? Math.round((r.avg_skor / r.max_poin) * 100) : null;
+                return (
+                  <div key={r.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: '#fff', background: '#0D5C3A', padding: '2px 9px', borderRadius: '5px', flexShrink: 0 }}>
+                      Quiz {String(r.quiz.nomor).padStart(2, '0')}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{r.quiz.judul}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                        {r.group && <GrupBadge kode={r.group.kode} warna={r.group.warna} warna_text={r.group.warna_text} />}
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: '#888' }}>{dateLabel}</span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexShrink: 0 }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#0D5C3A', lineHeight: 1 }}>{r.student_count}</div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#888' }}>siswa</div>
+                      </div>
+                      {avgPct !== null && r.student_count > 0 && (
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: avgPct >= 80 ? '#15803D' : avgPct >= 60 ? '#A16207' : '#DC0A1E', lineHeight: 1 }}>
+                            {r.avg_skor % 1 === 0 ? r.avg_skor.toFixed(0) : r.avg_skor.toFixed(1)}
+                          </div>
+                          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#888' }}>rata-rata</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: '0 0 20px' }}>
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </p>
+
+          {loading ? (
         <p style={muted}>Memuat...</p>
       ) : todaySessions.length === 0 ? (
         <div style={card}>
@@ -248,6 +394,8 @@ export default function TeacherQuiz() {
             );
           })}
         </div>
+      )}
+        </>
       )}
     </div>
   );
