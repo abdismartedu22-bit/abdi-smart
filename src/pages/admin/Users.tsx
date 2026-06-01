@@ -438,16 +438,29 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
           </FieldRow>
           {!isSelf && (
             <FieldRow label="Status">
-              <div style={{ display: 'flex', gap: '10px' }}>
-                {([true, false] as const).map(val => (
-                  <label key={String(val)} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-                    <input type="radio" name="is_active_edit" checked={form.is_active === val} onChange={() => setForm(f => ({ ...f, is_active: val }))} />
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: val ? '#22C55E' : '#EAB308', display: 'inline-block' }} />
-                      {val ? 'Aktif' : 'Non-aktif'}
-                    </span>
-                  </label>
-                ))}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, is_active: true }))}
+                  style={{
+                    padding: '7px 20px', borderRadius: '20px', border: form.is_active ? '2px solid #86EFAC' : '2px solid #E2E1DC', cursor: 'pointer',
+                    background: form.is_active ? '#DCFCE7' : '#F3F2EE', color: form.is_active ? '#15803D' : '#999',
+                    fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.82rem', transition: 'all 0.15s',
+                  }}
+                >
+                  AKTIF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, is_active: false }))}
+                  style={{
+                    padding: '7px 20px', borderRadius: '20px', border: !form.is_active ? '2px solid #FCA5A5' : '2px solid #E2E1DC', cursor: 'pointer',
+                    background: !form.is_active ? '#FEE2E2' : '#F3F2EE', color: !form.is_active ? '#DC0A1E' : '#999',
+                    fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.82rem', transition: 'all 0.15s',
+                  }}
+                >
+                  NON-AKTIF
+                </button>
               </div>
             </FieldRow>
           )}

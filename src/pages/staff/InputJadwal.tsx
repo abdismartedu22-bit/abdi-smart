@@ -1,4 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { HARI, getWeekStart, getWeekDays, toISODate, formatDayLabel, getDateForHari, fmtTime } from '../../lib/dates';
@@ -56,8 +57,11 @@ function getYesterdayHari(): string {
   return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][yesterday.getDay()];
 }
 
+type DayFilter = 'today' | 'yesterday' | 'all';
+
 export default function InputJadwal() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const isAdmin = profile?.role === 'admin';
 
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
@@ -66,7 +70,8 @@ export default function InputJadwal() {
   const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [gedungRooms, setGedungRooms] = useState<GedungRoom[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAll, setShowAll] = useState(false);
+  const [dayFilter, setDayFilter] = useState<DayFilter>('today');
+  const [savedNew, setSavedNew] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<ScheduleRow | null>(null);
@@ -163,6 +168,7 @@ export default function InputJadwal() {
       created_by: profile?.id,
     };
 
+    const isNew = !editing;
     const { error } = editing
       ? await supabase.from('schedules').update(payload).eq('id', editing.id)
       : await supabase.from('schedules').insert(payload);
@@ -170,6 +176,7 @@ export default function InputJadwal() {
     setSubmitting(false);
     if (error) { setFormError(error.message); return; }
     setShowModal(false);
+    if (isNew) setSavedNew(true);
     load();
   }
 
@@ -182,12 +189,13 @@ export default function InputJadwal() {
     load();
   }
 
-  // Filter to H and H-1 when not showing all
-  const displayed = showAll
-    ? schedules
-    : schedules.filter(s => s.hari === todayHari || s.hari === yesterdayHari);
+  const displayed = dayFilter === 'today'
+    ? schedules.filter(s => s.hari === todayHari)
+    : dayFilter === 'yesterday'
+    ? schedules.filter(s => s.hari === yesterdayHari)
+    : schedules;
 
-  // For "show all" mode: group by day in HARI order
+  // For "all" mode: group by day in HARI order
   const byDay = HARI.map((hari, idx) => ({
     hari,
     dayDate: weekDays[idx],
@@ -212,32 +220,43 @@ export default function InputJadwal() {
         </div>
       </div>
 
-      {/* View toggle */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-        <button
-          onClick={() => setShowAll(false)}
-          style={{
-            padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
-            fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.82rem',
-            background: !showAll ? '#0D5C3A' : '#F3F2EE',
-            color: !showAll ? '#fff' : '#444',
-            border: 'none',
-          }}
-        >
-          Hari Ini &amp; Kemarin
-        </button>
-        <button
-          onClick={() => setShowAll(true)}
-          style={{
-            padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
-            fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.82rem',
-            background: showAll ? '#0D5C3A' : '#F3F2EE',
-            color: showAll ? '#fff' : '#444',
-            border: 'none',
-          }}
-        >
-          Semua Hari
-        </button>
+      {/* Saved new jadwal banner */}
+      {savedNew && (
+        <div style={{ background: '#D1FAE5', border: '1px solid #6EE7B7', borderRadius: '8px', padding: '10px 14px', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#047857', fontWeight: 600 }}>
+            Sesi berhasil ditambahkan.
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => navigate(isAdmin ? '/admin/realisasi' : '/staff/realisasi')}
+              style={{ padding: '5px 12px', background: '#047857', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem' }}
+            >
+              Lihat Realisasi
+            </button>
+            <button onClick={() => setSavedNew(false)} style={{ padding: '5px 12px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#047857' }}>
+              Tutup
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Day filter */}
+      <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+        {([['today', 'Hari Ini'], ['yesterday', 'Kemarin'], ['all', 'Semua Hari']] as [DayFilter, string][]).map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => setDayFilter(val)}
+            style={{
+              padding: '6px 14px', borderRadius: '6px', cursor: 'pointer',
+              fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.82rem',
+              background: dayFilter === val ? '#0D5C3A' : '#F3F2EE',
+              color: dayFilter === val ? '#fff' : '#444',
+              border: 'none',
+            }}
+          >
+            {label}
+          </button>
+        ))}
         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888' }}>
           {displayed.length} sesi
         </span>

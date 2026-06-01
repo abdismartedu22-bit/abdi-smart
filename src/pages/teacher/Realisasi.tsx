@@ -298,6 +298,21 @@ export default function TeacherRealisasi() {
 
   useEffect(() => { load(); }, [load]);
 
+  // Poll attendance every 10 s so teacher sees student check-ins live
+  useEffect(() => {
+    if (sessions.length === 0) return;
+    const scheduleIds = sessions.map(s => s.id);
+    const t = setInterval(async () => {
+      const { data: att } = await supabase
+        .from('attendance')
+        .select('id, schedule_id, person_id, person_role, status, checkin_at, sesi_status, note, locked_at')
+        .in('schedule_id', scheduleIds)
+        .eq('session_date', today);
+      if (att) setAttendance(att as AttRow[]);
+    }, 10_000);
+    return () => clearInterval(t);
+  }, [sessions, today]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>

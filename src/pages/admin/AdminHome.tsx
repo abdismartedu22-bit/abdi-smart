@@ -163,6 +163,24 @@ export default function AdminHome() {
     setLoading(false);
   }
 
+  // Poll teacher sesi_status every 30 s so dashboard reflects terlaksana without waiting for lock
+  useEffect(() => {
+    const t = setInterval(async () => {
+      if (todaySessions.length === 0) return;
+      const today = toISODate(new Date());
+      const { data: att } = await supabase
+        .from('attendance')
+        .select('schedule_id, sesi_status')
+        .in('schedule_id', todaySessions.map(s => s.id))
+        .eq('session_date', today)
+        .eq('person_role', 'teacher');
+      const map: Record<string, string | null> = {};
+      (att ?? []).forEach((a: any) => { map[a.schedule_id] = a.sesi_status; });
+      setTodayAttendance(map);
+    }, 30_000);
+    return () => clearInterval(t);
+  }, [todaySessions]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div>
       <div style={{ marginBottom: '24px' }}>

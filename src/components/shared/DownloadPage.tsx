@@ -271,7 +271,7 @@ export default function DownloadPage() {
 
         <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '8px', padding: '10px 14px' }}>
           <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#9A3412', margin: 0 }}>
-            File ini mungkin berisi data pribadi siswa. Jangan bagikan sembarangan.
+            File ini mungkin berisi data pribadi siswa. Mohon untuk tidak membagikan sembarangan.
           </p>
         </div>
 

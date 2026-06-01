@@ -117,10 +117,11 @@ function HariIniTab() {
   const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>({});
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
+  const [checkInError, setCheckInError] = useState<string>('');
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 30_000);
+    const t = setInterval(() => setTick(n => n + 1), 10_000);
     return () => clearInterval(t);
   }, []);
 
@@ -177,6 +178,7 @@ function HariIniTab() {
   async function handleCheckIn(scheduleId: string) {
     if (!user) return;
     setCheckingIn(scheduleId);
+    setCheckInError('');
     const today = toISODate(new Date());
     const { error } = await supabase.from('attendance').insert({
       schedule_id: scheduleId,
@@ -187,7 +189,8 @@ function HariIniTab() {
       status: null,
     });
     setCheckingIn(null);
-    if (!error) load();
+    if (error) setCheckInError('Gagal mencatat absen. Coba lagi.');
+    load();
   }
 
   const today = new Date();
@@ -233,13 +236,17 @@ function HariIniTab() {
                 </div>
 
                 <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '12px' }}>
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666', margin: '0 0 10px' }}>
+                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#aaa', margin: '0 0 10px' }}>
                     Waktu absen: {fmtTime(s.jam_mulai)} &ndash; {endWindow} WITA
+                    {winState === 'closed' && <span style={{ color: '#DC0A1E' }}> (sudah lewat)</span>}
                   </p>
 
                   {att?.locked_at ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>Absen dikunci</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '6px', background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: '#15803D' }}>TERKUNCI</span>
+                      </span>
                       {att.status && (
                         <span style={finalBadge(att.status)}>
                           {att.status === 'tidak_hadir' || att.status === 'absen' ? 'TIDAK HADIR' : att.status.toUpperCase()}
@@ -253,29 +260,31 @@ function HariIniTab() {
                     </div>
                   ) : att?.checkin_at ? (
                     <div>
-                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#047857', margin: '0 0 4px', fontWeight: 500 }}>
-                        Absen tercatat &mdash; menunggu verifikasi pengajar
-                      </p>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '6px', background: '#D1FAE5', border: '1px solid #6EE7B7' }}>
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: '#047857' }}>ABSEN TERCATAT</span>
+                        </span>
+                      </div>
                       <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', margin: 0 }}>
-                        check-in {fmtTimestampWITA(att.checkin_at, 'time')}
+                        check-in {fmtTimestampWITA(att.checkin_at, 'time')} &middot; menunggu verifikasi pengajar
                       </p>
                     </div>
-                  ) : winState === 'before' ? (
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: 0 }}>
-                      Belum waktunya absen
-                    </p>
-                  ) : winState === 'open' ? (
-                    <button
-                      onClick={() => handleCheckIn(s.id)}
-                      disabled={checkingIn === s.id}
-                      style={btnAbsen}
-                    >
-                      {checkingIn === s.id ? 'Mencatat...' : 'Absen Sekarang'}
-                    </button>
                   ) : (
-                    <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#DC0A1E', margin: 0 }}>
-                      Waktu absen sudah habis
-                    </p>
+                    <div>
+                      <button
+                        onClick={() => handleCheckIn(s.id)}
+                        disabled={checkingIn === s.id}
+                        style={btnAbsen}
+                      >
+                        {checkingIn === s.id ? 'Mencatat...' : 'Absen Sekarang'}
+                      </button>
+                      {checkInError && (
+                        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0' }}>
+                          {checkInError}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

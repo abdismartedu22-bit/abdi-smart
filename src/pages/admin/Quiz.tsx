@@ -201,7 +201,7 @@ export default function AdminQuiz() {
         <QuizFormModal
           nextNomor={nextNomor}
           onClose={() => setShowCreateQuiz(false)}
-          onDone={() => { setShowCreateQuiz(false); load(); }}
+          onDone={(newId) => { setShowCreateQuiz(false); load(); if (newId) setAddQuestFor({ quizId: newId, nextUrutan: 1 }); }}
         />
       )}
       {editQuiz && (
@@ -273,7 +273,7 @@ export default function AdminQuiz() {
 
 /* ===================== QUIZ FORM MODAL ===================== */
 
-function QuizFormModal({ quiz, nextNomor, onClose, onDone }: { quiz?: Quiz; nextNomor: number; onClose: () => void; onDone: () => void }) {
+function QuizFormModal({ quiz, nextNomor, onClose, onDone }: { quiz?: Quiz; nextNomor: number; onClose: () => void; onDone: (newId?: string) => void }) {
   const { profile } = useAuth();
   const [form, setForm] = useState({
     nomor: quiz?.nomor ?? nextNomor,
@@ -289,12 +289,18 @@ function QuizFormModal({ quiz, nextNomor, onClose, onDone }: { quiz?: Quiz; next
     if (!form.judul) { setError('Judul wajib diisi'); return; }
     setSubmitting(true);
     const payload = { nomor: form.nomor, judul: form.judul, deskripsi: form.deskripsi || null };
-    const { error: err } = quiz
-      ? await supabase.from('quizzes').update(payload).eq('id', quiz.id)
-      : await supabase.from('quizzes').insert({ ...payload, created_by: profile?.id });
-    setSubmitting(false);
-    if (err) { setError(err.message); return; }
-    onDone();
+    let newId: string | undefined;
+    if (quiz) {
+      const { error: err } = await supabase.from('quizzes').update(payload).eq('id', quiz.id);
+      setSubmitting(false);
+      if (err) { setError(err.message); return; }
+    } else {
+      const { data: created, error: err } = await supabase.from('quizzes').insert({ ...payload, created_by: profile?.id }).select('id').single();
+      setSubmitting(false);
+      if (err) { setError(err.message); return; }
+      newId = created?.id;
+    }
+    onDone(newId);
   }
 
   return (
@@ -427,19 +433,33 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
 
   return (
     <Overlay>
-      <div style={{ ...modal, maxWidth: '560px' }}>
-        <ModalHeader title={question ? 'Edit Soal' : 'Tambah Soal'} onClose={onClose} />
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div style={{ ...modal, maxWidth: '640px' }}>
+        <ModalHeader title={question ? 'Edit Soal' : 'Tambah Soal Baru'} onClose={onClose} />
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
           {/* Tipe */}
           <Field label="Tipe Soal">
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {(Object.keys(TIPE_LABELS) as QuizTipe[]).map(t => (
-                <label key={t} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.83rem' }}>
-                  <input type="radio" name="tipe_soal" checked={tipe === t} onChange={() => setTipe(t)} />
-                  {TIPE_LABELS[t]}
-                </label>
-              ))}
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {(Object.keys(TIPE_LABELS) as QuizTipe[]).map(t => {
+                const active = tipe === t;
+                const tb = TIPE_BADGE[t];
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setTipe(t)}
+                    style={{
+                      padding: '6px 14px', borderRadius: '20px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem',
+                      border: active ? `2px solid ${tb.color}40` : '2px solid #E2E1DC',
+                      background: active ? tb.bg : '#F9F9F7',
+                      color: active ? tb.color : '#888',
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    {TIPE_LABELS[t]}
+                  </button>
+                );
+              })}
             </div>
           </Field>
 
@@ -470,56 +490,77 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
           {/* Options (PG / centang_semua) */}
           {(tipe === 'pilihan_ganda' || tipe === 'centang_semua') && (
             <Field label="Opsi Jawaban">
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '0 0 8px' }}>
+                {tipe === 'pilihan_ganda' ? 'Klik lingkaran hijau untuk menandai jawaban benar.' : 'Centang semua opsi yang benar.'}
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {options.map((opt, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {tipe === 'pilihan_ganda' ? (
-                      <input type="radio" name="correct_pg" checked={correctPG === opt.label} onChange={() => setCorrectPG(opt.label)} title="Tandai sebagai jawaban benar" />
-                    ) : (
+                {options.map((opt, i) => {
+                  const isCorrect = tipe === 'pilihan_ganda' ? correctPG === opt.label : correctCentang.has(opt.label);
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', background: isCorrect ? '#F0FDF4' : '#F9F9F7', border: `1.5px solid ${isCorrect ? '#86EFAC' : '#E2E1DC'}`, transition: 'all 0.12s' }}>
+                      {tipe === 'pilihan_ganda' ? (
+                        <button
+                          type="button"
+                          onClick={() => setCorrectPG(opt.label)}
+                          style={{ width: '22px', height: '22px', borderRadius: '50%', border: isCorrect ? '2px solid #16A34A' : '2px solid #D1D5DB', background: isCorrect ? '#16A34A' : 'transparent', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Tandai sebagai jawaban benar"
+                        >
+                          {isCorrect && <span style={{ color: '#fff', fontSize: '0.6rem', fontWeight: 900 }}>✓</span>}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setCorrectCentang(prev => { const n = new Set(prev); isCorrect ? n.delete(opt.label) : n.add(opt.label); return n; })}
+                          style={{ width: '22px', height: '22px', borderRadius: '4px', border: isCorrect ? '2px solid #7C3AED' : '2px solid #D1D5DB', background: isCorrect ? '#7C3AED' : 'transparent', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Tandai sebagai jawaban benar"
+                        >
+                          {isCorrect && <span style={{ color: '#fff', fontSize: '0.6rem', fontWeight: 900 }}>✓</span>}
+                        </button>
+                      )}
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.88rem', fontWeight: 700, minWidth: '20px', color: isCorrect ? '#15803D' : '#aaa' }}>
+                        {opt.label}
+                      </span>
                       <input
-                        type="checkbox"
-                        checked={correctCentang.has(opt.label)}
-                        onChange={e => setCorrectCentang(prev => {
-                          const n = new Set(prev);
-                          e.target.checked ? n.add(opt.label) : n.delete(opt.label);
-                          return n;
-                        })}
-                        title="Tandai sebagai jawaban benar"
+                        style={{ ...input, flex: 1, background: 'transparent', border: 'none', padding: '0', outline: 'none', borderBottom: '1px solid #E2E1DC', borderRadius: 0 }}
+                        value={opt.text}
+                        onChange={e => setOptions(o => o.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
+                        placeholder={`Teks opsi ${opt.label}...`}
                       />
-                    )}
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', fontWeight: 700, minWidth: '18px', color: (tipe === 'pilihan_ganda' ? correctPG === opt.label : correctCentang.has(opt.label)) ? '#15803D' : '#888' }}>
-                      {opt.label}
-                    </span>
-                    <input
-                      style={{ ...input, flex: 1 }}
-                      value={opt.text}
-                      onChange={e => setOptions(o => o.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
-                      placeholder={`Opsi ${opt.label}`}
-                    />
-                    {options.length > 2 && (
-                      <button type="button" onClick={() => removeOption(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#DC0A1E', fontSize: '1rem', padding: '0 4px' }}>×</button>
-                    )}
-                  </div>
-                ))}
+                      {options.length > 2 && (
+                        <button type="button" onClick={() => removeOption(i)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D1D5DB', fontSize: '1rem', padding: '0 2px', lineHeight: 1 }}
+                          onMouseEnter={e => (e.currentTarget.style.color = '#DC0A1E')}
+                          onMouseLeave={e => (e.currentTarget.style.color = '#D1D5DB')}
+                        >×</button>
+                      )}
+                    </div>
+                  );
+                })}
                 {options.length < 6 && (
-                  <button type="button" onClick={addOption} style={{ ...btnGhost, alignSelf: 'flex-start', fontSize: '0.78rem' }}>+ Tambah Opsi</button>
+                  <button type="button" onClick={addOption} style={{ ...btnGhost, alignSelf: 'flex-start', fontSize: '0.78rem', color: '#0D5C3A', borderColor: '#0D5C3A' }}>+ Tambah Opsi</button>
                 )}
               </div>
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '4px 0 0' }}>
-                {tipe === 'pilihan_ganda' ? 'Klik radio untuk menandai jawaban benar.' : 'Centang semua opsi yang benar.'}
-              </p>
             </Field>
           )}
 
           {/* Benar/Salah */}
           {tipe === 'benar_salah' && (
             <Field label="Jawaban Benar">
-              <div style={{ display: 'flex', gap: '16px' }}>
+              <div style={{ display: 'flex', gap: '10px' }}>
                 {['Benar', 'Salah'].map(v => (
-                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
-                    <input type="radio" name="correct_bs" checked={correctBS === v} onChange={() => setCorrectBS(v)} />
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setCorrectBS(v)}
+                    style={{
+                      flex: 1, padding: '10px', borderRadius: '8px', cursor: 'pointer',
+                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem',
+                      border: correctBS === v ? '2px solid ' + (v === 'Benar' ? '#16A34A' : '#DC2626') : '2px solid #E2E1DC',
+                      background: correctBS === v ? (v === 'Benar' ? '#D1FAE5' : '#FEE2E2') : '#F9F9F7',
+                      color: correctBS === v ? (v === 'Benar' ? '#15803D' : '#DC2626') : '#888',
+                    }}
+                  >
                     {v}
-                  </label>
+                  </button>
                 ))}
               </div>
             </Field>
@@ -541,14 +582,19 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
           )}
 
           {/* Poin */}
-          <Field label="Poin">
-            <input style={{ ...input, maxWidth: '100px' }} type="number" min="1" value={poin} onChange={e => setPoin(parseInt(e.target.value) || 1)} required />
+          <Field label="Poin per Soal">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <button type="button" onClick={() => setPoin(p => Math.max(1, p - 1))} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1.5px solid #E2E1DC', background: '#F9F9F7', cursor: 'pointer', fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>-</button>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', fontWeight: 700, color: '#0D5C3A', minWidth: '32px', textAlign: 'center' }}>{poin}</span>
+              <button type="button" onClick={() => setPoin(p => p + 1)} style={{ width: '32px', height: '32px', borderRadius: '8px', border: '1.5px solid #E2E1DC', background: '#F9F9F7', cursor: 'pointer', fontWeight: 700, fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>+</button>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#aaa' }}>poin</span>
+            </div>
           </Field>
 
           {error && <p style={errorText}>{error}</p>}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '4px', paddingTop: '12px', borderTop: '1px solid #F3F2EE' }}>
             <button type="button" onClick={onClose} style={btnSecondary}>Batal</button>
-            <button type="submit" disabled={submitting} style={btnPrimary}>{submitting ? 'Menyimpan...' : 'Simpan Soal'}</button>
+            <button type="submit" disabled={submitting} style={{ ...btnPrimary, background: submitting ? '#6B7280' : '#0D5C3A' }}>{submitting ? 'Menyimpan...' : 'Simpan Soal'}</button>
           </div>
         </form>
       </div>
