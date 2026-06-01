@@ -32,6 +32,7 @@ const defaultForm = {
   group_id: '',
   teacher_id: '',
   hari: 'Senin',
+  tanggal: '',
   jam_mulai: '15:30',
   jam_selesai: '17:00',
   materi: '',
@@ -39,6 +40,11 @@ const defaultForm = {
   ruangan: '',
   pertemuan_ke: '',
 };
+
+function formatTanggalDisplay(iso: string): string {
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
 
 function getTodayHari(): string {
   return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()];
@@ -99,7 +105,7 @@ export default function InputJadwal() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ ...defaultForm, group_id: '', teacher_id: '' });
+    setForm({ ...defaultForm, group_id: '', teacher_id: '', tanggal: toISODate(new Date()) });
     const missing = [];
     if (groups.length === 0) missing.push('grup');
     if (teachers.length === 0) missing.push('pengajar');
@@ -109,10 +115,12 @@ export default function InputJadwal() {
 
   function openEdit(s: ScheduleRow) {
     setEditing(s);
+    const editDate = getDateForHari(new Date(s.week_start + 'T00:00:00'), s.hari);
     setForm({
       group_id: s.group_id,
       teacher_id: s.teacher_id,
       hari: s.hari,
+      tanggal: toISODate(editDate),
       jam_mulai: fmtTime(s.jam_mulai),
       jam_selesai: fmtTime(s.jam_selesai),
       materi: s.materi ?? '',
@@ -124,13 +132,23 @@ export default function InputJadwal() {
     setShowModal(true);
   }
 
+  function handleTanggalChange(iso: string) {
+    if (!iso) return;
+    const d = new Date(iso + 'T00:00:00');
+    const hariNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const hari = hariNames[d.getDay()];
+    setForm(f => ({ ...f, tanggal: iso, hari }));
+  }
+
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     setFormError('');
     if (!form.group_id || !form.teacher_id) { setFormError('Grup dan pengajar wajib diisi'); return; }
+    if (!form.tanggal) { setFormError('Tanggal wajib diisi'); return; }
     if (form.jam_mulai >= form.jam_selesai) { setFormError('Jam selesai harus setelah jam mulai'); return; }
 
     setSubmitting(true);
+    const pickedDate = new Date(form.tanggal + 'T00:00:00');
     const payload = {
       group_id: form.group_id,
       teacher_id: form.teacher_id,
@@ -141,7 +159,7 @@ export default function InputJadwal() {
       lokasi: form.lokasi || null,
       ruangan: form.ruangan || null,
       pertemuan_ke: form.pertemuan_ke ? parseInt(form.pertemuan_ke) : null,
-      week_start: toISODate(weekStart),
+      week_start: toISODate(getWeekStart(pickedDate)),
       created_by: profile?.id,
     };
 
@@ -296,12 +314,21 @@ export default function InputJadwal() {
                 />
               </Field>
 
-              <Field label="Hari">
-                <select value={form.hari} onChange={e => setForm(f => ({ ...f, hari: e.target.value }))} style={select}>
-                  {HARI.map((h, i) => (
-                    <option key={h} value={h}>{h}, {formatDayLabel(weekDays[i])}</option>
-                  ))}
-                </select>
+              <Field label="Tanggal">
+                <div style={{ position: 'relative' }}>
+                  <div style={{ ...input, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: form.tanggal ? '#0D0D0D' : '#999' }}>
+                    <span>{form.tanggal ? formatTanggalDisplay(form.tanggal) : 'Pilih tanggal...'}</span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, color: '#888' }}>
+                      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                    </svg>
+                  </div>
+                  <input
+                    type="date"
+                    value={form.tanggal}
+                    onChange={e => handleTanggalChange(e.target.value)}
+                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%', zIndex: 1 }}
+                  />
+                </div>
               </Field>
 
               <div style={{ display: 'flex', gap: '10px' }}>

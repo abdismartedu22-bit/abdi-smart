@@ -98,7 +98,7 @@ const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }
 
 type Tab = 'realisasi' | 'siswa';
 
-export default function AdminRealisasi() {
+export default function AdminRealisasi({ readOnly = false }: { readOnly?: boolean }) {
   const [tab, setTab] = useState<Tab>('realisasi');
 
   return (
@@ -130,7 +130,7 @@ export default function AdminRealisasi() {
         ))}
       </div>
 
-      {tab === 'realisasi' ? <RealisasiSesiTab /> : <AbsensiSiswaTab />}
+      {tab === 'realisasi' ? <RealisasiSesiTab readOnly={readOnly} /> : <AbsensiSiswaTab readOnly={readOnly} />}
     </div>
   );
 }
@@ -149,7 +149,7 @@ function getHariForDate(date: Date): string {
   return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][date.getDay()];
 }
 
-function RealisasiSesiTab() {
+function RealisasiSesiTab({ readOnly = false }: { readOnly?: boolean }) {
   const todayISO = toISODate(new Date());
   const [dateFilter, setDateFilter] = useState(todayISO);
   const [rows, setRows] = useState<MergedRow[]>([]);
@@ -252,7 +252,7 @@ function RealisasiSesiTab() {
                 <th style={th}>Pengajar</th>
                 <th style={th}>Status Sesi</th>
                 <th style={th}>Catatan</th>
-                <th style={th}>Aksi</th>
+                {!readOnly && <th style={th}>Aksi</th>}
               </tr>
             </thead>
             <tbody>
@@ -294,9 +294,11 @@ function RealisasiSesiTab() {
                         {!r.att?.catatan_admin && !r.att?.note && <span style={{ color: '#999' }}>-</span>}
                       </div>
                     </td>
-                    <td style={td}>
-                      <button onClick={() => setEditing(r)} style={editBtn}>Edit</button>
-                    </td>
+                    {!readOnly && (
+                      <td style={td}>
+                        <button onClick={() => setEditing(r)} style={editBtn}>Edit</button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -305,7 +307,7 @@ function RealisasiSesiTab() {
         </div>
       )}
 
-      {editing && (
+      {!readOnly && editing && (
         <RealisasiEditModal
           row={editing}
           onClose={() => setEditing(null)}
@@ -422,7 +424,7 @@ function RealisasiEditModal({ row, onClose, onSaved }: { row: MergedRow; onClose
 
 /* ===================== ABSENSI SISWA TAB ===================== */
 
-function AbsensiSiswaTab() {
+function AbsensiSiswaTab({ readOnly = false }: { readOnly?: boolean }) {
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
   const [rows, setRows] = useState<StudentAttRow[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
@@ -540,7 +542,7 @@ function AbsensiSiswaTab() {
                 <th style={th}>Check-in</th>
                 <th style={th}>Status</th>
                 <th style={th}>Catatan</th>
-                <th style={th}>Aksi</th>
+                {!readOnly && <th style={th}>Aksi</th>}
               </tr>
             </thead>
             <tbody>
@@ -595,9 +597,11 @@ function AbsensiSiswaTab() {
                         {!r.catatan_admin && !r.note && <span style={{ color: '#999' }}>-</span>}
                       </div>
                     </td>
-                    <td style={td}>
-                      <button onClick={() => setEditing(r)} style={editBtn}>Edit</button>
-                    </td>
+                    {!readOnly && (
+                      <td style={td}>
+                        <button onClick={() => setEditing(r)} style={editBtn}>Edit</button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -606,7 +610,7 @@ function AbsensiSiswaTab() {
         </div>
       )}
 
-      {editing && (
+      {!readOnly && editing && (
         <StudentAttEditModal
           row={editing}
           onClose={() => setEditing(null)}

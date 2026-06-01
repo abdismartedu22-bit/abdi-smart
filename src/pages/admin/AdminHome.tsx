@@ -81,7 +81,7 @@ export default function AdminHome() {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({ sessions: 0, teachers: 0, students: 0 });
+  const [stats, setStats] = useState({ sessions: 0, teachers: 0, students: 0, activeTeachers: 0, activeStudents: 0 });
   const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
   const [todayAttendance, setTodayAttendance] = useState<Record<string, string | null>>({});
   const [recentUsers, setRecentUsers] = useState<RecentUser[]>([]);
@@ -101,7 +101,7 @@ export default function AdminHome() {
 
     const thirtyDaysAgo = toISODate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
-    const [sessionsRes, teachersRes, studentsRes, todaySchedRes, recentRes, groupsRes, inactiveRes, waLinksRes] = await Promise.all([
+    const [sessionsRes, teachersRes, studentsRes, todaySchedRes, recentRes, groupsRes, inactiveRes, waLinksRes, activeTeachersRes, activeStudentsRes] = await Promise.all([
       supabase.from('schedules').select('id', { count: 'exact', head: true }).gte('week_start', weekStart).lte('week_start', weekEnd),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'teacher'),
       supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student'),
@@ -118,12 +118,18 @@ export default function AdminHome() {
       supabase.rpc('get_groups_with_realisasi'),
       supabase.rpc('get_inactive_groups'),
       supabase.from('groups').select('id, wa_group_link'),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'teacher').eq('is_active', true),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }).eq('role', 'student').eq('is_active', true),
     ]);
 
+    const totalTeachers = teachersRes.count ?? 0;
+    const totalStudents = studentsRes.count ?? 0;
     setStats({
       sessions: sessionsRes.count ?? 0,
-      teachers: teachersRes.count ?? 0,
-      students: studentsRes.count ?? 0,
+      teachers: totalTeachers,
+      students: totalStudents,
+      activeTeachers: activeTeachersRes.count ?? totalTeachers,
+      activeStudents: activeStudentsRes.count ?? totalStudents,
     });
 
     const sessions = ((todaySchedRes.data ?? []) as unknown as TodaySession[]);
@@ -176,16 +182,24 @@ export default function AdminHome() {
 
           {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
-            {[
-              { val: stats.sessions, label: 'Sesi minggu ini' },
-              { val: stats.teachers, label: 'Pengajar aktif' },
-              { val: stats.students, label: 'Siswa terdaftar' },
-            ].map((s, i) => (
-              <div key={i} style={statCard}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0D5C3A', lineHeight: 1 }}>{s.val}</div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>{s.label}</div>
+            <div style={statCard}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0D5C3A', lineHeight: 1 }}>{stats.sessions}</div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>Sesi minggu ini</div>
+            </div>
+            <div style={statCard}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0D5C3A', lineHeight: 1 }}>{stats.activeTeachers}</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '1rem', color: '#9CA3AF' }}>/{stats.teachers}</span>
               </div>
-            ))}
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>Pengajar aktif</div>
+            </div>
+            <div style={statCard}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '2px' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', color: '#0D5C3A', lineHeight: 1 }}>{stats.activeStudents}</span>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '1rem', color: '#9CA3AF' }}>/{stats.students}</span>
+              </div>
+              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '4px' }}>Siswa terdaftar</div>
+            </div>
           </div>
 
           {/* Sisa < 10 alert */}

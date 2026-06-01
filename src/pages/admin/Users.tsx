@@ -9,6 +9,7 @@ type UserRow = {
   username: string;
   display_name: string;
   role: Role;
+  is_active: boolean;
   nama: string | null;
   tempat_lahir: string | null;
   tanggal_lahir: string | null;
@@ -81,14 +82,13 @@ function UsersTab() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<Role | 'all'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
   const [showCreate, setShowCreate] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
-  const [showResetPw, setShowResetPw] = useState(false);
-  const [resetTarget, setResetTarget] = useState<UserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
 
   useEffect(() => { load(); }, []);
@@ -97,7 +97,7 @@ function UsersTab() {
     setLoading(true);
     const [{ data: u }, { data: g }] = await Promise.all([
       supabase.from('profiles')
-        .select('id, username, display_name, role, nama, tempat_lahir, tanggal_lahir, sekolah, jurusan, student_groups(group_id, groups(id, nama, kode))')
+        .select('*, student_groups(group_id, groups(id, nama, kode))')
         .order('role').order('display_name'),
       supabase.from('groups').select('*').eq('active', true).order('nama'),
     ]);
@@ -108,6 +108,8 @@ function UsersTab() {
 
   const filtered = users.filter(u => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
+    if (activeFilter === 'active' && u.is_active === false) return false;
+    if (activeFilter === 'inactive' && u.is_active !== false) return false;
     if (search && !u.username.toLowerCase().includes(search.toLowerCase()) && !u.display_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -133,6 +135,11 @@ function UsersTab() {
             <option value="all">Semua role</option>
             {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
           </select>
+          <select value={activeFilter} onChange={e => { setActiveFilter(e.target.value as 'all' | 'active' | 'inactive'); setPage(1); }} style={selectStyle}>
+            <option value="all">Semua status</option>
+            <option value="active">Aktif</option>
+            <option value="inactive">Non-aktif</option>
+          </select>
         </div>
         <button onClick={() => setShowCreate(true)} style={btnPrimary}>+ Tambah User</button>
       </div>
@@ -144,33 +151,40 @@ function UsersTab() {
       ) : (
         <>
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
-            {paginated.map((u, i) => (
-              <div key={u.id} style={{
-                display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
-                borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none',
-                flexWrap: 'wrap',
-              }}>
-                <span style={{ ...roleBadgeStyle, background: roleBg[u.role] }}>{roleLabel[u.role]}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>
-                    {u.display_name}
+            {paginated.map((u, i) => {
+              const isActive = u.is_active !== false;
+              return (
+                <div key={u.id} style={{
+                  display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
+                  borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none',
+                  flexWrap: 'wrap',
+                }}>
+                  <span title={isActive ? 'Aktif' : 'Non-aktif'} style={{
+                    width: '9px', height: '9px', borderRadius: '50%', flexShrink: 0,
+                    background: isActive ? '#22C55E' : '#EAB308',
+                    display: 'inline-block',
+                  }} />
+                  <span style={{ ...roleBadgeStyle, background: roleBg[u.role] }}>{roleLabel[u.role]}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>
+                      {u.display_name}
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
+                      @{u.username}
+                      {u.role === 'student' && u.groups && u.groups.length > 0 && (
+                        <span> &middot; {u.groups.map(g => g.groups?.kode ?? '').join(', ')}</span>
+                      )}
+                    </div>
                   </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
-                    @{u.username}
-                    {u.role === 'student' && u.groups && u.groups.length > 0 && (
-                      <span> &middot; {u.groups.map(g => g.groups?.kode ?? '').join(', ')}</span>
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <button onClick={() => { setEditTarget(u); setShowEdit(true); }} style={btnEdit}>Edit</button>
+                    {u.id !== me?.id && (
+                      <button onClick={() => setDeleteTarget(u)} style={{ ...btnGhost, color: '#DC0A1E', borderColor: '#FECACA' }}>Hapus</button>
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                  <button onClick={() => { setEditTarget(u); setShowEdit(true); }} style={btnEdit}>Edit</button>
-                  <button onClick={() => { setResetTarget(u); setShowResetPw(true); }} style={btnGhost}>Reset PW</button>
-                  {u.id !== me?.id && (
-                    <button onClick={() => setDeleteTarget(u)} style={{ ...btnGhost, color: '#DC0A1E', borderColor: '#FECACA' }}>Hapus</button>
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <PaginationBar page={page} totalPages={totalPages} total={filtered.length} onChange={setPage} />
         </>
@@ -187,14 +201,9 @@ function UsersTab() {
         <EditUserModal
           user={editTarget}
           groups={groups}
+          isSelf={editTarget.id === me?.id}
           onClose={() => setShowEdit(false)}
           onDone={() => { setShowEdit(false); load(); }}
-        />
-      )}
-      {showResetPw && resetTarget && (
-        <ResetPwModal
-          user={resetTarget}
-          onClose={() => setShowResetPw(false)}
         />
       )}
       {deleteTarget && (
@@ -304,7 +313,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
                   <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
                 )}
               </FieldRow>
-              <FieldRow label="Nama Lengkap (sesuai KTP/ijazah)">
+              <FieldRow label="Nama Lengkap (sesuai NIS/NIK)">
                 <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" />
               </FieldRow>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -336,11 +345,12 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
 
 /* ===================== EDIT USER MODAL ===================== */
 
-function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; groups: Group[]; onClose: () => void; onDone: () => void }) {
+function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRow; groups: Group[]; isSelf: boolean; onClose: () => void; onDone: () => void }) {
   const currentGroupId = (user.groups ?? [])[0]?.group_id ?? '';
   const [form, setForm] = useState({
     display_name: user.display_name,
     role: user.role,
+    is_active: user.is_active !== false,
     group_id: currentGroupId,
     nama: user.nama ?? '',
     tempat_lahir: user.tempat_lahir ?? '',
@@ -351,12 +361,19 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  // Reset PW section
+  const [showResetPw, setShowResetPw] = useState(false);
+  const [newPw, setNewPw] = useState('');
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState('');
+  const [resetDone, setResetDone] = useState(false);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
     setSubmitting(true);
 
-    const update: Record<string, unknown> = { display_name: form.display_name, role: form.role };
+    const update: Record<string, unknown> = { display_name: form.display_name, role: form.role, is_active: form.is_active };
     if (form.role === 'student') {
       update.nama = form.nama || null;
       update.tempat_lahir = form.tempat_lahir || null;
@@ -379,6 +396,29 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
     onDone();
   }
 
+  async function handleResetPw(e: FormEvent) {
+    e.preventDefault();
+    setResetError('');
+    if (newPw.length < 6) { setResetError('Minimal 6 karakter'); return; }
+    setResetting(true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-user-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ user_id: user.id, new_password: newPw }),
+    });
+    const json = await res.json();
+    setResetting(false);
+    if (!res.ok) { setResetError(json.error ?? 'Gagal reset password'); return; }
+    setResetDone(true);
+    setNewPw('');
+    setTimeout(() => { setResetDone(false); setShowResetPw(false); }, 2000);
+  }
+
   return (
     <Overlay>
       <Modal title={`Edit: ${user.username}`} onClose={onClose}>
@@ -396,6 +436,21 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
               ))}
             </div>
           </FieldRow>
+          {!isSelf && (
+            <FieldRow label="Status">
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {([true, false] as const).map(val => (
+                  <label key={String(val)} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+                    <input type="radio" name="is_active_edit" checked={form.is_active === val} onChange={() => setForm(f => ({ ...f, is_active: val }))} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: val ? '#22C55E' : '#EAB308', display: 'inline-block' }} />
+                      {val ? 'Aktif' : 'Non-aktif'}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </FieldRow>
+          )}
           {form.role === 'student' && (
             <>
               <FieldRow label="Grup">
@@ -405,7 +460,7 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
                   <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
                 )}
               </FieldRow>
-              <FieldRow label="Nama Lengkap (sesuai KTP/ijazah)">
+              <FieldRow label="Nama Lengkap (sesuai NIS/NIK)">
                 <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" />
               </FieldRow>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -430,6 +485,32 @@ function EditUserModal({ user, groups, onClose, onDone }: { user: UserRow; group
             <button type="submit" disabled={submitting} style={btnPrimary}>{submitting ? 'Menyimpan...' : 'Simpan'}</button>
           </div>
         </form>
+
+        {/* Reset Password section */}
+        <div style={{ marginTop: '20px', borderTop: '1px solid #E2E1DC', paddingTop: '16px' }}>
+          <button
+            type="button"
+            onClick={() => { setShowResetPw(v => !v); setResetError(''); setResetDone(false); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#0D5C3A', fontWeight: 600, padding: 0 }}
+          >
+            {showResetPw ? '▲ Tutup Reset Password' : '▼ Reset Password'}
+          </button>
+          {showResetPw && (
+            <form onSubmit={handleResetPw} style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {resetDone ? (
+                <p style={{ fontFamily: 'var(--font-body)', color: '#047857', fontSize: '0.85rem', margin: 0 }}>Password berhasil direset!</p>
+              ) : (
+                <>
+                  <PasswordInput value={newPw} onChange={setNewPw} required minLength={6} style={inputStyle} />
+                  {resetError && <p style={errorStyle}>{resetError}</p>}
+                  <button type="submit" disabled={resetting} style={{ ...btnPrimary, flex: 'none' }}>
+                    {resetting ? 'Mereset...' : 'Reset Password'}
+                  </button>
+                </>
+              )}
+            </form>
+          )}
+        </div>
       </Modal>
     </Overlay>
   );

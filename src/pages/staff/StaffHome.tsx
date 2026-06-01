@@ -182,9 +182,6 @@ export default function StaffHome() {
                 <span style={{ fontWeight: 700 }}>{weekStats.sessions}</span> <span style={{ color: '#666' }}>sesi</span>
               </div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#0D0D0D' }}>
-                <span style={{ fontWeight: 700 }}>{weekStats.teachers}</span> <span style={{ color: '#666' }}>pengajar</span>
-              </div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#0D0D0D' }}>
                 <span style={{ fontWeight: 700 }}>{weekStats.realisasi}</span><span style={{ color: '#666' }}>/{weekStats.sessions} realisasi terisi</span>
               </div>
             </div>

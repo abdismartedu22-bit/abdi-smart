@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",
+    "@types/katex": "^0.16.8",
     "date-fns": "^4.2.1",
+    "katex": "^0.17.0",
     "motion": "^12.35.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -462,7 +462,12 @@ function SessionCard({
           {session.materi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>{session.materi}</div>}
           {session.lokasi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '1px' }}>@ {session.lokasi}</div>}
         </div>
-        {locked && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 700, color: '#666', background: '#F3F2EE', padding: '3px 8px', borderRadius: '4px' }}>TERKUNCI</span>}
+        {locked && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '6px', background: '#DCFCE7', flexShrink: 0 }}>
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: '#15803D' }}>TERKUNCI</span>
+          </span>
+        )}
       </div>
 
       <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -603,17 +608,31 @@ function SessionCard({
           )}
         </div>
 
-        {/* Lock button */}
-        {!locked && (
-          <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '14px' }}>
-            <button onClick={handleLock} disabled={locking} style={{ ...btnSmall, background: '#047857' }}>
-              {locking ? 'Mengunci...' : 'Selesai & Kunci Absen'}
-            </button>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666', margin: '6px 0 0' }}>
-              Atau akan terkunci otomatis pukul 23:59
-            </p>
-          </div>
-        )}
+        {/* Lock button / locked banner */}
+        <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '14px' }}>
+          {locked ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '12px 14px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <div>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', fontWeight: 700, color: '#15803D' }}>Sesi dikunci</span>
+                {teacherRow?.locked_at && (
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666', marginLeft: '8px' }}>
+                    {fmtTimestampWITA(teacherRow.locked_at, 'time')}
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <button onClick={handleLock} disabled={locking} style={{ ...btnSmall, background: '#047857' }}>
+                {locking ? 'Mengunci...' : 'Selesai & Kunci Absen'}
+              </button>
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666', margin: '6px 0 0' }}>
+                Atau akan terkunci otomatis pukul 23:59
+              </p>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ export interface Profile {
   tanggal_lahir: string | null;
   sekolah: string | null;
   jurusan: string | null;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -72,13 +73,57 @@ export interface Attendance {
 export interface TryoutResult {
   id: string;
   student_id: string;
-  type: 'SNBT' | 'TKA-Saintek' | 'TKA-Soshum';
+  type: 'SNBT' | 'TKA';
   nama_to: string;
+  kode_to: string | null;
   tanggal_to: string | null;
   scores: Record<string, number> | null;
   total_score: number | null;
   entered_by: string | null;
   created_at: string;
+}
+
+export type QuizTipe = 'pilihan_ganda' | 'isian_singkat' | 'benar_salah' | 'centang_semua';
+
+export interface Quiz {
+  id: string;
+  nomor: number;
+  judul: string;
+  deskripsi: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface QuizQuestion {
+  id: string;
+  quiz_id: string;
+  urutan: number;
+  tipe: QuizTipe;
+  pertanyaan: string;
+  opsi: string[] | null;
+  jawaban_benar: string | string[];
+  poin: number;
+}
+
+export interface QuizSession {
+  id: string;
+  quiz_id: string;
+  schedule_id: string | null;
+  group_id: string;
+  session_date: string;
+  activated_by: string | null;
+  activated_at: string;
+  closed_at: string | null;
+}
+
+export interface QuizAnswer {
+  id: string;
+  quiz_session_id: string;
+  student_id: string;
+  question_id: string;
+  jawaban: string | string[] | null;
+  skor: number | null;
+  submitted_at: string;
 }
 
 export interface Gedung {

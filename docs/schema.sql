@@ -26,8 +26,12 @@ CREATE TABLE public.profiles (
   tanggal_lahir  date,
   sekolah        text,
   jurusan        text,
+  is_active      boolean     NOT NULL DEFAULT true,
   created_at     timestamptz NOT NULL DEFAULT now()
 );
+
+-- Migration (run if table already exists):
+-- ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS is_active boolean NOT NULL DEFAULT true;
 
 -- groups: flexible size, admin/staff create on demand
 CREATE TABLE public.groups (
@@ -91,8 +95,9 @@ CREATE TABLE public.attendance (
 CREATE TABLE public.tryout_results (
   id          uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
   student_id  uuid        NOT NULL REFERENCES public.profiles(id),
-  type        text        NOT NULL CHECK (type IN ('SNBT', 'TKA-Saintek', 'TKA-Soshum')),
+  type        text        NOT NULL CHECK (type IN ('SNBT', 'TKA')),
   nama_to     text        NOT NULL,
+  kode_to     text,
   tanggal_to  date,
   scores      jsonb,
   total_score numeric,

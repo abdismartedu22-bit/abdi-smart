@@ -9,6 +9,7 @@ export default function AdminGedung() {
 
   const [gedung, setGedung] = useState<Gedung[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterBldg, setFilterBldg] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Gedung | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Gedung | null>(null);
@@ -46,6 +47,9 @@ export default function AdminGedung() {
     grouped[g.nama].push(g);
   });
 
+  const buildingNames = Object.keys(grouped);
+  const filteredGrouped = filterBldg ? { [filterBldg]: grouped[filterBldg] ?? [] } : grouped;
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
@@ -57,13 +61,27 @@ export default function AdminGedung() {
         </button>
       </div>
 
+      {/* Filter */}
+      {buildingNames.length > 1 && (
+        <div style={{ marginBottom: '20px' }}>
+          <select
+            value={filterBldg}
+            onChange={e => setFilterBldg(e.target.value)}
+            style={{ padding: '8px 12px', border: '1.5px solid #E2E1DC', borderRadius: '8px', fontFamily: 'var(--font-body)', fontSize: '0.85rem', background: '#fff', color: '#0D0D0D', outline: 'none', cursor: 'pointer' }}
+          >
+            <option value="">Semua Gedung</option>
+            {buildingNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+      )}
+
       {loading ? (
         <p style={muted}>Memuat...</p>
       ) : gedung.length === 0 ? (
         <p style={muted}>Belum ada data gedung.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {Object.entries(grouped).map(([bldg, rooms]) => (
+          {Object.entries(filteredGrouped).map(([bldg, rooms]) => (
             <div key={bldg}>
               <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#0D5C3A' }}>
                 {bldg}
@@ -117,6 +135,7 @@ export default function AdminGedung() {
       {showForm && (
         <GedungFormModal
           gedung={editing ?? undefined}
+          existingNames={buildingNames}
           onClose={() => setShowForm(false)}
           onDone={() => { setShowForm(false); load(); }}
         />
@@ -143,13 +162,15 @@ export default function AdminGedung() {
   );
 }
 
-function GedungFormModal({ gedung, onClose, onDone }: { gedung?: Gedung; onClose: () => void; onDone: () => void }) {
+function GedungFormModal({ gedung, existingNames, onClose, onDone }: { gedung?: Gedung; existingNames: string[]; onClose: () => void; onDone: () => void }) {
+  const isExistingName = gedung?.nama ? existingNames.includes(gedung.nama) : false;
   const [form, setForm] = useState({
     nama: gedung?.nama ?? '',
     ruangan: gedung?.ruangan ?? '',
     kapasitas: gedung?.kapasitas?.toString() ?? '',
     status: gedung?.status ?? 'aktif' as 'aktif' | 'nonaktif',
   });
+  const [useNewNama, setUseNewNama] = useState(!isExistingName && !!gedung?.nama && existingNames.length > 0 ? false : existingNames.length === 0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -183,13 +204,44 @@ function GedungFormModal({ gedung, onClose, onDone }: { gedung?: Gedung; onClose
         </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <Field label="Nama Gedung">
-            <input
-              style={input}
-              value={form.nama}
-              onChange={e => setForm(f => ({ ...f, nama: e.target.value }))}
-              placeholder="cth. Badak Agung"
-              required
-            />
+            {existingNames.length > 0 && !useNewNama ? (
+              <select
+                style={input}
+                value={form.nama}
+                onChange={e => {
+                  if (e.target.value === '__new__') {
+                    setUseNewNama(true);
+                    setForm(f => ({ ...f, nama: '' }));
+                  } else {
+                    setForm(f => ({ ...f, nama: e.target.value }));
+                  }
+                }}
+                required
+              >
+                <option value="">-- pilih gedung --</option>
+                {existingNames.map(n => <option key={n} value={n}>{n}</option>)}
+                <option value="__new__">+ Tambah nama gedung baru...</option>
+              </select>
+            ) : (
+              <div>
+                <input
+                  style={input}
+                  value={form.nama}
+                  onChange={e => setForm(f => ({ ...f, nama: e.target.value }))}
+                  placeholder="cth. Badak Agung"
+                  required
+                />
+                {existingNames.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => { setUseNewNama(false); setForm(f => ({ ...f, nama: existingNames[0] })); }}
+                    style={{ marginTop: '4px', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0D5C3A', padding: 0 }}
+                  >
+                    &larr; Pilih dari daftar gedung
+                  </button>
+                )}
+              </div>
+            )}
           </Field>
           <Field label="Kode Ruangan">
             <input

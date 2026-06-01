@@ -13,20 +13,24 @@ import AdminRealisasi from './pages/admin/Realisasi';
 import AdminUsers from './pages/admin/Users';
 import AdminDownload from './pages/admin/Download';
 import AdminGedung from './pages/admin/Gedung';
+import AdminQuiz from './pages/admin/Quiz';
 
 import StaffHome from './pages/staff/StaffHome';
 import InputJadwal from './pages/staff/InputJadwal';
 import StaffHasilTO from './pages/staff/HasilTO';
 import StaffDownload from './pages/staff/Download';
+import StaffRealisasi from './pages/staff/Realisasi';
 
 import TeacherHome from './pages/teacher/TeacherHome';
 import TeacherJadwal from './pages/teacher/Jadwal';
 import TeacherRealisasi from './pages/teacher/Realisasi';
+import TeacherQuiz from './pages/teacher/Quiz';
 
 import StudentHome from './pages/student/StudentHome';
 import StudentJadwal from './pages/student/Jadwal';
 import StudentAbsen from './pages/student/Absen';
 import StudentHasilTO from './pages/student/HasilTO';
+import StudentQuiz from './pages/student/Quiz';
 
 export default function App() {
   return (
@@ -51,6 +55,7 @@ export default function App() {
               <Route path="/admin/users" element={<AdminUsers />} />
               <Route path="/admin/download" element={<AdminDownload />} />
               <Route path="/admin/gedung" element={<AdminGedung />} />
+              <Route path="/admin/quiz" element={<AdminQuiz />} />
             </Route>
           </Route>
 
@@ -59,6 +64,7 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route path="/staff" element={<StaffHome />} />
               <Route path="/staff/jadwal" element={<InputJadwal />} />
+              <Route path="/staff/realisasi" element={<StaffRealisasi />} />
               <Route path="/staff/hasil-to" element={<StaffHasilTO />} />
               <Route path="/staff/download" element={<StaffDownload />} />
               <Route path="/staff/gedung" element={<AdminGedung />} />
@@ -71,6 +77,7 @@ export default function App() {
               <Route path="/teacher" element={<TeacherHome />} />
               <Route path="/teacher/jadwal" element={<TeacherJadwal />} />
               <Route path="/teacher/realisasi" element={<TeacherRealisasi />} />
+              <Route path="/teacher/quiz" element={<TeacherQuiz />} />
             </Route>
           </Route>
 
@@ -81,6 +88,7 @@ export default function App() {
               <Route path="/student/jadwal" element={<StudentJadwal />} />
               <Route path="/student/absen" element={<StudentAbsen />} />
               <Route path="/student/hasil-to" element={<StudentHasilTO />} />
+              <Route path="/student/quiz" element={<StudentQuiz />} />
             </Route>
           </Route>
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 import { getWeekStart, nextWeek, prevWeek, toISODate, formatWeekLabel } from '../../lib/dates';
 import { startOfMonth, format } from 'date-fns';
 import * as XLSX from 'xlsx';
@@ -9,7 +10,10 @@ type Group = { id: string; nama: string; kode: string };
 type ReportType = 'jadwal' | 'absensi' | 'hasil-to';
 
 export default function DownloadPage() {
+  const { profile } = useAuth();
+  const isStaff = profile?.role === 'staff';
   const [reportType, setReportType] = useState<ReportType>('absensi');
+  const effectiveReportType: ReportType = isStaff ? 'absensi' : reportType;
   const [groups, setGroups] = useState<Group[]>([]);
   const [filterGroup, setFilterGroup] = useState('');
   const [loading, setLoading] = useState(false);
@@ -160,8 +164,8 @@ export default function DownloadPage() {
   }
 
   function handleDownload() {
-    if (reportType === 'jadwal') downloadJadwal();
-    else if (reportType === 'absensi') downloadAbsensi();
+    if (effectiveReportType === 'jadwal') downloadJadwal();
+    else if (effectiveReportType === 'absensi') downloadAbsensi();
     else downloadHasilTO();
   }
 
@@ -176,22 +180,28 @@ export default function DownloadPage() {
         {/* Report type selector */}
         <div style={card}>
           <label style={labelStyle}>Jenis Laporan</label>
-          <select
-            value={reportType}
-            onChange={e => setReportType(e.target.value as ReportType)}
-            style={selectStyle}
-          >
-            <option value="absensi">Rekap Absensi</option>
-            <option value="jadwal">Jadwal Mingguan</option>
-            <option value="hasil-to">Hasil Tryout</option>
-          </select>
+          {isStaff ? (
+            <div style={{ padding: '9px 12px', border: '1.5px solid #E2E1DC', borderRadius: '8px', fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', background: '#F9F9F7' }}>
+              Rekap Absensi
+            </div>
+          ) : (
+            <select
+              value={reportType}
+              onChange={e => setReportType(e.target.value as ReportType)}
+              style={selectStyle}
+            >
+              <option value="absensi">Rekap Absensi</option>
+              <option value="jadwal">Jadwal Mingguan</option>
+              <option value="hasil-to">Hasil Tryout</option>
+            </select>
+          )}
         </div>
 
         {/* Parameters */}
         <div style={card}>
           <p style={sectionLabel}>Parameter</p>
 
-          {reportType === 'jadwal' && (
+          {effectiveReportType === 'jadwal' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div>
                 <label style={labelStyle}>Minggu</label>
@@ -213,7 +223,7 @@ export default function DownloadPage() {
             </div>
           )}
 
-          {reportType === 'absensi' && (
+          {effectiveReportType === 'absensi' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
@@ -235,7 +245,7 @@ export default function DownloadPage() {
             </div>
           )}
 
-          {reportType === 'hasil-to' && (
+          {effectiveReportType === 'hasil-to' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div>
