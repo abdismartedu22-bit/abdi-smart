@@ -36,6 +36,7 @@ type ActiveQuizSession = {
   id: string;
   quiz_id: string;
   group_id: string;
+  schedule_id: string | null;
   activated_at: string;
   closed_at: string | null;
   quiz: { nomor: number; judul: string };
@@ -51,7 +52,7 @@ export default function TeacherQuiz() {
   const [loading, setLoading] = useState(true);
   const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
-  const [activeByGroup, setActiveByGroup] = useState<Record<string, ActiveQuizSession | null>>({});
+  const [activeBySchedule, setActiveBySchedule] = useState<Record<string, ActiveQuizSession | null>>({});
   const [answerCounts, setAnswerCounts] = useState<Record<string, number>>({});
   const [selectedQuiz, setSelectedQuiz] = useState<Record<string, string>>({});
   const [activating, setActivating] = useState<string | null>(null);
@@ -90,32 +91,32 @@ export default function TeacherQuiz() {
     setTodaySessions(sessions);
     setQuizzes(qList);
 
-    const groupIds = [...new Set(sessions.map(s => s.group_id))];
+    const scheduleIds = sessions.map(s => s.id);
     if (qList.length > 0) {
       const init: Record<string, string> = {};
-      groupIds.forEach(gid => { init[gid] = qList[0].id; });
+      scheduleIds.forEach(sid => { init[sid] = qList[0].id; });
       setSelectedQuiz(init);
     }
 
-    if (groupIds.length > 0) {
-      await loadActiveSessions(groupIds);
+    if (scheduleIds.length > 0) {
+      await loadActiveSessions(scheduleIds);
     }
 
     setLoading(false);
   }
 
-  async function loadActiveSessions(groupIds: string[]) {
+  async function loadActiveSessions(scheduleIds: string[]) {
     const { data } = await supabase
       .from('quiz_sessions')
-      .select('id, quiz_id, group_id, activated_at, closed_at, quiz:quizzes!quiz_id(nomor,judul)')
-      .in('group_id', groupIds)
+      .select('id, quiz_id, group_id, schedule_id, activated_at, closed_at, quiz:quizzes!quiz_id(nomor,judul)')
+      .in('schedule_id', scheduleIds)
       .eq('session_date', today)
       .is('closed_at', null);
 
     const map: Record<string, ActiveQuizSession | null> = {};
-    groupIds.forEach(gid => { map[gid] = null; });
-    (data ?? []).forEach((s: any) => { map[s.group_id] = s as ActiveQuizSession; });
-    setActiveByGroup(map);
+    scheduleIds.forEach(sid => { map[sid] = null; });
+    (data ?? []).forEach((s: any) => { if (s.schedule_id) map[s.schedule_id] = s as ActiveQuizSession; });
+    setActiveBySchedule(map);
 
     const activeList = (data ?? []) as any[];
     if (activeList.length > 0) {
@@ -135,22 +136,21 @@ export default function TeacherQuiz() {
     }
   }
 
-  async function activateQuiz(groupId: string) {
-    const quizId = selectedQuiz[groupId];
-    if (!quizId || !user) return;
-    setActivating(groupId);
-    const schedId = todaySessions.find(s => s.group_id === groupId)?.id ?? null;
+  async function activateQuiz(scheduleId: string) {
+    const quizId = selectedQuiz[scheduleId];
+    const session = todaySessions.find(s => s.id === scheduleId);
+    if (!quizId || !user || !session) return;
+    setActivating(scheduleId);
     const { error } = await supabase.from('quiz_sessions').insert({
       quiz_id: quizId,
-      schedule_id: schedId,
-      group_id: groupId,
+      schedule_id: scheduleId,
+      group_id: session.group_id,
       session_date: today,
       activated_by: user.id,
       activated_at: new Date().toISOString(),
     });
     if (!error) {
-      const groupIds = [...new Set(todaySessions.map(s => s.group_id))];
-      await loadActiveSessions(groupIds);
+      await loadActiveSessions(todaySessions.map(s => s.id));
     }
     setActivating(null);
   }
@@ -158,8 +158,7 @@ export default function TeacherQuiz() {
   async function closeQuiz(quizSessionId: string) {
     setClosing(quizSessionId);
     await supabase.from('quiz_sessions').update({ closed_at: new Date().toISOString() }).eq('id', quizSessionId);
-    const groupIds = [...new Set(todaySessions.map(s => s.group_id))];
-    await loadActiveSessions(groupIds);
+    await loadActiveSessions(todaySessions.map(s => s.id));
     setClosing(null);
     // Auto-switch to riwayat and reload
     setRiwayatLoaded(false);
@@ -232,11 +231,6 @@ export default function TeacherQuiz() {
     }
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const groupedSessions: Record<string, TodaySession[]> = {};
-  todaySessions.forEach(s => {
-    if (!groupedSessions[s.group_id]) groupedSessions[s.group_id] = [];
-    groupedSessions[s.group_id].push(s);
-  });
 
   return (
     <div>
@@ -316,23 +310,21 @@ export default function TeacherQuiz() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {Object.entries(groupedSessions).map(([groupId, sessions]) => {
-            const group = sessions[0].groups;
-            const active = activeByGroup[groupId] ?? null;
+          {todaySessions.map(session => {
+            const group = session.groups;
+            const active = activeBySchedule[session.id] ?? null;
             const answered = active ? (answerCounts[active.id] ?? 0) : 0;
 
             return (
-              <div key={groupId} style={card}>
-                {/* Group header */}
+              <div key={session.id} style={card}>
+                {/* Session header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
                   <GrupBadge kode={group.kode} warna={group.warna} warna_text={group.warna_text} />
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem', color: '#0D0D0D' }}>{group.nama}</span>
-                  {sessions.map(s => (
-                    <span key={s.id} style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>
-                      {fmtTime(s.jam_mulai)}&ndash;{fmtTime(s.jam_selesai)}
-                      {s.pertemuan_ke ? ` · Pertemuan ${s.pertemuan_ke}` : ''}
-                    </span>
-                  ))}
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>
+                    {fmtTime(session.jam_mulai)}&ndash;{fmtTime(session.jam_selesai)}
+                    {session.pertemuan_ke ? ` · Pertemuan ${session.pertemuan_ke}` : ''}
+                  </span>
                 </div>
 
                 {active ? (
@@ -370,8 +362,8 @@ export default function TeacherQuiz() {
                     </p>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       <select
-                        value={selectedQuiz[groupId] ?? ''}
-                        onChange={e => setSelectedQuiz(prev => ({ ...prev, [groupId]: e.target.value }))}
+                        value={selectedQuiz[session.id] ?? ''}
+                        onChange={e => setSelectedQuiz(prev => ({ ...prev, [session.id]: e.target.value }))}
                         style={selectStyle}
                       >
                         {quizzes.map(q => (
@@ -381,11 +373,11 @@ export default function TeacherQuiz() {
                         ))}
                       </select>
                       <button
-                        onClick={() => activateQuiz(groupId)}
-                        disabled={activating === groupId || !selectedQuiz[groupId]}
+                        onClick={() => activateQuiz(session.id)}
+                        disabled={activating === session.id || !selectedQuiz[session.id]}
                         style={btnActivate}
                       >
-                        {activating === groupId ? 'Mengaktifkan...' : 'Aktifkan'}
+                        {activating === session.id ? 'Mengaktifkan...' : 'Aktifkan'}
                       </button>
                     </div>
                   </div>

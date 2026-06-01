@@ -118,12 +118,6 @@ function HariIniTab() {
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [checkInError, setCheckInError] = useState<string>('');
-  const [, setTick] = useState(0);
-
-  useEffect(() => {
-    const t = setInterval(() => setTick(n => n + 1), 10_000);
-    return () => clearInterval(t);
-  }, []);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -174,6 +168,26 @@ function HariIniTab() {
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Poll attendance every 10 s so locked_at reflects teacher's action
+  useEffect(() => {
+    if (!user || sessions.length === 0) return;
+    const todayISO = toISODate(new Date());
+    const t = setInterval(async () => {
+      const { data: att } = await supabase
+        .from('attendance')
+        .select('id, schedule_id, status, checkin_at, locked_at')
+        .in('schedule_id', sessions.map(s => s.id))
+        .eq('person_id', user.id)
+        .eq('session_date', todayISO);
+      if (att) {
+        const map: Record<string, AttendanceRow> = {};
+        att.forEach((a: any) => { map[a.schedule_id] = a as AttendanceRow; });
+        setAttendance(map);
+      }
+    }, 10_000);
+    return () => clearInterval(t);
+  }, [user, sessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCheckIn(scheduleId: string) {
     if (!user) return;

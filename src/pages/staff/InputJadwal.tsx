@@ -288,7 +288,7 @@ export default function InputJadwal() {
                   fontFamily: 'var(--font-display)', fontSize: '1rem', margin: 0,
                   color: hari === todayHari ? '#DC0A1E' : '#0D0D0D',
                 }}>
-                  {hari}{hari === todayHari ? ' (hari ini)' : hari === yesterdayHari ? ' (kemarin)' : ''}
+                  {hari}
                 </h2>
                 <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>
                   {formatDayLabel(dayDate)}
