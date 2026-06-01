@@ -80,7 +80,7 @@ export default function Sidebar({ open, onClose }: Props) {
         <img
           src="/logo.png"
           alt="Abdi Smart"
-          style={{ width: '44px', height: '44px', objectFit: 'contain' }}
+          style={{ width: '52px', height: '52px', objectFit: 'cover', borderRadius: '8px' }}
         />
         <span style={{
           fontFamily: 'var(--font-display)',
