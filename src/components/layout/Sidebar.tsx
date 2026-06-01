@@ -15,6 +15,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Jadwal', href: '/staff/jadwal' },
     { label: 'Realisasi', href: '/admin/realisasi' },
     { label: 'Quiz', href: '/admin/quiz' },
+    { label: 'Konten', href: '/admin/konten' },
     { label: 'Users', href: '/admin/users' },
     { label: 'Gedung', href: '/admin/gedung' },
     { label: 'Download', href: '/admin/download' },
@@ -79,7 +80,7 @@ export default function Sidebar({ open, onClose }: Props) {
         <img
           src="/logo.png"
           alt="Abdi Smart"
-          style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+          style={{ width: '32px', height: '32px', objectFit: 'contain' }}
         />
         <span style={{
           fontFamily: 'var(--font-display)',

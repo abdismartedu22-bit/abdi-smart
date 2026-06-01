@@ -271,7 +271,7 @@ export default function Hero() {
               <img
                 src="/logo.png"
                 alt="Abdi Smart"
-                style={{ width: '260px', height: '260px', borderRadius: '50%', objectFit: 'cover' }}
+                style={{ width: '220px', height: '220px', objectFit: 'contain' }}
               />
             </div>
 

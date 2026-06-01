@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 import DashboardBanner from '../../components/shared/DashboardBanner';
+import AnnouncementSlider from '../../components/shared/AnnouncementSlider';
 
 type Session = {
   id: string;
@@ -120,6 +121,7 @@ export default function TeacherHome() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
+          <AnnouncementSlider />
           <DashboardBanner />
 
           {/* Monthly teaching count */}

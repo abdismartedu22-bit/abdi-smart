@@ -14,6 +14,7 @@ import AdminUsers from './pages/admin/Users';
 import AdminDownload from './pages/admin/Download';
 import AdminGedung from './pages/admin/Gedung';
 import AdminQuiz from './pages/admin/Quiz';
+import AdminKonten from './pages/admin/Konten';
 
 import StaffHome from './pages/staff/StaffHome';
 import InputJadwal from './pages/staff/InputJadwal';
@@ -58,6 +59,7 @@ export default function App() {
               <Route path="/admin/download" element={<AdminDownload />} />
               <Route path="/admin/gedung" element={<AdminGedung />} />
               <Route path="/admin/quiz" element={<AdminQuiz />} />
+              <Route path="/admin/konten" element={<AdminKonten />} />
             </Route>
           </Route>
 
