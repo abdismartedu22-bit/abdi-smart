@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 
 type Tab = 'pengumuman' | 'testimoni';
@@ -6,7 +6,6 @@ type Tab = 'pengumuman' | 'testimoni';
 type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null; urutan: number; is_active: boolean };
 type Testimonial = { id: string; nama: string; asal_sekolah: string | null; universitas: string | null; isi: string; urutan: number; is_active: boolean };
 
-/* ---- Shared form modal ---- */
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
@@ -44,7 +43,9 @@ function PengumumanTab() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Announcement | null>(null);
-  const [form, setForm] = useState({ judul: '', isi: '', gambar_url: '', urutan: 0, is_active: true });
+  const [form, setForm] = useState({ judul: '', isi: '', gambar_url: '', is_active: true });
+  const dragIdx = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -55,26 +56,46 @@ function PengumumanTab() {
 
   useEffect(() => { load(); }, []);
 
+  async function reorderItems(newItems: Announcement[]) {
+    setItems(newItems);
+    await Promise.all(newItems.map((item, idx) =>
+      supabase.from('announcements').update({ urutan: idx }).eq('id', item.id)
+    ));
+  }
+
+  function handleDragStart(idx: number) { dragIdx.current = idx; }
+  function handleDragOver(e: React.DragEvent, idx: number) { e.preventDefault(); setDragOver(idx); }
+  function handleDragEnd() { dragIdx.current = null; setDragOver(null); }
+  function handleDrop(idx: number) {
+    const from = dragIdx.current;
+    if (from === null || from === idx) { handleDragEnd(); return; }
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    next.splice(idx, 0, moved);
+    handleDragEnd();
+    reorderItems(next);
+  }
+
   function openAdd() {
     setEditing(null);
-    setForm({ judul: '', isi: '', gambar_url: '', urutan: items.length, is_active: true });
+    setForm({ judul: '', isi: '', gambar_url: '', is_active: true });
     setShowForm(true);
   }
 
   function openEdit(a: Announcement) {
     setEditing(a);
-    setForm({ judul: a.judul, isi: a.isi, gambar_url: a.gambar_url ?? '', urutan: a.urutan, is_active: a.is_active });
+    setForm({ judul: a.judul, isi: a.isi, gambar_url: a.gambar_url ?? '', is_active: a.is_active });
     setShowForm(true);
   }
 
   async function save() {
     if (!form.judul.trim() || !form.isi.trim()) return;
     setSaving(true);
-    const payload = { judul: form.judul, isi: form.isi, gambar_url: form.gambar_url.trim() || null, urutan: form.urutan, is_active: form.is_active };
+    const payload = { judul: form.judul, isi: form.isi, gambar_url: form.gambar_url.trim() || null, is_active: form.is_active };
     if (editing) {
       await supabase.from('announcements').update(payload).eq('id', editing.id);
     } else {
-      await supabase.from('announcements').insert(payload);
+      await supabase.from('announcements').insert({ ...payload, urutan: items.length });
     }
     setSaving(false);
     setShowForm(false);
@@ -84,6 +105,10 @@ function PengumumanTab() {
   async function del(id: string) {
     if (!confirm('Hapus pengumuman ini?')) return;
     await supabase.from('announcements').delete().eq('id', id);
+    const next = items.filter(i => i.id !== id);
+    await Promise.all(next.map((item, idx) =>
+      supabase.from('announcements').update({ urutan: idx }).eq('id', item.id)
+    ));
     load();
   }
 
@@ -92,16 +117,38 @@ function PengumumanTab() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-        <p style={muted}>Tampil di dashboard guru dan siswa. Maks 3 aktif.</p>
-        <button onClick={openAdd} disabled={activeCount >= 3 && !editing} style={btnPrimary}>+ Tambah</button>
+        <p style={muted}>Tampil di dashboard guru dan siswa. Maks 3 aktif. Drag untuk ubah urutan.</p>
+        <button onClick={openAdd} disabled={activeCount >= 3} style={btnPrimary}>+ Tambah</button>
       </div>
 
       {loading ? <p style={muted}>Memuat...</p> : items.length === 0 ? (
         <div style={emptyCard}><p style={muted}>Belum ada pengumuman.</p></div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {items.map(a => (
-            <div key={a.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '14px 16px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {items.map((a, idx) => (
+            <div
+              key={a.id}
+              draggable
+              onDragStart={() => handleDragStart(idx)}
+              onDragOver={e => handleDragOver(e, idx)}
+              onDragEnd={handleDragEnd}
+              onDrop={() => handleDrop(idx)}
+              style={{
+                background: '#fff',
+                border: dragOver === idx ? '2px solid #0D5C3A' : '1px solid #E2E1DC',
+                borderRadius: '10px', padding: '12px 14px',
+                display: 'flex', gap: '10px', alignItems: 'flex-start',
+                cursor: 'grab', opacity: dragIdx.current === idx ? 0.5 : 1,
+                transition: 'border-color 0.15s',
+              }}
+            >
+              {/* Position + drag handle */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flexShrink: 0, paddingTop: '2px' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 900, color: '#0D5C3A', lineHeight: 1 }}>{idx + 1}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2">
+                  <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/>
+                </svg>
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>{a.judul}</span>
@@ -110,6 +157,7 @@ function PengumumanTab() {
                   </span>
                 </div>
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666', margin: 0, lineHeight: 1.5 }}>{a.isi}</p>
+                {a.gambar_url && <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#0D5C3A', margin: '4px 0 0' }}>Ada gambar</p>}
               </div>
               <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                 <button onClick={() => openEdit(a)} style={{ ...btnSecondary, padding: '6px 12px', fontSize: '0.78rem' }}>Edit</button>
@@ -133,9 +181,6 @@ function PengumumanTab() {
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '4px 0 0' }}>
               Google Drive: buka file &rarr; Share &rarr; Anyone with link &rarr; copy link
             </p>
-          </Field>
-          <Field label="Urutan">
-            <input type="number" value={form.urutan} onChange={e => setForm(f => ({ ...f, urutan: Number(e.target.value) }))} style={{ ...inputStyle, width: '80px' }} />
           </Field>
           <Field label="Status">
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -168,7 +213,9 @@ function TestimoniTab() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Testimonial | null>(null);
-  const [form, setForm] = useState({ nama: '', asal_sekolah: '', universitas: '', isi: '', urutan: 0, is_active: true });
+  const [form, setForm] = useState({ nama: '', asal_sekolah: '', universitas: '', isi: '', is_active: true });
+  const dragIdx = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
 
   async function load() {
     setLoading(true);
@@ -179,26 +226,46 @@ function TestimoniTab() {
 
   useEffect(() => { load(); }, []);
 
+  async function reorderItems(newItems: Testimonial[]) {
+    setItems(newItems);
+    await Promise.all(newItems.map((item, idx) =>
+      supabase.from('testimonials').update({ urutan: idx }).eq('id', item.id)
+    ));
+  }
+
+  function handleDragStart(idx: number) { dragIdx.current = idx; }
+  function handleDragOver(e: React.DragEvent, idx: number) { e.preventDefault(); setDragOver(idx); }
+  function handleDragEnd() { dragIdx.current = null; setDragOver(null); }
+  function handleDrop(idx: number) {
+    const from = dragIdx.current;
+    if (from === null || from === idx) { handleDragEnd(); return; }
+    const next = [...items];
+    const [moved] = next.splice(from, 1);
+    next.splice(idx, 0, moved);
+    handleDragEnd();
+    reorderItems(next);
+  }
+
   function openAdd() {
     setEditing(null);
-    setForm({ nama: '', asal_sekolah: '', universitas: '', isi: '', urutan: items.length, is_active: true });
+    setForm({ nama: '', asal_sekolah: '', universitas: '', isi: '', is_active: true });
     setShowForm(true);
   }
 
   function openEdit(t: Testimonial) {
     setEditing(t);
-    setForm({ nama: t.nama, asal_sekolah: t.asal_sekolah ?? '', universitas: t.universitas ?? '', isi: t.isi, urutan: t.urutan, is_active: t.is_active });
+    setForm({ nama: t.nama, asal_sekolah: t.asal_sekolah ?? '', universitas: t.universitas ?? '', isi: t.isi, is_active: t.is_active });
     setShowForm(true);
   }
 
   async function save() {
     if (!form.nama.trim() || !form.isi.trim()) return;
     setSaving(true);
-    const payload = { nama: form.nama, asal_sekolah: form.asal_sekolah || null, universitas: form.universitas || null, isi: form.isi, urutan: form.urutan, is_active: form.is_active };
+    const payload = { nama: form.nama, asal_sekolah: form.asal_sekolah || null, universitas: form.universitas || null, isi: form.isi, is_active: form.is_active };
     if (editing) {
       await supabase.from('testimonials').update(payload).eq('id', editing.id);
     } else {
-      await supabase.from('testimonials').insert(payload);
+      await supabase.from('testimonials').insert({ ...payload, urutan: items.length });
     }
     setSaving(false);
     setShowForm(false);
@@ -208,6 +275,10 @@ function TestimoniTab() {
   async function del(id: string) {
     if (!confirm('Hapus testimoni ini?')) return;
     await supabase.from('testimonials').delete().eq('id', id);
+    const next = items.filter(i => i.id !== id);
+    await Promise.all(next.map((item, idx) =>
+      supabase.from('testimonials').update({ urutan: idx }).eq('id', item.id)
+    ));
     load();
   }
 
@@ -216,16 +287,38 @@ function TestimoniTab() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-        <p style={muted}>Tampil di halaman publik. Maks 10 aktif.</p>
+        <p style={muted}>Tampil di halaman publik. Maks 10 aktif. Drag untuk ubah urutan.</p>
         <button onClick={openAdd} disabled={activeCount >= 10} style={btnPrimary}>+ Tambah</button>
       </div>
 
       {loading ? <p style={muted}>Memuat...</p> : items.length === 0 ? (
         <div style={emptyCard}><p style={muted}>Belum ada testimoni.</p></div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {items.map(t => (
-            <div key={t.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '14px 16px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          {items.map((t, idx) => (
+            <div
+              key={t.id}
+              draggable
+              onDragStart={() => handleDragStart(idx)}
+              onDragOver={e => handleDragOver(e, idx)}
+              onDragEnd={handleDragEnd}
+              onDrop={() => handleDrop(idx)}
+              style={{
+                background: '#fff',
+                border: dragOver === idx ? '2px solid #0D5C3A' : '1px solid #E2E1DC',
+                borderRadius: '10px', padding: '12px 14px',
+                display: 'flex', gap: '10px', alignItems: 'flex-start',
+                cursor: 'grab', opacity: dragIdx.current === idx ? 0.5 : 1,
+                transition: 'border-color 0.15s',
+              }}
+            >
+              {/* Position + drag handle */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flexShrink: 0, paddingTop: '2px' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 900, color: '#0D5C3A', lineHeight: 1 }}>{idx + 1}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2">
+                  <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/>
+                </svg>
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>{t.nama}</span>
@@ -262,9 +355,6 @@ function TestimoniTab() {
           </Field>
           <Field label="Isi Testimoni">
             <textarea value={form.isi} onChange={e => setForm(f => ({ ...f, isi: e.target.value }))} style={textareaStyle} placeholder="Kata-kata siswa tentang Abdi Smart..." />
-          </Field>
-          <Field label="Urutan">
-            <input type="number" value={form.urutan} onChange={e => setForm(f => ({ ...f, urutan: Number(e.target.value) }))} style={{ ...inputStyle, width: '80px' }} />
           </Field>
           <Field label="Status">
             <div style={{ display: 'flex', gap: '8px' }}>
