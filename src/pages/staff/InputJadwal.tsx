@@ -265,7 +265,7 @@ export default function InputJadwal() {
       {/* Schedule list */}
       {loading ? (
         <p style={mutedText}>Memuat...</p>
-      ) : !showAll ? (
+      ) : dayFilter !== 'all' ? (
         /* H-1 + H flat list sorted by created_at desc */
         <div>
           {displayed.length === 0 ? (
