@@ -242,38 +242,21 @@ export default function Hero() {
           className="hidden lg:flex"
           style={{ justifyContent: 'center', alignItems: 'center', position: 'relative' }}
         >
-          {/* Outer dashed ring */}
           <div
             style={{
               position: 'relative',
               width: '380px',
               height: '380px',
-              borderRadius: '50%',
-              border: '2px dashed rgba(0,0,0,0.1)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            {/* Inner yellow filled circle */}
-            <div
-              style={{
-                width: '310px',
-                height: '310px',
-                borderRadius: '50%',
-                background: 'var(--color-yellow)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                boxShadow: '0 24px 72px rgba(255,229,0,0.4), 0 4px 16px rgba(0,0,0,0.06)',
-              }}
-            >
-              <img
-                src="/logo.png"
-                alt="Abdi Smart"
-                style={{ width: '300px', height: '300px', objectFit: 'contain' }}
-              />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Abdi Smart"
+              style={{ width: '360px', height: '360px', objectFit: 'contain' }}
+            />
 
             {/* Floating chip -- top right */}
             <div

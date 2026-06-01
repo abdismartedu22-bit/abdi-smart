@@ -77,11 +77,13 @@ export default function Sidebar({ open, onClose }: Props) {
         height: '64px',
         flexShrink: 0,
       }}>
-        <img
-          src="/logo.png"
-          alt="Abdi Smart"
-          style={{ width: '44px', height: '44px', objectFit: 'contain' }}
-        />
+        <div style={{ width: '44px', height: '44px', overflow: 'hidden', flexShrink: 0, borderRadius: '50%' }}>
+          <img
+            src="/logo.png"
+            alt="Abdi Smart"
+            style={{ width: '44px', height: '44px', objectFit: 'contain', transform: 'scale(1.45)', transformOrigin: 'center' }}
+          />
+        </div>
         <span style={{
           fontFamily: 'var(--font-display)',
           fontWeight: 900,
