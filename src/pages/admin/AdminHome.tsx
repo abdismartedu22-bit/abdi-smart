@@ -4,8 +4,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
-import DashboardBanner from '../../components/shared/DashboardBanner';
-import BannerManager from '../../components/shared/BannerManager';
 
 type TodaySession = {
   id: string;
@@ -198,8 +196,6 @@ export default function AdminHome() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
-          <DashboardBanner />
-          <BannerManager />
 
           {/* Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>

@@ -3,7 +3,7 @@ import { supabase } from '../../lib/supabase';
 
 type Tab = 'pengumuman' | 'testimoni';
 
-type Announcement = { id: string; judul: string; isi: string; urutan: number; is_active: boolean };
+type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null; urutan: number; is_active: boolean };
 type Testimonial = { id: string; nama: string; asal_sekolah: string | null; universitas: string | null; isi: string; urutan: number; is_active: boolean };
 
 /* ---- Shared form modal ---- */
@@ -44,7 +44,7 @@ function PengumumanTab() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Announcement | null>(null);
-  const [form, setForm] = useState({ judul: '', isi: '', urutan: 0, is_active: true });
+  const [form, setForm] = useState({ judul: '', isi: '', gambar_url: '', urutan: 0, is_active: true });
 
   async function load() {
     setLoading(true);
@@ -57,23 +57,24 @@ function PengumumanTab() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ judul: '', isi: '', urutan: items.length, is_active: true });
+    setForm({ judul: '', isi: '', gambar_url: '', urutan: items.length, is_active: true });
     setShowForm(true);
   }
 
   function openEdit(a: Announcement) {
     setEditing(a);
-    setForm({ judul: a.judul, isi: a.isi, urutan: a.urutan, is_active: a.is_active });
+    setForm({ judul: a.judul, isi: a.isi, gambar_url: a.gambar_url ?? '', urutan: a.urutan, is_active: a.is_active });
     setShowForm(true);
   }
 
   async function save() {
     if (!form.judul.trim() || !form.isi.trim()) return;
     setSaving(true);
+    const payload = { judul: form.judul, isi: form.isi, gambar_url: form.gambar_url.trim() || null, urutan: form.urutan, is_active: form.is_active };
     if (editing) {
-      await supabase.from('announcements').update({ judul: form.judul, isi: form.isi, urutan: form.urutan, is_active: form.is_active }).eq('id', editing.id);
+      await supabase.from('announcements').update(payload).eq('id', editing.id);
     } else {
-      await supabase.from('announcements').insert({ judul: form.judul, isi: form.isi, urutan: form.urutan, is_active: form.is_active });
+      await supabase.from('announcements').insert(payload);
     }
     setSaving(false);
     setShowForm(false);
@@ -126,6 +127,12 @@ function PengumumanTab() {
           </Field>
           <Field label="Isi">
             <textarea value={form.isi} onChange={e => setForm(f => ({ ...f, isi: e.target.value }))} style={textareaStyle} placeholder="Isi pengumuman..." />
+          </Field>
+          <Field label="Gambar (opsional)">
+            <input value={form.gambar_url} onChange={e => setForm(f => ({ ...f, gambar_url: e.target.value }))} style={inputStyle} placeholder="URL gambar atau link Google Drive" />
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '4px 0 0' }}>
+              Google Drive: buka file &rarr; Share &rarr; Anyone with link &rarr; copy link
+            </p>
           </Field>
           <Field label="Urutan">
             <input type="number" value={form.urutan} onChange={e => setForm(f => ({ ...f, urutan: Number(e.target.value) }))} style={{ ...inputStyle, width: '80px' }} />

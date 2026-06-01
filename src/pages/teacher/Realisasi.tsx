@@ -441,22 +441,31 @@ function SessionCard({
       });
     }
 
-    // Lock all student rows and set final statuses
+    // Step 1: upsert student rows WITHOUT locked_at
+    // (RLS "teacher insert student rows" requires locked_at IS NULL in WITH CHECK)
     for (const st of sessionStudents) {
       const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
       const finalStatus = studentStatuses[st.student_id]?.status ?? 'tidak_hadir';
       const finalNote = studentStatuses[st.student_id]?.note ?? '';
       if (att) {
-        await supabase.from('attendance').update({ status: finalStatus, note: finalNote || null, locked_at: now, verified_by: teacherId, verified_at: now }).eq('id', att.id);
+        await supabase.from('attendance').update({ status: finalStatus, note: finalNote || null }).eq('id', att.id);
       } else {
         await supabase.from('attendance').insert({
           schedule_id: session.id, session_date: today,
           person_id: st.student_id, person_role: 'student',
           status: finalStatus, note: finalNote || null,
-          locked_at: now, verified_by: teacherId, verified_at: now,
         });
       }
     }
+
+    // Step 2: bulk lock all student rows for this session
+    // (RLS "teacher update own sessions" allows UPDATE when existing locked_at IS NULL)
+    await supabase
+      .from('attendance')
+      .update({ locked_at: now, verified_by: teacherId, verified_at: now })
+      .eq('schedule_id', session.id)
+      .eq('session_date', today)
+      .eq('person_role', 'student');
 
     setLocking(false);
     onRefresh();

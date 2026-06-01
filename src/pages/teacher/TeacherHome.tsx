@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
-import DashboardBanner from '../../components/shared/DashboardBanner';
 import AnnouncementSlider from '../../components/shared/AnnouncementSlider';
 
 type Session = {
@@ -122,7 +121,6 @@ export default function TeacherHome() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
           <AnnouncementSlider />
-          <DashboardBanner />
 
           {/* Monthly teaching count */}
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px' }}>

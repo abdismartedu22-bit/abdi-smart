@@ -4,7 +4,6 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
-import DashboardBanner from '../../components/shared/DashboardBanner';
 import AnnouncementSlider from '../../components/shared/AnnouncementSlider';
 
 type Group = { id: string; nama: string; kode: string; warna: string; warna_text: string; paket: number | null };
@@ -203,7 +202,7 @@ export default function StudentHome() {
   })();
 
   return (
-    <div style={{ maxWidth: '640px' }}>
+    <div>
 
       {/* Header */}
       <div style={{ marginBottom: isBirthday ? '16px' : '24px' }}>
@@ -231,7 +230,6 @@ export default function StudentHome() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
           <AnnouncementSlider />
-          <DashboardBanner />
 
           {/* Paket card per group */}
           {groups.map(g => {
