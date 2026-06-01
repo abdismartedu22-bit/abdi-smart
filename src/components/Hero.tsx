@@ -262,14 +262,16 @@ export default function Hero() {
                 height: '310px',
                 borderRadius: '50%',
                 background: 'var(--color-yellow)',
-                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 boxShadow: '0 24px 72px rgba(255,229,0,0.4), 0 4px 16px rgba(0,0,0,0.06)',
               }}
             >
               <img
                 src="/logo.png"
                 alt="Abdi Smart"
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                style={{ width: '300px', height: '300px', objectFit: 'contain' }}
               />
             </div>
 
