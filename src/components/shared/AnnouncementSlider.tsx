@@ -47,11 +47,11 @@ export default function AnnouncementSlider() {
         <img
           src={imgSrc}
           alt={item.judul}
-          style={{ width: '100%', maxHeight: '180px', objectFit: 'cover', display: 'block' }}
+          style={{ width: '100%', maxHeight: '240px', objectFit: 'cover', display: 'block' }}
           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
         />
-      )}
-      <div style={{ padding: '14px 18px' }}>
+)}
+      <div style={{ padding: '10px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFE500" strokeWidth="2.2" style={{ marginTop: '2px', flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
