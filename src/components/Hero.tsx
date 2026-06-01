@@ -252,11 +252,13 @@ export default function Hero() {
               justifyContent: 'center',
             }}
           >
-            <img
-              src="/logo.png"
-              alt="Abdi Smart"
-              style={{ width: '360px', height: '360px', objectFit: 'contain' }}
-            />
+            <div style={{ width: '360px', height: '360px', overflow: 'hidden' }}>
+              <img
+                src="/logo.png"
+                alt="Abdi Smart"
+                style={{ width: '360px', height: '360px', objectFit: 'contain', transform: 'scale(1.45)', transformOrigin: 'center' }}
+              />
+            </div>
 
             {/* Floating chip -- top right */}
             <div
