@@ -145,8 +145,10 @@ function PengumumanTab() {
               {/* Position + drag handle */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flexShrink: 0, paddingTop: '2px' }}>
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 900, color: '#0D5C3A', lineHeight: 1 }}>{idx + 1}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2">
-                  <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/>
+                <svg width="12" height="16" viewBox="0 0 12 16" fill="#ccc">
+                  <circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/>
+                  <circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/>
+                  <circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/>
                 </svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -315,8 +317,10 @@ function TestimoniTab() {
               {/* Position + drag handle */}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', flexShrink: 0, paddingTop: '2px' }}>
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 900, color: '#0D5C3A', lineHeight: 1 }}>{idx + 1}</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2">
-                  <line x1="8" y1="6" x2="16" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="18" x2="16" y2="18"/>
+                <svg width="12" height="16" viewBox="0 0 12 16" fill="#ccc">
+                  <circle cx="3" cy="3" r="1.5"/><circle cx="9" cy="3" r="1.5"/>
+                  <circle cx="3" cy="8" r="1.5"/><circle cx="9" cy="8" r="1.5"/>
+                  <circle cx="3" cy="13" r="1.5"/><circle cx="9" cy="13" r="1.5"/>
                 </svg>
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
