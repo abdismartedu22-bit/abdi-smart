@@ -84,34 +84,14 @@ export default function StudentHome() {
     const groupIds = myGroups.map(g => g.id);
 
     if (groupIds.length > 0) {
-      // Compute realisasi per group
-      const { data: allSchedules } = await supabase
-        .from('schedules')
-        .select('id, group_id')
-        .in('group_id', groupIds);
-
-      const schedsByGroup: Record<string, string[]> = {};
-      (allSchedules ?? []).forEach((s: any) => {
-        if (!schedsByGroup[s.group_id]) schedsByGroup[s.group_id] = [];
-        schedsByGroup[s.group_id].push(s.id);
+      // Use SECURITY DEFINER RPC so students can read teacher realisasi counts
+      const { data: rpcData } = await supabase.rpc('get_groups_with_realisasi');
+      const rMap: Record<string, number> = {};
+      myGroups.forEach(g => { rMap[g.id] = 0; });
+      ((rpcData ?? []) as { id: string; realisasi: number }[]).forEach(r => {
+        if (rMap[r.id] !== undefined) rMap[r.id] = Number(r.realisasi);
       });
-
-      const allSchedIds = (allSchedules ?? []).map((s: any) => s.id);
-      if (allSchedIds.length > 0) {
-        const { data: realisedRows } = await supabase
-          .from('attendance')
-          .select('schedule_id')
-          .eq('person_role', 'teacher')
-          .eq('sesi_status', 'terlaksana')
-          .in('schedule_id', allSchedIds);
-
-        const realisedSet = new Set((realisedRows ?? []).map((r: any) => r.schedule_id));
-        const rMap: Record<string, number> = {};
-        Object.entries(schedsByGroup).forEach(([gid, sids]) => {
-          rMap[gid] = sids.filter(sid => realisedSet.has(sid)).length;
-        });
-        setRealisasiByGroup(rMap);
-      }
+      setRealisasiByGroup(rMap);
 
       // Next session
       const weekStart = getWeekStartISO();
@@ -240,7 +220,7 @@ export default function StudentHome() {
             return (
               <div key={g.id} style={card}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                  <GrupBadge kode={g.kode} warna={g.warna} warna_text={g.warna_text} />
+                  <GrupBadge nama={g.nama} warna={g.warna} warna_text={g.warna_text} />
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{g.nama}</span>
                   <span style={chip}>Paket Bimbel</span>
                 </div>
@@ -301,7 +281,7 @@ export default function StudentHome() {
             {nextSession ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <GrupBadge kode={nextSession.groups.kode} warna={nextSession.groups.warna} warna_text={nextSession.groups.warna_text} />
+                  <GrupBadge nama={nextSession.groups.nama} warna={nextSession.groups.warna} warna_text={nextSession.groups.warna_text} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem', color: '#0D0D0D' }}>
                       {nextSession.hari} &nbsp;{fmtTime(nextSession.jam_mulai)}&ndash;{fmtTime(nextSession.jam_selesai)}

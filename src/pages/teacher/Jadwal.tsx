@@ -71,7 +71,7 @@ export default function TeacherJadwal() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {daySessions.map(s => (
                       <div key={s.id} style={card}>
-                        <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                        <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                         <span style={bold}>{fmtTime(s.jam_mulai)} – {fmtTime(s.jam_selesai)}</span>
                         <span style={normal}>{s.materi ?? '–'}</span>
                         {s.lokasi && <span style={muted}>@ {s.lokasi}</span>}

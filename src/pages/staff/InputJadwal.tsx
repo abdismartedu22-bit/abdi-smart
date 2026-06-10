@@ -27,8 +27,6 @@ type ScheduleRow = {
 type Teacher = { id: string; display_name: string };
 type GedungRoom = { id: string; nama: string; ruangan: string; kapasitas: number | null };
 
-const LOKASI = ['Badak Agung', 'Trijata', 'Mahendradata'];
-
 const defaultForm = {
   group_id: '',
   teacher_id: '',
@@ -37,7 +35,7 @@ const defaultForm = {
   jam_mulai: '15:30',
   jam_selesai: '17:00',
   materi: '',
-  lokasi: 'Badak Agung',
+  lokasi: '',
   ruangan: '',
   pertemuan_ke: '',
 };
@@ -78,6 +76,7 @@ export default function InputJadwal() {
   const [form, setForm] = useState(defaultForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [minPertemuan, setMinPertemuan] = useState(1);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -99,7 +98,7 @@ export default function InputJadwal() {
         .order('created_at', { ascending: false }), // most recently added first
       supabase.from('groups').select('*').eq('active', true).order('nama'),
       supabase.from('profiles').select('id, display_name').eq('role', 'teacher').order('display_name'),
-      supabase.from('gedung').select('id, nama, ruangan, kapasitas').eq('status', 'aktif').order('nama').order('ruangan'),
+      supabase.from('gedung').select('id, nama, ruangan, kapasitas').ilike('status', 'aktif').order('nama').order('ruangan'),
     ]);
     setSchedules((sched ?? []) as unknown as ScheduleRow[]);
     setGroups(grp ?? []);
@@ -108,19 +107,37 @@ export default function InputJadwal() {
     setLoading(false);
   }
 
-  function openAdd() {
+  async function fetchMinPertemuan(groupId: string, excludeScheduleId?: string): Promise<number> {
+    if (!groupId) return 1;
+    const { data } = await supabase
+      .from('schedules')
+      .select('pertemuan_ke')
+      .eq('group_id', groupId)
+      .not('pertemuan_ke', 'is', null);
+    const rows = (data ?? []) as { pertemuan_ke: number }[];
+    const filtered = excludeScheduleId ? rows : rows;
+    const max = filtered.reduce((m, r) => Math.max(m, r.pertemuan_ke ?? 0), 0);
+    return max + 1;
+  }
+
+  async function openAdd() {
     setEditing(null);
-    setForm({ ...defaultForm, group_id: '', teacher_id: '', tanggal: toISODate(new Date()) });
     const missing = [];
     if (groups.length === 0) missing.push('grup');
     if (teachers.length === 0) missing.push('pengajar');
     setFormError(missing.length > 0 ? `Belum ada ${missing.join(' dan ')}. Tambahkan di /admin/users terlebih dahulu.` : '');
+    setMinPertemuan(1);
+    const todayISO = toISODate(new Date());
+    const todayHariName = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()];
+    setForm({ ...defaultForm, group_id: '', teacher_id: '', tanggal: todayISO, hari: todayHariName, pertemuan_ke: '1' });
     setShowModal(true);
   }
 
-  function openEdit(s: ScheduleRow) {
+  async function openEdit(s: ScheduleRow) {
     setEditing(s);
     const editDate = getDateForHari(new Date(s.week_start + 'T00:00:00'), s.hari);
+    const min = await fetchMinPertemuan(s.group_id, s.id);
+    setMinPertemuan(min);
     setForm({
       group_id: s.group_id,
       teacher_id: s.teacher_id,
@@ -129,12 +146,18 @@ export default function InputJadwal() {
       jam_mulai: fmtTime(s.jam_mulai),
       jam_selesai: fmtTime(s.jam_selesai),
       materi: s.materi ?? '',
-      lokasi: s.lokasi ?? 'Badak Agung',
+      lokasi: s.lokasi ?? '',
       ruangan: s.ruangan ?? '',
       pertemuan_ke: s.pertemuan_ke?.toString() ?? '',
     });
     setFormError('');
     setShowModal(true);
+  }
+
+  async function handleGroupChange(groupId: string) {
+    const min = await fetchMinPertemuan(groupId);
+    setMinPertemuan(min);
+    setForm(f => ({ ...f, group_id: groupId, pertemuan_ke: String(min) }));
   }
 
   function handleTanggalChange(iso: string) {
@@ -148,9 +171,19 @@ export default function InputJadwal() {
   async function handleSave(e: FormEvent) {
     e.preventDefault();
     setFormError('');
-    if (!form.group_id || !form.teacher_id) { setFormError('Grup dan pengajar wajib diisi'); return; }
+    if (!form.group_id) { setFormError('Grup wajib diisi'); return; }
+    if (!form.teacher_id) { setFormError('Pengajar wajib diisi'); return; }
     if (!form.tanggal) { setFormError('Tanggal wajib diisi'); return; }
+    if (!form.jam_mulai || !form.jam_selesai) { setFormError('Jam mulai dan jam selesai wajib diisi'); return; }
     if (form.jam_mulai >= form.jam_selesai) { setFormError('Jam selesai harus setelah jam mulai'); return; }
+    if (!form.materi.trim()) { setFormError('Materi wajib diisi'); return; }
+    if (!form.lokasi) { setFormError('Lokasi wajib diisi'); return; }
+    if (!form.ruangan) { setFormError('Ruangan wajib diisi'); return; }
+    if (!form.pertemuan_ke) { setFormError('Pertemuan ke- wajib diisi'); return; }
+    if (form.pertemuan_ke && Number(form.pertemuan_ke) < minPertemuan) {
+      setFormError(`Pertemuan ke- tidak boleh kurang dari ${minPertemuan} (grup ini sudah ada ${minPertemuan - 1} sesi sebelumnya)`);
+      return;
+    }
 
     setSubmitting(true);
     const pickedDate = new Date(form.tanggal + 'T00:00:00');
@@ -201,6 +234,9 @@ export default function InputJadwal() {
     dayDate: weekDays[idx],
     sessions: schedules.filter(s => s.hari === hari),
   }));
+
+  // Lokasi options derived from gedung data (dynamic, not hardcoded)
+  const lokasiOptions = [...new Set(gedungRooms.map(r => r.nama))].sort();
 
   // Rooms for the selected lokasi in the form
   const roomsForLokasi = gedungRooms.filter(r => r.nama === form.lokasi);
@@ -286,7 +322,7 @@ export default function InputJadwal() {
               <div style={{ display: 'flex', alignItems: 'baseline', gap: '10px', marginBottom: '8px' }}>
                 <h2 style={{
                   fontFamily: 'var(--font-display)', fontSize: '1rem', margin: 0,
-                  color: hari === todayHari ? '#DC0A1E' : '#0D0D0D',
+                  color: toISODate(dayDate) === toISODate(new Date()) ? '#DC0A1E' : '#0D0D0D',
                 }}>
                   {hari}
                 </h2>
@@ -319,7 +355,7 @@ export default function InputJadwal() {
                 <SearchSelect
                   items={groups.map(g => ({ id: g.id, label: g.nama, badge: g.kode, badgeBg: g.warna, badgeColor: g.warna_text }))}
                   value={form.group_id}
-                  onChange={id => setForm(f => ({ ...f, group_id: id }))}
+                  onChange={id => handleGroupChange(id)}
                   placeholder="Cari grup..."
                 />
               </Field>
@@ -334,28 +370,26 @@ export default function InputJadwal() {
               </Field>
 
               <Field label="Tanggal">
-                <div style={{ position: 'relative' }}>
-                  <div style={{ ...input, display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', color: form.tanggal ? '#0D0D0D' : '#999' }}>
-                    <span>{form.tanggal ? formatTanggalDisplay(form.tanggal) : 'Pilih tanggal...'}</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, color: '#888' }}>
-                      <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-                    </svg>
-                  </div>
-                  <input
-                    type="date"
-                    value={form.tanggal}
-                    onChange={e => handleTanggalChange(e.target.value)}
-                    style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer', width: '100%', height: '100%', zIndex: 1 }}
-                  />
-                </div>
+                <input
+                  type="date"
+                  value={form.tanggal}
+                  onChange={e => handleTanggalChange(e.target.value)}
+                  required
+                  style={input}
+                />
+                {form.tanggal && (
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0D5C3A', fontWeight: 600 }}>
+                    {formatTanggalDisplay(form.tanggal)}
+                  </span>
+                )}
               </Field>
 
               <div style={{ display: 'flex', gap: '10px' }}>
                 <Field label="Jam Mulai" style={{ flex: 1 }}>
-                  <input type="time" value={form.jam_mulai} onChange={e => setForm(f => ({ ...f, jam_mulai: e.target.value }))} required style={input} />
+                  <input type="time" value={form.jam_mulai} onChange={e => setForm(f => ({ ...f, jam_mulai: e.target.value }))} required style={{ ...input, fontSize: '1rem', padding: '10px 11px' }} />
                 </Field>
                 <Field label="Jam Selesai" style={{ flex: 1 }}>
-                  <input type="time" value={form.jam_selesai} onChange={e => setForm(f => ({ ...f, jam_selesai: e.target.value }))} required style={input} />
+                  <input type="time" value={form.jam_selesai} onChange={e => setForm(f => ({ ...f, jam_selesai: e.target.value }))} required style={{ ...input, fontSize: '1rem', padding: '10px 11px' }} />
                 </Field>
               </div>
 
@@ -366,7 +400,8 @@ export default function InputJadwal() {
               <div style={{ display: 'flex', gap: '10px' }}>
                 <Field label="Lokasi" style={{ flex: 1 }}>
                   <select value={form.lokasi} onChange={e => setForm(f => ({ ...f, lokasi: e.target.value, ruangan: '' }))} style={select}>
-                    {LOKASI.map(l => <option key={l} value={l}>{l}</option>)}
+                    <option value="">-- pilih --</option>
+                    {lokasiOptions.map(l => <option key={l} value={l}>{l}</option>)}
                   </select>
                 </Field>
                 <Field label="Ruangan" style={{ flex: 1 }}>
@@ -384,7 +419,19 @@ export default function InputJadwal() {
               </div>
 
               <Field label="Pertemuan ke-">
-                <input type="number" min="1" value={form.pertemuan_ke} onChange={e => setForm(f => ({ ...f, pertemuan_ke: e.target.value }))} placeholder="cth. 5" style={input} />
+                <input
+                  type="number"
+                  min={minPertemuan}
+                  value={form.pertemuan_ke}
+                  onChange={e => setForm(f => ({ ...f, pertemuan_ke: e.target.value }))}
+                  placeholder={String(minPertemuan)}
+                  style={input}
+                />
+                {form.pertemuan_ke && Number(form.pertemuan_ke) < minPertemuan && (
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#DC0A1E' }}>
+                    Grup ini sudah ada {minPertemuan - 1} sesi. Masukkan minimal sesi ke-{minPertemuan}.
+                  </span>
+                )}
               </Field>
 
               {formError && <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: '#DC0A1E', margin: 0 }}>{formError}</p>}
@@ -424,7 +471,7 @@ function SessionCard({ s, isAdmin, onEdit, onDelete }: { s: ScheduleRow; isAdmin
   return (
     <div style={sessionCard}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, flexWrap: 'wrap', minWidth: 0 }}>
-        <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+        <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
         <span style={timeText}>{fmtTime(s.jam_mulai)} – {fmtTime(s.jam_selesai)}</span>
         <span style={mainText}>{s.materi ?? '–'}</span>
         <span style={mutedText}>{s.teacher.display_name}</span>

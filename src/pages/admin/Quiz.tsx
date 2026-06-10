@@ -9,18 +9,20 @@ const TIPE_LABELS: Record<QuizTipe, string> = {
   isian_singkat: 'Isian Singkat',
   benar_salah:   'Benar / Salah',
   centang_semua: 'Centang Semua Benar',
+  gambar:        'Gambar',
 };
 const TIPE_BADGE: Record<QuizTipe, { bg: string; color: string }> = {
   pilihan_ganda: { bg: '#DBEAFE', color: '#1D4ED8' },
   isian_singkat: { bg: '#D1FAE5', color: '#065F46' },
   benar_salah:   { bg: '#FEF9C3', color: '#92400E' },
   centang_semua: { bg: '#EDE9FE', color: '#5B21B6' },
+  gambar:        { bg: '#FFE4E6', color: '#BE123C' },
 };
 
 function gradeAnswer(q: QuizQuestion, jawaban: string | string[] | null): number {
   if (jawaban === null || jawaban === undefined) return 0;
   const benar = q.jawaban_benar;
-  if (q.tipe === 'pilihan_ganda' || q.tipe === 'benar_salah') {
+  if (q.tipe === 'pilihan_ganda' || q.tipe === 'benar_salah' || q.tipe === 'gambar') {
     return String(jawaban).trim() === String(benar).trim() ? q.poin : 0;
   }
   if (q.tipe === 'isian_singkat') {
@@ -38,12 +40,15 @@ function gradeAnswer(q: QuizQuestion, jawaban: string | string[] | null): number
   return 0;
 }
 
+const PAGE_SIZE = 10;
+
 export default function AdminQuiz() {
   const { profile } = useAuth();
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [questions, setQuestions] = useState<Record<string, QuizQuestion[]>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
 
   const [showCreateQuiz, setShowCreateQuiz] = useState(false);
   const [editQuiz, setEditQuiz] = useState<Quiz | null>(null);
@@ -61,7 +66,7 @@ export default function AdminQuiz() {
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from('quizzes').select('*').order('nomor');
+    const { data } = await supabase.from('quizzes').select('*').order('created_at', { ascending: false });
     setQuizzes(data ?? []);
     setLoading(false);
   }
@@ -109,6 +114,8 @@ export default function AdminQuiz() {
   }
 
   const nextNomor = quizzes.length > 0 ? Math.max(...quizzes.map(q => q.nomor)) + 1 : 1;
+  const totalPages = Math.max(1, Math.ceil(quizzes.length / PAGE_SIZE));
+  const paginatedQuizzes = quizzes.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <div>
@@ -122,8 +129,9 @@ export default function AdminQuiz() {
       ) : quizzes.length === 0 ? (
         <p style={muted}>Belum ada quiz.</p>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {quizzes.map(quiz => {
+        <>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
+          {paginatedQuizzes.map(quiz => {
             const isOpen = expanded[quiz.id] ?? false;
             const qList = questions[quiz.id] ?? [];
             return (
@@ -167,7 +175,8 @@ export default function AdminQuiz() {
                               </div>
                               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666' }}>
                                 {q.poin} poin
-                                {q.tipe === 'pilihan_ganda' && q.opsi && ` · ${q.opsi.length} opsi`}
+                                {(q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') && q.opsi && ` · ${q.opsi.length} opsi`}
+                                {q.tipe === 'gambar' && q.gambar_url && ' · Ada gambar'}
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
@@ -194,6 +203,30 @@ export default function AdminQuiz() {
             );
           })}
         </div>
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666' }}>
+              {quizzes.length} quiz &middot; Halaman {page} dari {totalPages}
+            </span>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{ ...btnGhost, opacity: page === 1 ? 0.4 : 1 }}
+              >
+                &larr; Prev
+              </button>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{ ...btnGhost, opacity: page === totalPages ? 0.4 : 1 }}
+              >
+                Next &rarr;
+              </button>
+            </div>
+          </div>
+        )}
+        </>
       )}
 
       {/* Modals */}
@@ -352,7 +385,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
 
   // Correct answer state (depends on tipe)
   const [correctPG, setCorrectPG] = useState<string>(() => {
-    if (question && (question.tipe === 'pilihan_ganda')) return String(question.jawaban_benar);
+    if (question && (question.tipe === 'pilihan_ganda' || question.tipe === 'gambar')) return String(question.jawaban_benar);
     return 'A';
   });
   const [correctBS, setCorrectBS] = useState<string>(() => {
@@ -370,6 +403,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
     return new Set();
   });
 
+  const [gambarUrl, setGambarUrl] = useState(question?.gambar_url ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -394,7 +428,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
     let jawaban_benar: string | string[];
     let opsi: string[] | null = null;
 
-    if (tipe === 'pilihan_ganda') {
+    if (tipe === 'pilihan_ganda' || tipe === 'gambar') {
       opsi = options.map(o => o.text);
       jawaban_benar = correctPG;
     } else if (tipe === 'benar_salah') {
@@ -407,7 +441,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
       jawaban_benar = Array.from(correctCentang);
     }
 
-    return { quiz_id: quizId, urutan: question?.urutan ?? nextUrutan, tipe, pertanyaan, opsi, jawaban_benar, poin };
+    return { quiz_id: quizId, urutan: question?.urutan ?? nextUrutan, tipe, pertanyaan, opsi, jawaban_benar, poin, gambar_url: tipe === 'gambar' ? (gambarUrl.trim() || null) : null };
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -415,7 +449,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
     setError('');
     if (!pertanyaan.trim()) { setError('Pertanyaan wajib diisi'); return; }
 
-    if (tipe === 'pilihan_ganda' || tipe === 'centang_semua') {
+    if (tipe === 'pilihan_ganda' || tipe === 'centang_semua' || tipe === 'gambar') {
       if (options.some(o => !o.text.trim())) { setError('Semua opsi harus diisi'); return; }
     }
     if (tipe === 'centang_semua' && correctCentang.size === 0) { setError('Pilih minimal 1 jawaban benar'); return; }
@@ -487,18 +521,43 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
             )}
           </Field>
 
-          {/* Options (PG / centang_semua) */}
-          {(tipe === 'pilihan_ganda' || tipe === 'centang_semua') && (
+          {/* Gambar URL */}
+          {tipe === 'gambar' && (
+            <Field label="URL Gambar">
+              <input
+                style={input}
+                value={gambarUrl}
+                onChange={e => setGambarUrl(e.target.value)}
+                placeholder="https://... atau link Google Drive"
+              />
+              {gambarUrl.trim() && (
+                <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC', background: '#F9F9F7' }}>
+                  <img
+                    src={gambarUrl.trim()}
+                    alt="Preview gambar"
+                    style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block' }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                </div>
+              )}
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '4px 0 0' }}>
+                Google Drive: buka file &rarr; Share &rarr; Anyone with link &rarr; copy link
+              </p>
+            </Field>
+          )}
+
+          {/* Options (PG / centang_semua / gambar) */}
+          {(tipe === 'pilihan_ganda' || tipe === 'centang_semua' || tipe === 'gambar') && (
             <Field label="Opsi Jawaban">
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '0 0 8px' }}>
-                {tipe === 'pilihan_ganda' ? 'Klik lingkaran hijau untuk menandai jawaban benar.' : 'Centang semua opsi yang benar.'}
+                {(tipe === 'pilihan_ganda' || tipe === 'gambar') ? 'Klik lingkaran hijau untuk menandai jawaban benar.' : 'Centang semua opsi yang benar.'}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {options.map((opt, i) => {
                   const isCorrect = tipe === 'pilihan_ganda' ? correctPG === opt.label : correctCentang.has(opt.label);
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', background: isCorrect ? '#F0FDF4' : '#F9F9F7', border: `1.5px solid ${isCorrect ? '#86EFAC' : '#E2E1DC'}`, transition: 'all 0.12s' }}>
-                      {tipe === 'pilihan_ganda' ? (
+                      {(tipe === 'pilihan_ganda' || tipe === 'gambar') ? (
                         <button
                           type="button"
                           onClick={() => setCorrectPG(opt.label)}

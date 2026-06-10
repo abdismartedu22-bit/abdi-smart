@@ -16,6 +16,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Realisasi', href: '/admin/realisasi' },
     { label: 'Quiz', href: '/admin/quiz' },
     { label: 'Konten', href: '/admin/konten' },
+    { label: 'Hasil TO', href: '/admin/hasil-to' },
     { label: 'Users', href: '/admin/users' },
     { label: 'Gedung', href: '/admin/gedung' },
     { label: 'Download', href: '/admin/download' },
@@ -25,7 +26,6 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Jadwal', href: '/staff/jadwal' },
     { label: 'Realisasi', href: '/staff/realisasi' },
     { label: 'Gedung', href: '/staff/gedung' },
-    { label: 'Hasil TO', href: '/staff/hasil-to' },
     { label: 'Download', href: '/staff/download' },
   ],
   teacher: [
@@ -39,8 +39,6 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Jadwal', href: '/student/jadwal' },
     { label: 'Absen', href: '/student/absen' },
     { label: 'Quiz', href: '/student/quiz' },
-    { label: 'Hasil TO', href: '/student/hasil-to' },
-    { label: 'Buka TO', href: 'https://abdismart.web.id/toAS/', external: true },
   ],
 };
 
@@ -59,11 +57,17 @@ interface Props {
   onClose: () => void;
 }
 
+const TO_ITEMS: NavItem[] = [
+  { label: 'Tryout', href: '/student/hasil-to' },
+];
+
 export default function Sidebar({ open, onClose }: Props) {
   const { profile } = useAuth();
   const isDesktop = useIsDesktop();
   const role = profile?.role ?? 'student';
-  const items = navByRole[role];
+  const items = role === 'student'
+    ? [...navByRole.student, ...TO_ITEMS]
+    : navByRole[role];
 
   const inner = (
     <div style={{ width: '220px', minWidth: '220px', height: '100%', background: '#0D5C3A', display: 'flex', flexDirection: 'column' }}>
@@ -81,7 +85,7 @@ export default function Sidebar({ open, onClose }: Props) {
           <img
             src="/logo.png"
             alt="Abdi Smart"
-            style={{ width: '44px', height: '44px', objectFit: 'contain', transform: 'scale(1.45)', transformOrigin: 'center' }}
+            style={{ width: '44px', height: '44px', objectFit: 'cover' }}
           />
         </div>
         <span style={{

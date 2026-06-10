@@ -153,7 +153,7 @@ export default function TeacherHome() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {todaySessions.map(s => (
                   <div key={s.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px', background: '#F9F9F7', borderRadius: '8px' }}>
-                    <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                    <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
                         {fmtTime(s.jam_mulai)} &ndash; {fmtTime(s.jam_selesai)}
@@ -186,7 +186,7 @@ export default function TeacherHome() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {upcomingWeek.map(s => (
                   <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: '#F9F9F7', borderRadius: '7px', flexWrap: 'wrap' }}>
-                    <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                    <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                     <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.85rem', color: '#0D0D0D' }}>{s.hari}</span>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#555' }}>{fmtTime(s.jam_mulai)}</span>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#555', flex: 1 }}>{s.materi ?? '-'}</span>

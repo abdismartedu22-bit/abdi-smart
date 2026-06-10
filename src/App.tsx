@@ -18,9 +18,9 @@ import AdminKonten from './pages/admin/Konten';
 
 import StaffHome from './pages/staff/StaffHome';
 import InputJadwal from './pages/staff/InputJadwal';
-import StaffHasilTO from './pages/staff/HasilTO';
 import StaffDownload from './pages/staff/Download';
 import StaffRealisasi from './pages/staff/Realisasi';
+import AdminHasilTO from './pages/staff/HasilTO';
 
 import TeacherHome from './pages/teacher/TeacherHome';
 import TeacherJadwal from './pages/teacher/Jadwal';
@@ -60,6 +60,7 @@ export default function App() {
               <Route path="/admin/gedung" element={<AdminGedung />} />
               <Route path="/admin/quiz" element={<AdminQuiz />} />
               <Route path="/admin/konten" element={<AdminKonten />} />
+              <Route path="/admin/hasil-to" element={<AdminHasilTO />} />
             </Route>
           </Route>
 
@@ -69,7 +70,6 @@ export default function App() {
               <Route path="/staff" element={<StaffHome />} />
               <Route path="/staff/jadwal" element={<InputJadwal />} />
               <Route path="/staff/realisasi" element={<StaffRealisasi />} />
-              <Route path="/staff/hasil-to" element={<StaffHasilTO />} />
               <Route path="/staff/download" element={<StaffDownload />} />
               <Route path="/staff/gedung" element={<AdminGedung />} />
             </Route>

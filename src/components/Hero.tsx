@@ -252,11 +252,11 @@ export default function Hero() {
               justifyContent: 'center',
             }}
           >
-            <div style={{ width: '360px', height: '360px', overflow: 'hidden' }}>
+            <div style={{ width: '360px', height: '360px', overflow: 'hidden', borderRadius: '50%' }}>
               <img
                 src="/logo.png"
                 alt="Abdi Smart"
-                style={{ width: '360px', height: '360px', objectFit: 'contain', transform: 'scale(1.45)', transformOrigin: 'center' }}
+                style={{ width: '360px', height: '360px', objectFit: 'cover' }}
               />
             </div>
 

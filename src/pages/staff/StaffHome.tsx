@@ -5,6 +5,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 import DashboardBanner from '../../components/shared/DashboardBanner';
+import AnnouncementSlider from '../../components/shared/AnnouncementSlider';
 
 type TodaySession = {
   id: string;
@@ -122,6 +123,8 @@ export default function StaffHome() {
 
           <DashboardBanner />
 
+          <AnnouncementSlider />
+
           {/* Today's sessions */}
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -136,7 +139,7 @@ export default function StaffHome() {
                   const sesiStatus = todayAttendance[s.id];
                   return (
                     <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', background: '#F9F9F7', borderRadius: '8px', flexWrap: 'wrap' }}>
-                      <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                      <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                       <span style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.85rem', color: '#0D0D0D' }}>{fmtTime(s.jam_mulai)}</span>
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#555', flex: 1 }}>{s.materi ?? 'tanpa materi'}</span>
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666' }}>{s.teacher.display_name}</span>
@@ -160,7 +163,6 @@ export default function StaffHome() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '10px', marginTop: '4px' }}>
               {[
                 { label: '+ Tambah Jadwal', path: '/staff/jadwal', color: '#0D5C3A' },
-                { label: '+ Input Hasil TO', path: '/staff/hasil-to', color: '#047857' },
                 { label: 'Download Laporan', path: '/staff/download', color: '#4B5563' },
               ].map(a => (
                 <button

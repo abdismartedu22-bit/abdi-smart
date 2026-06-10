@@ -141,7 +141,7 @@ function RiwayatTab({ teacherId }: { teacherId: string }) {
             return (
               <div key={sched.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '14px 16px' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                  <GrupBadge kode={sched.groups.kode} warna={sched.groups.warna} warna_text={sched.groups.warna_text} />
+                  <GrupBadge nama={sched.groups.nama} warna={sched.groups.warna} warna_text={sched.groups.warna_text} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '2px', flexWrap: 'wrap' }}>
                       <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
@@ -360,7 +360,9 @@ function SessionCard({
   onRefresh: () => void;
 }) {
   const teacherRow = attendance.find(a => a.person_role === 'teacher' && a.person_id === teacherId);
-  const locked = !!teacherRow?.locked_at;
+  const [optimisticLocked, setOptimisticLocked] = useState(false);
+  const locked = optimisticLocked || !!teacherRow?.locked_at;
+  const [lockError, setLockError] = useState<string | null>(null);
 
   const hasSavedSesi = !!teacherRow?.sesi_status;
   const [saving, setSaving] = useState<string | null>(null);
@@ -427,22 +429,43 @@ function SessionCard({
 
   async function handleLock() {
     setLocking(true);
+    setLockError(null);
     const now = new Date().toISOString();
 
-    // Upsert teacher row with lock
-    if (teacherRow) {
-      await supabase.from('attendance').update({ sesi_status: sesiStatus, note: note || null, locked_at: now }).eq('id', teacherRow.id);
-    } else {
-      await supabase.from('attendance').insert({
+    // Step 1: ensure teacher row exists WITHOUT locked_at (policy allows insert with locked_at IS NULL)
+    if (!teacherRow) {
+      const { error: insErr } = await supabase.from('attendance').insert({
         schedule_id: session.id, session_date: today,
         person_id: teacherId, person_role: 'teacher',
         status: 'hadir', sesi_status: sesiStatus, note: note || null,
-        checkin_at: now, locked_at: now,
+        checkin_at: now,
       });
+      if (insErr) {
+        setLockError('Gagal menyimpan kehadiran guru: ' + insErr.message);
+        setLocking(false);
+        return;
+      }
+    } else {
+      await supabase.from('attendance')
+        .update({ sesi_status: sesiStatus, note: note || null })
+        .eq('id', teacherRow.id);
     }
 
-    // Step 1: upsert student rows WITHOUT locked_at
-    // (RLS "teacher insert student rows" requires locked_at IS NULL in WITH CHECK)
+    // Step 2: lock the teacher row via UPDATE (policy: locked_at IS NULL in USING, no WITH CHECK restriction)
+    const { error: lockTeacherErr } = await supabase.from('attendance')
+      .update({ locked_at: now })
+      .eq('schedule_id', session.id)
+      .eq('session_date', today)
+      .eq('person_id', teacherId)
+      .eq('person_role', 'teacher');
+
+    if (lockTeacherErr) {
+      setLockError('Gagal mengunci sesi guru: ' + lockTeacherErr.message);
+      setLocking(false);
+      return;
+    }
+
+    // Step 3: upsert student rows WITHOUT locked_at
     for (const st of sessionStudents) {
       const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
       const finalStatus = studentStatuses[st.student_id]?.status ?? 'tidak_hadir';
@@ -458,15 +481,21 @@ function SessionCard({
       }
     }
 
-    // Step 2: bulk lock all student rows for this session
-    // (RLS "teacher update own sessions" allows UPDATE when existing locked_at IS NULL)
-    await supabase
+    // Step 4: bulk lock all student rows
+    const { error: lockStudentsErr } = await supabase
       .from('attendance')
       .update({ locked_at: now, verified_by: teacherId, verified_at: now })
       .eq('schedule_id', session.id)
       .eq('session_date', today)
       .eq('person_role', 'student');
 
+    if (lockStudentsErr) {
+      setLockError('Gagal mengunci absen siswa: ' + lockStudentsErr.message);
+      setLocking(false);
+      return;
+    }
+
+    setOptimisticLocked(true);
     setLocking(false);
     onRefresh();
   }
@@ -475,7 +504,7 @@ function SessionCard({
     <div style={cardStyle}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '16px' }}>
-        <GrupBadge kode={session.groups.kode} warna={session.groups.warna} warna_text={session.groups.warna_text} />
+        <GrupBadge nama={session.groups.nama} warna={session.groups.warna} warna_text={session.groups.warna_text} />
         <div style={{ flex: 1 }}>
           <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
             {fmtTime(session.jam_mulai)} &ndash; {fmtTime(session.jam_selesai)}
@@ -651,6 +680,11 @@ function SessionCard({
               <button onClick={handleLock} disabled={locking} style={{ ...btnSmall, background: '#047857' }}>
                 {locking ? 'Mengunci...' : 'Selesai & Kunci Absen'}
               </button>
+              {lockError && (
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0', fontWeight: 600 }}>
+                  {lockError}
+                </p>
+              )}
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666', margin: '6px 0 0' }}>
                 Atau akan terkunci otomatis pukul 23:59
               </p>

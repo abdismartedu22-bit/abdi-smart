@@ -254,7 +254,7 @@ function RealisasiSesiTab({ readOnly = false }: { readOnly?: boolean }) {
                   <tr key={`${s.id}-${r.session_date}`} style={{ borderBottom: i < displayed.length - 1 ? '1px solid #F3F2EE' : 'none' }}>
                     <td style={td}><span style={{ color: '#0D0D0D', fontWeight: 500, whiteSpace: 'nowrap' }}>{dateLabel}</span></td>
                     <td style={td}>
-                      {s.groups && <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />}
+                      {s.groups && <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />}
                     </td>
                     <td style={td}>
                       <div style={{ color: '#0D0D0D' }}>{s.materi ?? '-'}</div>
@@ -487,7 +487,7 @@ function AbsensiSiswaTab({ readOnly = false }: { readOnly?: boolean }) {
         />
         <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} style={selectStyle}>
           <option value="">Semua Grup</option>
-          {groups.map(g => <option key={g.id} value={g.id}>[{g.kode}] {g.nama}</option>)}
+          {groups.map(g => <option key={g.id} value={g.id}>{g.nama}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="">Semua Status</option>
@@ -548,7 +548,7 @@ function AbsensiSiswaTab({ readOnly = false }: { readOnly?: boolean }) {
                     </td>
                     <td style={td}>
                       {r.schedule?.groups && (
-                        <GrupBadge kode={r.schedule.groups.kode} warna={r.schedule.groups.warna} warna_text={r.schedule.groups.warna_text} />
+                        <GrupBadge nama={r.schedule.groups.nama} warna={r.schedule.groups.warna} warna_text={r.schedule.groups.warna_text} />
                       )}
                     </td>
                     <td style={td}>

@@ -40,20 +40,15 @@ type HistoryRow = {
 };
 
 // Uses WITA (UTC+8) for strict timezone-correct comparison
-function getWindowState(jamMulai: string): 'before' | 'open' | 'closed' {
-  const [h, m] = jamMulai.split(':').map(Number);
-  const startMin = h * 60 + m;
-  const endMin = startMin + 45;
+function getWindowState(jamMulai: string, jamSelesai: string): 'before' | 'open' | 'closed' {
+  const [sh, sm] = jamMulai.split(':').map(Number);
+  const [eh, em] = jamSelesai.split(':').map(Number);
+  const startMin = sh * 60 + sm;
+  const endMin = eh * 60 + em;
   const nowMin = nowWITAMinutes();
   if (nowMin < startMin) return 'before';
   if (nowMin <= endMin) return 'open';
   return 'closed';
-}
-
-function addMinutes(timeStr: string, mins: number): string {
-  const [h, m] = timeStr.split(':').map(Number);
-  const total = h * 60 + m + mins;
-  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 function getTodayHari(): string {
@@ -194,16 +189,29 @@ function HariIniTab() {
     setCheckingIn(scheduleId);
     setCheckInError('');
     const today = toISODate(new Date());
-    const { error } = await supabase.from('attendance').insert({
-      schedule_id: scheduleId,
-      session_date: today,
-      person_id: user.id,
-      person_role: 'student',
-      checkin_at: new Date().toISOString(),
-      status: null,
-    });
+    const existingRow = attendance[scheduleId];
+
+    let error;
+    if (existingRow?.id) {
+      ({ error } = await supabase.from('attendance').update({
+        checkin_at: new Date().toISOString(),
+      }).eq('id', existingRow.id));
+    } else {
+      ({ error } = await supabase.from('attendance').insert({
+        schedule_id: scheduleId,
+        session_date: today,
+        person_id: user.id,
+        person_role: 'student',
+        checkin_at: new Date().toISOString(),
+        status: null,
+      }));
+    }
+
     setCheckingIn(null);
-    if (error) setCheckInError('Gagal mencatat absen. Coba lagi.');
+    if (error) {
+      console.error('Absen error:', error);
+      setCheckInError(`Gagal mencatat absen: ${error.message}`);
+    }
     load();
   }
 
@@ -227,13 +235,13 @@ function HariIniTab() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {sessions.map(s => {
             const att = attendance[s.id];
-            const winState = getWindowState(s.jam_mulai);
-            const endWindow = addMinutes(fmtTime(s.jam_mulai), 45);
+            const winState = getWindowState(s.jam_mulai, s.jam_selesai);
+            const endWindow = fmtTime(s.jam_selesai);
 
             return (
               <div key={s.id} style={card}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
-                  <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                  <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
                       {fmtTime(s.jam_mulai)} &ndash; {fmtTime(s.jam_selesai)} WITA
@@ -402,7 +410,7 @@ function RiwayatTab() {
                   flexWrap: 'wrap',
                 }}>
                   {s?.groups && (
-                    <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                    <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.88rem', color: '#0D0D0D' }}>

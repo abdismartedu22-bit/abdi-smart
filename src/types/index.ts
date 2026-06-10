@@ -11,6 +11,7 @@ export interface Profile {
   tanggal_lahir: string | null;
   sekolah: string | null;
   jurusan: string | null;
+  tingkat_kelas: string | null;
   is_active: boolean;
   created_at: string;
 }
@@ -83,7 +84,7 @@ export interface TryoutResult {
   created_at: string;
 }
 
-export type QuizTipe = 'pilihan_ganda' | 'isian_singkat' | 'benar_salah' | 'centang_semua';
+export type QuizTipe = 'pilihan_ganda' | 'isian_singkat' | 'benar_salah' | 'centang_semua' | 'gambar';
 
 export interface Quiz {
   id: string;
@@ -103,6 +104,7 @@ export interface QuizQuestion {
   opsi: string[] | null;
   jawaban_benar: string | string[];
   poin: number;
+  gambar_url?: string | null;
 }
 
 export interface QuizSession {

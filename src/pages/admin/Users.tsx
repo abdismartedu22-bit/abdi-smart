@@ -4,6 +4,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import PasswordInput from '../../components/shared/PasswordInput';
 import type { Role, Group } from '../../types';
 
+const TINGKAT_KELAS_OPTIONS = ['1SD','2SD','3SD','4SD','5SD','6SD','7SMP','8SMP','9SMP','10SMA','11IPA','11IPS','12IPA','12IPS'];
+
 type UserRow = {
   id: string;
   username: string;
@@ -15,6 +17,7 @@ type UserRow = {
   tanggal_lahir: string | null;
   sekolah: string | null;
   jurusan: string | null;
+  tingkat_kelas: string | null;
   groups?: { group_id: string; groups: { id: string; nama: string; kode: string } }[];
 };
 
@@ -171,8 +174,8 @@ function UsersTab() {
                     </div>
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
                       @{u.username}
-                      {u.role === 'student' && u.groups && u.groups.length > 0 && (
-                        <span> &middot; {u.groups.map(g => g.groups?.kode ?? '').join(', ')}</span>
+                      {u.role === 'student' && u.tingkat_kelas && (
+                        <span> &middot; {u.tingkat_kelas}</span>
                       )}
                     </div>
                   </div>
@@ -224,7 +227,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
     display_name: '', nama: '', username: '', email: '', password: '',
     role: 'student' as Role,
     group_id: '',
-    tempat_lahir: '', tanggal_lahir: '', sekolah: '', jurusan: '',
+    tempat_lahir: '', tanggal_lahir: '', sekolah: '', jurusan: '', tingkat_kelas: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -269,6 +272,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       if (form.tanggal_lahir) extras.tanggal_lahir = form.tanggal_lahir;
       if (form.sekolah) extras.sekolah = form.sekolah;
       if (form.jurusan) extras.jurusan = form.jurusan;
+      if (form.tingkat_kelas) extras.tingkat_kelas = form.tingkat_kelas;
       if (Object.keys(extras).length > 0) {
         await supabase.from('profiles').update(extras).eq('id', json.user.id);
       }
@@ -330,6 +334,12 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
               <FieldRow label="Jurusan">
                 <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" />
               </FieldRow>
+              <FieldRow label="Tingkat Kelas">
+                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))}>
+                  <option value="">-- Pilih tingkat kelas --</option>
+                  {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
+              </FieldRow>
             </>
           )}
           {error && <p style={errorStyle}>{error}</p>}
@@ -357,6 +367,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
     tanggal_lahir: user.tanggal_lahir ?? '',
     sekolah: user.sekolah ?? '',
     jurusan: user.jurusan ?? '',
+    tingkat_kelas: user.tingkat_kelas ?? '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -380,6 +391,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
       update.tanggal_lahir = form.tanggal_lahir || null;
       update.sekolah = form.sekolah || null;
       update.jurusan = form.jurusan || null;
+      update.tingkat_kelas = form.tingkat_kelas || null;
     }
 
     const { error: profileErr } = await supabase.from('profiles').update(update).eq('id', user.id);
@@ -489,6 +501,12 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
               </FieldRow>
               <FieldRow label="Jurusan">
                 <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" />
+              </FieldRow>
+              <FieldRow label="Tingkat Kelas">
+                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))}>
+                  <option value="">-- Pilih tingkat kelas --</option>
+                  {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
+                </select>
               </FieldRow>
             </>
           )}
@@ -703,15 +721,12 @@ function GroupsTab() {
                     display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
                     flexWrap: 'wrap',
                   }}>
-                    <span style={{ background: g.warna, color: g.warna_text, padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700, fontFamily: 'var(--font-body)', letterSpacing: '0.05em', flexShrink: 0 }}>
-                      {g.kode}
-                    </span>
+                    <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: g.warna, flexShrink: 0, display: 'inline-block' }} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{g.nama}</div>
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
                         {g.tipe}
                         {g.sekolah && <span> &middot; {g.sekolah}</span>}
-                        {g.wa_group_link && <span style={{ color: '#25D366' }}> &middot; WA</span>}
                         <span> &middot; {groupMembers.length} siswa</span>
                       </div>
                     </div>
@@ -720,7 +735,7 @@ function GroupsTab() {
                         Paket {g.paket} sesi
                       </span>
                     )}
-                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: '6px', flexShrink: 0, alignItems: 'center' }}>
                       {groupMembers.length > 0 && (
                         <button
                           onClick={() => setExpanded(ex => ({ ...ex, [g.id]: !ex[g.id] }))}
@@ -728,6 +743,19 @@ function GroupsTab() {
                         >
                           {isExpanded ? 'Tutup' : 'Anggota'}
                         </button>
+                      )}
+                      {g.wa_group_link && (
+                        <a
+                          href={g.wa_group_link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Buka WA Grup"
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', background: '#25D366', color: '#fff', borderRadius: '6px', flexShrink: 0, textDecoration: 'none' }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                          </svg>
+                        </a>
                       )}
                       <button onClick={() => setEditTarget(g)} style={btnEdit}>Edit</button>
                       <button onClick={() => { setDeleteTarget(g); setDeleteError(''); }} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
@@ -801,11 +829,12 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
-    if (!form.nama || !form.kode) { setError('Nama dan kode wajib diisi'); return; }
+    if (!form.nama) { setError('Nama grup wajib diisi'); return; }
     setSubmitting(true);
+    const derivedKode = group?.kode ?? (form.nama.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4) || 'GRUP');
     const payload = {
       nama: form.nama,
-      kode: form.kode.toUpperCase(),
+      kode: derivedKode,
       tipe: form.tipe,
       warna: form.warna,
       warna_text: form.warna_text,
@@ -831,9 +860,6 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <FieldRow label="Nama Grup">
             <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} required placeholder="cth. 12IPA26001" />
-          </FieldRow>
-          <FieldRow label="Kode (2-4 huruf)">
-            <input style={inputStyle} value={form.kode} onChange={e => setForm(f => ({ ...f, kode: e.target.value.toUpperCase().slice(0, 4) }))} required placeholder="cth. GR" maxLength={4} />
           </FieldRow>
           <FieldRow label="Sekolah Asal (opsional)">
             <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
@@ -875,7 +901,7 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
                 padding: '2px 10px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: 700,
                 fontFamily: 'var(--font-body)', background: form.warna, color: form.warna_text,
               }}>
-                {form.kode || 'KODE'}
+                {form.nama || 'NAMA'}
               </span>
             </div>
           </FieldRow>
@@ -931,7 +957,7 @@ function GroupSelect({ groups, value, onChange }: { groups: Group[]; value: stri
   return (
     <div style={{ position: 'relative' }}>
       <input
-        value={open ? search : (selected ? `[${selected.kode}] ${selected.nama}` : '')}
+        value={open ? search : (selected ? selected.nama : '')}
         onChange={e => setSearch(e.target.value)}
         onFocus={() => { setOpen(true); setSearch(''); }}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
@@ -957,8 +983,7 @@ function GroupSelect({ groups, value, onChange }: { groups: Group[]; value: stri
                 fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D',
               }}
             >
-              <span style={{ background: g.warna, color: g.warna_text, padding: '1px 6px', borderRadius: '3px', fontSize: '0.68rem', fontWeight: 700 }}>{g.kode}</span>
-              {g.nama}
+              <span style={{ background: g.warna, color: g.warna_text, padding: '1px 6px', borderRadius: '3px', fontSize: '0.68rem', fontWeight: 700, maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.nama}</span>
             </div>
           ))}
         </div>

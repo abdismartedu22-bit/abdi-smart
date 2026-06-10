@@ -2,7 +2,23 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="icon" type="image/png" href="/logo.png" id="favicon" />
+    <script>
+      (function() {
+        var img = new Image();
+        img.onload = function() {
+          var c = document.createElement('canvas');
+          c.width = 64; c.height = 64;
+          var ctx = c.getContext('2d');
+          ctx.beginPath();
+          ctx.arc(32, 32, 32, 0, Math.PI * 2);
+          ctx.clip();
+          ctx.drawImage(img, 0, 0, 64, 64);
+          document.getElementById('favicon').href = c.toDataURL('image/png');
+        };
+        img.src = '/logo.png';
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Abdi Smart Education — Bimbel SNBP & SNBT Bali</title>
     <meta

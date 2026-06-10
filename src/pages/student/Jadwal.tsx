@@ -117,7 +117,7 @@ export default function StudentJadwal() {
                       boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                        <GrupBadge kode={s.groups.kode} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                        <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                             <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', color: '#0D0D0D', lineHeight: 1 }}>
@@ -136,7 +136,7 @@ export default function StudentJadwal() {
                             {s.materi ?? 'Materi belum diisi'}
                           </p>
                           <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', alignItems: 'center' }}>
-                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#999' }}>
+                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#555' }}>
                               {s.teacher?.display_name ?? 'Pengajar'}
                             </span>
                             {(s.lokasi || s.ruangan) && (

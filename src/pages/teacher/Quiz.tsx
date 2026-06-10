@@ -83,7 +83,7 @@ export default function TeacherQuiz() {
         .eq('week_start', weekStart)
         .eq('hari', todayHari)
         .order('jam_mulai'),
-      supabase.from('quizzes').select('*').order('nomor'),
+      supabase.from('quizzes').select('*').order('created_at', { ascending: false }),
     ]);
 
     const sessions = (schedData ?? []) as unknown as TodaySession[];
@@ -268,7 +268,7 @@ export default function TeacherQuiz() {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{r.quiz.judul}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
-                        {r.group && <GrupBadge kode={r.group.kode} warna={r.group.warna} warna_text={r.group.warna_text} />}
+                        {r.group && <GrupBadge nama={r.group.nama} warna={r.group.warna} warna_text={r.group.warna_text} />}
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: '#888' }}>{dateLabel}</span>
                       </div>
                     </div>
@@ -319,7 +319,7 @@ export default function TeacherQuiz() {
               <div key={session.id} style={card}>
                 {/* Session header */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
-                  <GrupBadge kode={group.kode} warna={group.warna} warna_text={group.warna_text} />
+                  <GrupBadge nama={group.nama} warna={group.warna} warna_text={group.warna_text} />
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem', color: '#0D0D0D' }}>{group.nama}</span>
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>
                     {fmtTime(session.jam_mulai)}&ndash;{fmtTime(session.jam_selesai)}
@@ -361,17 +361,14 @@ export default function TeacherQuiz() {
                       Pilih quiz untuk diaktifkan:
                     </p>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      <select
-                        value={selectedQuiz[session.id] ?? ''}
-                        onChange={e => setSelectedQuiz(prev => ({ ...prev, [session.id]: e.target.value }))}
-                        style={selectStyle}
-                      >
-                        {quizzes.map(q => (
-                          <option key={q.id} value={q.id}>
-                            Quiz {String(q.nomor).padStart(2, '0')} &mdash; {q.judul}
-                          </option>
-                        ))}
-                      </select>
+                      <div style={{ flex: 1, minWidth: '200px' }}>
+                        <SearchSelect
+                          items={quizzes.map(q => ({ id: q.id, label: `Quiz ${String(q.nomor).padStart(2, '0')} — ${q.judul}` }))}
+                          value={selectedQuiz[session.id] ?? ''}
+                          onChange={id => setSelectedQuiz(prev => ({ ...prev, [session.id]: id }))}
+                          placeholder="Cari quiz..."
+                        />
+                      </div>
                       <button
                         onClick={() => activateQuiz(session.id)}
                         disabled={activating === session.id || !selectedQuiz[session.id]}
@@ -397,12 +394,6 @@ const muted: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '
 const card: React.CSSProperties = {
   background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '18px',
 };
-const selectStyle: React.CSSProperties = {
-  flex: 1, minWidth: '200px', padding: '9px 11px',
-  border: '1.5px solid #E2E1DC', borderRadius: '7px',
-  fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#0D0D0D',
-  background: '#fff', cursor: 'pointer',
-};
 const btnActivate: React.CSSProperties = {
   padding: '9px 22px', background: '#0D5C3A', color: '#fff',
   border: 'none', borderRadius: '7px', cursor: 'pointer',
@@ -413,3 +404,59 @@ const btnClose: React.CSSProperties = {
   border: '1px solid #FECACA', borderRadius: '8px', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.85rem',
 };
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '9px 11px', boxSizing: 'border-box',
+  border: '1.5px solid #E2E1DC', borderRadius: '7px',
+  fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#0D0D0D',
+  background: '#fff', outline: 'none',
+};
+
+function SearchSelect({ items, value, onChange, placeholder }: {
+  items: { id: string; label: string }[];
+  value: string;
+  onChange: (id: string) => void;
+  placeholder: string;
+}) {
+  const [search, setSearch] = useState('');
+  const [open, setOpen] = useState(false);
+  const selected = items.find(i => i.id === value);
+  const filtered = items.filter(i => i.label.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        value={open ? search : (selected ? selected.label : '')}
+        onChange={e => setSearch(e.target.value)}
+        onFocus={() => { setOpen(true); setSearch(''); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        style={inputStyle}
+      />
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0,
+          background: '#fff', border: '1px solid #E2E1DC', borderRadius: '7px',
+          zIndex: 20, maxHeight: '200px', overflowY: 'auto',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+        }}>
+          {filtered.length === 0 ? (
+            <div style={{ padding: '10px 12px', fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>Tidak ditemukan</div>
+          ) : filtered.map(item => (
+            <div
+              key={item.id}
+              onMouseDown={() => onChange(item.id)}
+              style={{
+                padding: '9px 12px', cursor: 'pointer',
+                background: value === item.id ? '#F0F3FF' : 'transparent',
+                fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D',
+              }}
+            >
+              {item.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

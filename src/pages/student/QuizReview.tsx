@@ -14,6 +14,7 @@ type QuizQuestion = {
   opsi: string[] | null;
   jawaban_benar: string | string[];
   poin: number;
+  gambar_url?: string | null;
 };
 
 type StudentAnswer = {
@@ -31,7 +32,7 @@ type SessionInfo = {
 
 function renderStudentAnswer(q: QuizQuestion, jawaban: string | string[] | null): string {
   if (jawaban === null || jawaban === undefined) return '(tidak dijawab)';
-  if (q.tipe === 'pilihan_ganda') {
+  if (q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') {
     const label = String(jawaban);
     const idx = label.charCodeAt(0) - 65;
     if (q.opsi && q.opsi[idx] !== undefined) return `${label}. ${q.opsi[idx]}`;
@@ -48,7 +49,7 @@ function renderStudentAnswer(q: QuizQuestion, jawaban: string | string[] | null)
 
 function renderCorrectAnswer(q: QuizQuestion): string {
   const benar = q.jawaban_benar;
-  if (q.tipe === 'pilihan_ganda') {
+  if (q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') {
     const label = String(benar);
     const idx = label.charCodeAt(0) - 65;
     if (q.opsi && q.opsi[idx] !== undefined) return `${label}. ${q.opsi[idx]}`;
@@ -202,6 +203,15 @@ export default function StudentQuizReview() {
 
               {/* Question + answers */}
               <div style={{ padding: '16px 18px' }}>
+                {q.tipe === 'gambar' && q.gambar_url && (
+                  <div style={{ marginBottom: '14px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC' }}>
+                    <img
+                      src={q.gambar_url}
+                      alt="Gambar soal"
+                      style={{ width: '100%', maxHeight: '280px', objectFit: 'contain', display: 'block', background: '#F9F9F7' }}
+                    />
+                  </div>
+                )}
                 {/* Question text */}
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#0D5C3A', flexShrink: 0, fontSize: '1rem', lineHeight: 1.4 }}>{qi + 1}.</span>
@@ -253,6 +263,7 @@ const TIPE_LABELS: Record<QuizTipe, string> = {
   isian_singkat: 'Isian Singkat',
   benar_salah: 'Benar / Salah',
   centang_semua: 'Centang Semua Benar',
+  gambar: 'Gambar',
 };
 
 const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
@@ -260,6 +271,7 @@ const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
   isian_singkat: { background: '#D1FAE5', color: '#065F46' },
   benar_salah:   { background: '#FEF9C3', color: '#92400E' },
   centang_semua: { background: '#EDE9FE', color: '#5B21B6' },
+  gambar:        { background: '#FFE4E6', color: '#BE123C' },
 };
 
 function tipeBadge(tipe: QuizTipe): React.CSSProperties {

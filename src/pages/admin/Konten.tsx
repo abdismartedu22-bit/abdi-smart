@@ -4,7 +4,7 @@ import { supabase } from '../../lib/supabase';
 type Tab = 'pengumuman' | 'testimoni';
 
 type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null; urutan: number; is_active: boolean };
-type Testimonial = { id: string; nama: string; asal_sekolah: string | null; universitas: string | null; isi: string; urutan: number; is_active: boolean };
+type Testimonial = { id: string; nama: string; asal_sekolah: string | null; universitas: string | null; isi: string; gambar_url: string | null; urutan: number; is_active: boolean };
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
@@ -215,7 +215,7 @@ function TestimoniTab() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Testimonial | null>(null);
-  const [form, setForm] = useState({ nama: '', asal_sekolah: '', universitas: '', isi: '', is_active: true });
+  const [form, setForm] = useState({ nama: '', asal_sekolah: '', universitas: '', isi: '', gambar_url: '', is_active: true });
   const dragIdx = useRef<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
 
@@ -250,20 +250,20 @@ function TestimoniTab() {
 
   function openAdd() {
     setEditing(null);
-    setForm({ nama: '', asal_sekolah: '', universitas: '', isi: '', is_active: true });
+    setForm({ nama: '', asal_sekolah: '', universitas: '', isi: '', gambar_url: '', is_active: true });
     setShowForm(true);
   }
 
   function openEdit(t: Testimonial) {
     setEditing(t);
-    setForm({ nama: t.nama, asal_sekolah: t.asal_sekolah ?? '', universitas: t.universitas ?? '', isi: t.isi, is_active: t.is_active });
+    setForm({ nama: t.nama, asal_sekolah: t.asal_sekolah ?? '', universitas: t.universitas ?? '', isi: t.isi, gambar_url: t.gambar_url ?? '', is_active: t.is_active });
     setShowForm(true);
   }
 
   async function save() {
     if (!form.nama.trim() || !form.isi.trim()) return;
     setSaving(true);
-    const payload = { nama: form.nama, asal_sekolah: form.asal_sekolah || null, universitas: form.universitas || null, isi: form.isi, is_active: form.is_active };
+    const payload = { nama: form.nama, asal_sekolah: form.asal_sekolah || null, universitas: form.universitas || null, isi: form.isi, gambar_url: form.gambar_url.trim() || null, is_active: form.is_active };
     if (editing) {
       await supabase.from('testimonials').update(payload).eq('id', editing.id);
     } else {
@@ -336,6 +336,7 @@ function TestimoniTab() {
                   </span>
                 </div>
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666', margin: 0, lineHeight: 1.5 }}>"{t.isi}"</p>
+                {t.gambar_url && <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#0D5C3A', margin: '4px 0 0' }}>Ada foto</p>}
               </div>
               <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                 <button onClick={() => openEdit(t)} style={{ ...btnSecondary, padding: '6px 12px', fontSize: '0.78rem' }}>Edit</button>
@@ -359,6 +360,12 @@ function TestimoniTab() {
           </Field>
           <Field label="Isi Testimoni">
             <textarea value={form.isi} onChange={e => setForm(f => ({ ...f, isi: e.target.value }))} style={textareaStyle} placeholder="Kata-kata siswa tentang Abdi Smart..." />
+          </Field>
+          <Field label="Foto (opsional)">
+            <input value={form.gambar_url} onChange={e => setForm(f => ({ ...f, gambar_url: e.target.value }))} style={inputStyle} placeholder="URL foto siswa" />
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '4px 0 0' }}>
+              Google Drive: buka file &rarr; Share &rarr; Anyone with link &rarr; copy link
+            </p>
           </Field>
           <Field label="Status">
             <div style={{ display: 'flex', gap: '8px' }}>
