@@ -316,6 +316,47 @@ function QuizFormModal({ quiz, nextNomor, onClose, onDone }: { quiz?: Quiz; next
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
+  const [qs, setQs] = useState<QuizQuestion[]>([]);
+  const [qsLoading, setQsLoading] = useState(false);
+  const [innerAddQ, setInnerAddQ] = useState(false);
+  const [innerEditQ, setInnerEditQ] = useState<QuizQuestion | null>(null);
+  const [innerDeleteQ, setInnerDeleteQ] = useState<QuizQuestion | null>(null);
+  const [deletingQ, setDeletingQ] = useState(false);
+
+  useEffect(() => {
+    if (!quiz) return;
+    loadQs();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadQs() {
+    if (!quiz) return;
+    setQsLoading(true);
+    const { data } = await supabase.from('quiz_questions').select('*').eq('quiz_id', quiz.id).order('urutan');
+    setQs((data ?? []) as QuizQuestion[]);
+    setQsLoading(false);
+  }
+
+  async function moveQ(q: QuizQuestion, dir: -1 | 1) {
+    const idx = qs.findIndex(x => x.id === q.id);
+    const swapIdx = idx + dir;
+    if (swapIdx < 0 || swapIdx >= qs.length) return;
+    const swap = qs[swapIdx];
+    await Promise.all([
+      supabase.from('quiz_questions').update({ urutan: swap.urutan }).eq('id', q.id),
+      supabase.from('quiz_questions').update({ urutan: q.urutan }).eq('id', swap.id),
+    ]);
+    loadQs();
+  }
+
+  async function confirmDeleteQ() {
+    if (!innerDeleteQ) return;
+    setDeletingQ(true);
+    await supabase.from('quiz_questions').delete().eq('id', innerDeleteQ.id);
+    setDeletingQ(false);
+    setInnerDeleteQ(null);
+    loadQs();
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -338,25 +379,111 @@ function QuizFormModal({ quiz, nextNomor, onClose, onDone }: { quiz?: Quiz; next
 
   return (
     <Overlay>
-      <div style={modal}>
-        <ModalHeader title={quiz ? `Edit: ${quiz.judul}` : 'Buat Quiz Baru'} onClose={onClose} />
+      <div style={{ ...modal, maxWidth: quiz ? '680px' : '480px' }}>
+        <ModalHeader title={quiz ? `Edit Quiz ${String(quiz.nomor).padStart(2,'0')}` : 'Buat Quiz Baru'} onClose={onClose} />
+
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          <Field label="Nomor Quiz">
-            <input style={input} type="number" min="1" value={form.nomor} onChange={e => setForm(f => ({ ...f, nomor: parseInt(e.target.value) || 1 }))} required />
-          </Field>
-          <Field label="Judul Quiz">
-            <input style={input} value={form.judul} onChange={e => setForm(f => ({ ...f, judul: e.target.value }))} placeholder="cth. Pengantar Trigonometri" required />
-          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: quiz ? '80px 1fr' : '1fr', gap: '12px' }}>
+            <Field label="Nomor">
+              <input style={input} type="number" min="1" value={form.nomor} onChange={e => setForm(f => ({ ...f, nomor: parseInt(e.target.value) || 1 }))} required />
+            </Field>
+            <Field label="Judul Quiz">
+              <input style={input} value={form.judul} onChange={e => setForm(f => ({ ...f, judul: e.target.value }))} placeholder="cth. Pengantar Trigonometri" required />
+            </Field>
+          </div>
           <Field label="Deskripsi (opsional)">
             <input style={input} value={form.deskripsi} onChange={e => setForm(f => ({ ...f, deskripsi: e.target.value }))} placeholder="cth. Materi sesi 3" />
           </Field>
           {error && <p style={errorText}>{error}</p>}
-          <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-            <button type="button" onClick={onClose} style={btnSecondary}>Batal</button>
-            <button type="submit" disabled={submitting} style={btnPrimary}>{submitting ? 'Menyimpan...' : 'Simpan'}</button>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            {!quiz && <button type="button" onClick={onClose} style={btnSecondary}>Batal</button>}
+            <button type="submit" disabled={submitting} style={btnPrimary}>{submitting ? 'Menyimpan...' : quiz ? 'Update Info' : 'Buat Quiz'}</button>
           </div>
         </form>
+
+        {/* Soal section - edit mode only */}
+        {quiz && (
+          <div style={{ marginTop: '24px', borderTop: '2px solid #F3F2EE', paddingTop: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.95rem', fontWeight: 700, color: '#0D0D0D' }}>
+                Soal {qs.length > 0 && `(${qs.length})`}
+              </span>
+              <button onClick={() => setInnerAddQ(true)} style={{ ...btnEdit, background: '#0D5C3A', color: '#fff' }}>+ Tambah Soal</button>
+            </div>
+
+            {qsLoading ? (
+              <p style={muted}>Memuat soal...</p>
+            ) : qs.length === 0 ? (
+              <p style={{ ...muted, padding: '16px 0' }}>Belum ada soal. Klik + Tambah Soal untuk mulai.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0', border: '1px solid #E2E1DC', borderRadius: '8px', overflow: 'hidden' }}>
+                {qs.map((q, qi) => {
+                  const tb = TIPE_BADGE[q.tipe];
+                  return (
+                    <div key={q.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '10px 14px', borderBottom: qi < qs.length - 1 ? '1px solid #F3F2EE' : 'none', background: '#fff' }}>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#aaa', minWidth: '18px', paddingTop: '3px' }}>{qi + 1}.</span>
+                      <span style={{ ...tb, padding: '2px 7px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, fontFamily: 'var(--font-body)', flexShrink: 0, marginTop: '2px' }}>
+                        {TIPE_LABELS[q.tipe].split(' ')[0]}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.83rem', color: '#0D0D0D' }}>
+                          <MathText text={q.pertanyaan} />
+                        </div>
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', marginTop: '2px' }}>
+                          {q.poin} poin{(q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') && q.opsi ? ` · ${q.opsi.length} opsi` : ''}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                        <button onClick={() => moveQ(q, -1)} disabled={qi === 0} style={{ ...btnGhost, padding: '3px 7px', opacity: qi === 0 ? 0.3 : 1 }}>↑</button>
+                        <button onClick={() => moveQ(q, 1)} disabled={qi === qs.length - 1} style={{ ...btnGhost, padding: '3px 7px', opacity: qi === qs.length - 1 ? 0.3 : 1 }}>↓</button>
+                        <button onClick={() => setInnerEditQ(q)} style={btnEdit}>Edit</button>
+                        <button onClick={() => setInnerDeleteQ(q)} style={{ ...btnGhost, color: '#DC0A1E', fontSize: '0.75rem' }}>Hapus</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={onClose} style={{ ...btnSecondary, flex: 'none', padding: '9px 24px' }}>Selesai</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Nested question modals */}
+      {innerAddQ && quiz && (
+        <QuestionFormModal
+          quizId={quiz.id}
+          nextUrutan={qs.length + 1}
+          onClose={() => setInnerAddQ(false)}
+          onDone={() => { setInnerAddQ(false); loadQs(); }}
+        />
+      )}
+      {innerEditQ && (
+        <QuestionFormModal
+          quizId={innerEditQ.quiz_id}
+          question={innerEditQ}
+          nextUrutan={innerEditQ.urutan}
+          onClose={() => setInnerEditQ(null)}
+          onDone={() => { setInnerEditQ(null); loadQs(); }}
+        />
+      )}
+      {innerDeleteQ && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200, padding: '20px' }}>
+          <div style={confirmBox}>
+            <h2 style={confirmTitle}>Hapus Soal?</h2>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#666', margin: '0 0 20px' }}>Soal ini akan dihapus permanen.</p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => setInnerDeleteQ(null)} style={btnSecondary}>Batal</button>
+              <button onClick={confirmDeleteQ} disabled={deletingQ} style={{ ...btnPrimary, background: '#DC0A1E' }}>
+                {deletingQ ? 'Menghapus...' : 'Hapus'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Overlay>
   );
 }

@@ -39,11 +39,32 @@ export default function StudentQuiz() {
     const { data: sg } = await supabase.from('student_groups').select('group_id').eq('student_id', user!.id);
     const groupIds = (sg ?? []).map((r: any) => r.group_id as string);
 
+    // Fetch today's schedule IDs for this student's groups so quiz sessions are
+    // only shown when tied to an actual scheduled session today (not stale data)
+    const todayScheduleIds: string[] = [];
+    if (groupIds.length > 0) {
+      const weekStart = (() => {
+        const d = new Date();
+        const day = d.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        d.setDate(d.getDate() + diff);
+        return d.toISOString().slice(0, 10);
+      })();
+      const todayHari = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()];
+      const { data: scheds } = await supabase
+        .from('schedules')
+        .select('id')
+        .in('group_id', groupIds)
+        .eq('week_start', weekStart)
+        .eq('hari', todayHari);
+      (scheds ?? []).forEach((s: any) => todayScheduleIds.push(s.id));
+    }
+
     const [sessRes, ansRes] = await Promise.all([
-      groupIds.length > 0
+      todayScheduleIds.length > 0
         ? supabase.from('quiz_sessions')
             .select('id, quiz_id, group_id, quiz:quizzes!quiz_id(nomor,judul,deskripsi)')
-            .in('group_id', groupIds)
+            .in('schedule_id', todayScheduleIds)
             .eq('session_date', today)
             .is('closed_at', null)
             .limit(1)
