@@ -12,7 +12,7 @@ type ScheduleRow = {
   jam_selesai: string;
   materi: string | null;
   lokasi: string | null;
-  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string; tipe: string };
 };
 
 export default function TeacherJadwal() {
@@ -32,7 +32,7 @@ export default function TeacherJadwal() {
     setLoading(true);
     const { data } = await supabase
       .from('schedules')
-      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text)')
+      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text,tipe)')
       .eq('teacher_id', user!.id)
       .eq('week_start', toISODate(weekStart))
       .order('jam_mulai');
@@ -69,14 +69,20 @@ export default function TeacherJadwal() {
                     <span style={muted}>{formatDayLabel(weekDays[idx])}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {daySessions.map(s => (
-                      <div key={s.id} style={card}>
+                    {daySessions.map(s => {
+                      const isOnline = s.groups.tipe === 'online';
+                      return (
+                      <div key={s.id} style={{ ...card, borderLeft: isOnline ? '3px solid #0369A1' : undefined, background: isOnline ? '#F0F9FF' : '#fff' }}>
                         <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                        {isOnline && (
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>ONLINE</span>
+                        )}
                         <span style={bold}>{fmtTime(s.jam_mulai)} – {fmtTime(s.jam_selesai)}</span>
                         <span style={normal}>{s.materi ?? '–'}</span>
                         {s.lokasi && <span style={muted}>@ {s.lokasi}</span>}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );

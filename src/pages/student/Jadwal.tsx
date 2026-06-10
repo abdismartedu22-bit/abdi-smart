@@ -7,6 +7,7 @@ import GrupBadge from '../../components/shared/GrupBadge';
 
 type ScheduleRow = {
   id: string;
+  group_id: string;
   hari: string;
   jam_mulai: string;
   jam_selesai: string;
@@ -14,7 +15,7 @@ type ScheduleRow = {
   lokasi: string | null;
   ruangan: string | null;
   pertemuan_ke: number | null;
-  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string; tipe: string };
   teacher: { id: string; display_name: string } | null;
 };
 
@@ -23,9 +24,10 @@ function getTodayHari(): string {
 }
 
 export default function StudentJadwal() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
+  const [onlineTotalSesi, setOnlineTotalSesi] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
   const weekDays = getWeekDays(weekStart);
@@ -40,27 +42,55 @@ export default function StudentJadwal() {
   async function load() {
     setLoading(true);
 
-    const { data: sg } = await supabase
-      .from('student_groups')
-      .select('group_id')
-      .eq('student_id', user!.id);
+    const is12SMA = profile?.tingkat_kelas === '12SMA';
 
-    const groupIds = (sg ?? []).map(x => x.group_id as string);
+    const [{ data: sg }, onlineGroupsRes] = await Promise.all([
+      supabase.from('student_groups').select('group_id').eq('student_id', user!.id),
+      is12SMA
+        ? supabase.from('groups').select('id').eq('tipe', 'online').eq('active', true)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
 
-    if (groupIds.length === 0) {
+    const myGroupIds = (sg ?? []).map(x => x.group_id as string);
+    const onlineGroupIds = (onlineGroupsRes.data ?? []).map((x: any) => x.id as string);
+    const allGroupIds = [...new Set([...myGroupIds, ...onlineGroupIds])];
+
+    if (allGroupIds.length === 0) {
       setSchedules([]);
+      setOnlineTotalSesi({});
       setLoading(false);
       return;
     }
 
-    const { data } = await supabase
-      .from('schedules')
-      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, pertemuan_ke, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(id,display_name)')
-      .in('group_id', groupIds)
-      .eq('week_start', toISODate(weekStart))
-      .order('jam_mulai');
+    const [{ data }, onlineSchedRes] = await Promise.all([
+      supabase
+        .from('schedules')
+        .select('id, group_id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, pertemuan_ke, groups!group_id(id,nama,kode,warna,warna_text,tipe), teacher:profiles!teacher_id(id,display_name)')
+        .in('group_id', allGroupIds)
+        .eq('week_start', toISODate(weekStart))
+        .order('jam_mulai'),
+      onlineGroupIds.length > 0
+        ? supabase.from('schedules').select('id, group_id').in('group_id', onlineGroupIds)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const totals: Record<string, number> = {};
+    const onlineSchedIds = (onlineSchedRes.data ?? []).map((r: any) => r.id as string);
+    if (onlineSchedIds.length > 0) {
+      const { data: terlaksanaData } = await supabase
+        .from('attendance')
+        .select('schedule_id')
+        .in('schedule_id', onlineSchedIds)
+        .eq('person_role', 'teacher')
+        .eq('sesi_status', 'terlaksana');
+      const terlaksanaSet = new Set((terlaksanaData ?? []).map((r: any) => r.schedule_id as string));
+      (onlineSchedRes.data ?? []).forEach((r: any) => {
+        if (terlaksanaSet.has(r.id)) totals[r.group_id] = (totals[r.group_id] ?? 0) + 1;
+      });
+    }
 
     setSchedules((data ?? []) as unknown as ScheduleRow[]);
+    setOnlineTotalSesi(totals);
     setLoading(false);
   }
 
@@ -107,17 +137,27 @@ export default function StudentJadwal() {
                   <span style={muted}>{formatDayLabel(weekDays[idx])}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {daySessions.map(s => (
+                  {daySessions.map(s => {
+                    const isOnline = s.groups.tipe === 'online';
+                    const totalSesi = isOnline ? (onlineTotalSesi[s.group_id] ?? 0) : null;
+                    return (
                     <div key={s.id} style={{
-                      background: '#fff',
-                      border: isToday ? '1px solid #E2E1DC' : '1px solid #E2E1DC',
-                      borderLeft: isToday ? '3px solid #FFE500' : '1px solid #E2E1DC',
+                      background: isOnline ? '#F0F9FF' : '#fff',
+                      border: isOnline ? '1.5px solid #BAE6FD' : '1px solid #E2E1DC',
+                      borderLeft: isToday ? `3px solid ${isOnline ? '#0369A1' : '#FFE500'}` : isOnline ? '3px solid #0369A1' : '1px solid #E2E1DC',
                       borderRadius: '14px',
-                      padding: isToday ? '14px 14px 14px 13px' : '14px',
+                      padding: (isToday || isOnline) ? '14px 14px 14px 13px' : '14px',
                       boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                        <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                          <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                          {isOnline && (
+                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>
+                              ONLINE
+                            </span>
+                          )}
+                        </div>
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
                             <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', color: '#0D0D0D', lineHeight: 1 }}>
@@ -127,8 +167,9 @@ export default function StudentJadwal() {
                               s/d {fmtTime(s.jam_selesai)}
                             </span>
                             {s.pertemuan_ke != null && (
-                              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', marginLeft: 'auto' }}>
-                                Pertemuan {s.pertemuan_ke}
+                              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: isOnline ? '#0369A1' : '#888', marginLeft: 'auto', fontWeight: isOnline ? 700 : 400 }}>
+                                Sesi ke-{s.pertemuan_ke}
+                                {isOnline && totalSesi != null && ` dari ${totalSesi} dilaksanakan`}
                               </span>
                             )}
                           </div>
@@ -151,7 +192,8 @@ export default function StudentJadwal() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );

@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import PasswordInput from '../../components/shared/PasswordInput';
 import type { Role, Group } from '../../types';
 
-const TINGKAT_KELAS_OPTIONS = ['1SD','2SD','3SD','4SD','5SD','6SD','7SMP','8SMP','9SMP','10SMA','11IPA','11IPS','12IPA','12IPS'];
+const TINGKAT_KELAS_OPTIONS = ['1SD','2SD','3SD','4SD','5SD','6SD','7SMP','8SMP','9SMP','10SMA','11IPA','11IPS','12IPA','12IPS','12SMA'];
 
 type UserRow = {
   id: string;
@@ -661,6 +661,9 @@ function GroupsTab() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
   const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [filterSekolah, setFilterSekolah] = useState('');
+  const [filterTipe, setFilterTipe] = useState('');
 
   useEffect(() => { load(); }, []);
 
@@ -696,19 +699,45 @@ function GroupsTab() {
     load();
   }
 
-  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
-  const paginated = groups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const sekolahOptions = Array.from(new Set(groups.map(g => g.sekolah).filter((s): s is string => !!s))).sort();
+
+  const filtered = groups.filter(g => {
+    if (search && !g.nama.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterSekolah && g.sekolah !== filterSekolah) return false;
+    if (filterTipe && g.tipe !== filterTipe) return false;
+    return true;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Cari nama grup..."
+            style={inputStyle}
+          />
+          <select value={filterSekolah} onChange={e => { setFilterSekolah(e.target.value); setPage(1); }} style={selectStyle}>
+            <option value="">Semua sekolah</option>
+            {sekolahOptions.map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <select value={filterTipe} onChange={e => { setFilterTipe(e.target.value); setPage(1); }} style={selectStyle}>
+            <option value="">Semua tipe</option>
+            <option value="reguler">Reguler</option>
+            <option value="privat">Privat</option>
+          </select>
+        </div>
         <button onClick={() => setShowCreate(true)} style={btnPrimary}>+ Tambah Grup</button>
       </div>
 
       {loading ? (
         <p style={mutedStyle}>Memuat...</p>
-      ) : groups.length === 0 ? (
-        <p style={mutedStyle}>Belum ada grup.</p>
+      ) : filtered.length === 0 ? (
+        <p style={mutedStyle}>{groups.length === 0 ? 'Belum ada grup.' : 'Tidak ada grup yang cocok.'}</p>
       ) : (
         <>
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
@@ -778,7 +807,7 @@ function GroupsTab() {
               );
             })}
           </div>
-          <PaginationBar page={page} totalPages={totalPages} total={groups.length} onChange={setPage} />
+          <PaginationBar page={page} totalPages={totalPages} total={filtered.length} onChange={setPage} />
         </>
       )}
 
@@ -864,7 +893,7 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
           <FieldRow label="Sekolah Asal (opsional)">
             <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
           </FieldRow>
-          <FieldRow label="Paket (jumlah sesi dibeli)">
+          <FieldRow label="Paket (jumlah tatap muka)">
             <input style={inputStyle} type="number" min="0" value={form.paket} onChange={e => setForm(f => ({ ...f, paket: e.target.value }))} placeholder="cth. 80" />
           </FieldRow>
           <FieldRow label="Link Grup WhatsApp (opsional)">
@@ -872,13 +901,18 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
           </FieldRow>
           <FieldRow label="Tipe">
             <div style={{ display: 'flex', gap: '16px' }}>
-              {['reguler', 'privat'].map(t => (
+              {(['reguler', 'privat', 'online'] as const).map(t => (
                 <label key={t} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-                  <input type="radio" name="tipe" value={t} checked={form.tipe === t} onChange={() => setForm(f => ({ ...f, tipe: t as 'reguler' | 'privat' }))} />
+                  <input type="radio" name="tipe" value={t} checked={form.tipe === t} onChange={() => setForm(f => ({ ...f, tipe: t }))} />
                   {t.charAt(0).toUpperCase() + t.slice(1)}
                 </label>
               ))}
             </div>
+            {form.tipe === 'online' && (
+              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#0369A1', margin: '4px 0 0', background: '#E0F2FE', padding: '6px 10px', borderRadius: '6px' }}>
+                Jadwal grup Online akan otomatis terlihat oleh semua siswa 12SMA.
+              </p>
+            )}
           </FieldRow>
           <FieldRow label="Warna">
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>

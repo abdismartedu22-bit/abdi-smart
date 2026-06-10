@@ -36,6 +36,9 @@ const TKA_FIELDS = [
   { key: 'geo',    label: 'GEO',      color: '#2ECC71' },
   { key: 'indlan', label: 'IND.Lan',  color: '#9B59B6' },
   { key: 'inglan', label: 'ING.Lan',  color: '#E74C3C' },
+  { key: 'mapel1', label: 'Mapel 1',  color: '#0369A1' },
+  { key: 'mapel2', label: 'Mapel 2',  color: '#B45309' },
+  { key: 'mapel3', label: 'Mapel 3',  color: '#047857' },
 ];
 const ALL_FIELDS: Record<string, typeof SNBT_FIELDS> = { SNBT: SNBT_FIELDS, TKA: TKA_FIELDS };
 

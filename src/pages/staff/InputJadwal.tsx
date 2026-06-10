@@ -20,7 +20,7 @@ type ScheduleRow = {
   pertemuan_ke: number | null;
   week_start: string;
   created_at: string;
-  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string; tipe: string };
   teacher: { id: string; display_name: string };
 };
 
@@ -93,7 +93,7 @@ export default function InputJadwal() {
     const [{ data: sched }, { data: grp }, { data: teach }, { data: gedung }] = await Promise.all([
       supabase
         .from('schedules')
-        .select('id, group_id, teacher_id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, pertemuan_ke, week_start, created_at, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(id,display_name)')
+        .select('id, group_id, teacher_id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, pertemuan_ke, week_start, created_at, groups!group_id(id,nama,kode,warna,warna_text,tipe), teacher:profiles!teacher_id(id,display_name)')
         .eq('week_start', ws)
         .order('created_at', { ascending: false }), // most recently added first
       supabase.from('groups').select('*').eq('active', true).order('nama'),
@@ -468,10 +468,14 @@ export default function InputJadwal() {
 
 /* ---- Session Card ---- */
 function SessionCard({ s, isAdmin, onEdit, onDelete }: { s: ScheduleRow; isAdmin: boolean; onEdit: () => void; onDelete: () => void }) {
+  const isOnline = s.groups.tipe === 'online';
   return (
-    <div style={sessionCard}>
+    <div style={{ ...sessionCard, borderLeft: isOnline ? '3px solid #0369A1' : undefined, background: isOnline ? '#F0F9FF' : '#fff' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, flexWrap: 'wrap', minWidth: 0 }}>
         <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+        {isOnline && (
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em', flexShrink: 0 }}>ONLINE</span>
+        )}
         <span style={timeText}>{fmtTime(s.jam_mulai)} – {fmtTime(s.jam_selesai)}</span>
         <span style={mainText}>{s.materi ?? '–'}</span>
         <span style={mutedText}>{s.teacher.display_name}</span>

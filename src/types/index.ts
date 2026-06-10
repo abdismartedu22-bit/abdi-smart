@@ -22,7 +22,7 @@ export interface Group {
   kode: string;
   warna: string;
   warna_text: string;
-  tipe: 'reguler' | 'privat';
+  tipe: 'reguler' | 'privat' | 'online';
   active: boolean;
   paket: number | null;
   sekolah: string | null;

@@ -35,11 +35,12 @@ type ParsedRow = {
 /* ── Field definitions ──────────────────────────────────────── */
 const SNBT_KEYS = ['pu', 'pk', 'ppu', 'pbm', 'lbi', 'lba', 'pm'];
 const SNBT_LABELS: Record<string, string> = { pu: 'PU', pk: 'PK', ppu: 'PPU', pbm: 'PBM', lbi: 'LBI', lba: 'LBA', pm: 'PM' };
-const TKA_KEYS = ['ind', 'matwa', 'ing', 'fis', 'kim', 'bio', 'matlan', 'eko', 'sos', 'sej', 'geo', 'indlan', 'inglan'];
+const TKA_KEYS = ['ind', 'matwa', 'ing', 'fis', 'kim', 'bio', 'matlan', 'eko', 'sos', 'sej', 'geo', 'indlan', 'inglan', 'mapel1', 'mapel2', 'mapel3'];
 const TKA_LABELS: Record<string, string> = {
   ind: 'B.Indonesia', matwa: 'Mat.Wajib', ing: 'B.Inggris', fis: 'Fisika',
   kim: 'Kimia', bio: 'Biologi', matlan: 'Mat.Lanjut', eko: 'Ekonomi',
   sos: 'Sosiologi', sej: 'Sejarah', geo: 'Geografi', indlan: 'B.Ind.Lanjut', inglan: 'B.Ing.Lanjut',
+  mapel1: 'Mapel 1', mapel2: 'Mapel 2', mapel3: 'Mapel 3',
 };
 
 const TYPE_BG: Record<string, { bg: string; color: string }> = {
@@ -224,7 +225,7 @@ function UploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
             <strong>Format kolom {type}:</strong><br />
             {type === 'SNBT'
               ? 'Date | Tryout ID | Student ID | Nama | PU (B,S,K,SKOR) | PK | PPU | PBM | LBI | LBA | PM'
-              : 'Date | Tryout ID | Student ID | Nama | IND (B,S,K,N) | MatWa | Ing | Fis | Kim | Bio | MatLan | Eko | Sos | Sej | Geo | IndLan | IngLan'}
+              : 'Date | Tryout ID | Student ID | Nama | IND (B,S,K,N) | MatWa | Ing | Fis | Kim | Bio | MatLan | Eko | Sos | Sej | Geo | IndLan | IngLan | Mapel1 | Mapel2 | Mapel3'}
             <br /><span style={{ color: '#888' }}>Nilai "-" = tidak mengambil mapel, akan dilewati.</span>
           </p>
         </div>

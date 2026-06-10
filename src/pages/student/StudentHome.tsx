@@ -7,6 +7,12 @@ import GrupBadge from '../../components/shared/GrupBadge';
 import AnnouncementSlider from '../../components/shared/AnnouncementSlider';
 
 type Group = { id: string; nama: string; kode: string; warna: string; warna_text: string; paket: number | null };
+type OnlineData = {
+  groups: Array<{ id: string; nama: string; warna: string; warna_text: string }>;
+  dilaksanakan: number;
+  dijadwalkan: number;
+  hadir: number;
+};
 type NextSession = {
   id: string;
   hari: string;
@@ -59,6 +65,7 @@ export default function StudentHome() {
   const [nextSession, setNextSession] = useState<NextSession | null>(null);
   const [attendance, setAttendance] = useState({ hadir: 0, tidak_hadir: 0 });
   const [latestTO, setLatestTO] = useState<TOResult | null>(null);
+  const [onlineData, setOnlineData] = useState<OnlineData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const dateLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -156,6 +163,46 @@ export default function StudentHome() {
       setAttendance(counts);
     }
 
+    // Online Umum stats (12SMA only)
+    if (profile?.tingkat_kelas === '12SMA') {
+      const { data: og } = await supabase
+        .from('groups')
+        .select('id, nama, warna, warna_text')
+        .eq('tipe', 'online')
+        .eq('active', true);
+      const onlineGroups = (og ?? []) as OnlineData['groups'];
+      const onlineGroupIds = onlineGroups.map(g => g.id);
+      if (onlineGroupIds.length > 0) {
+        const { data: schedData } = await supabase
+          .from('schedules')
+          .select('id')
+          .in('group_id', onlineGroupIds);
+        const onlineSchedIds = (schedData ?? []).map((r: any) => r.id as string);
+        const dijadwalkan = onlineSchedIds.length;
+
+        let dilaksanakan = 0;
+        let hadir = 0;
+        if (onlineSchedIds.length > 0) {
+          const [terlaksanaRes, hadirRes] = await Promise.all([
+            supabase.from('attendance')
+              .select('schedule_id')
+              .in('schedule_id', onlineSchedIds)
+              .eq('person_role', 'teacher')
+              .eq('sesi_status', 'terlaksana'),
+            supabase.from('attendance')
+              .select('id')
+              .in('schedule_id', onlineSchedIds)
+              .eq('person_id', user!.id)
+              .eq('person_role', 'student')
+              .eq('status', 'hadir'),
+          ]);
+          dilaksanakan = new Set((terlaksanaRes.data ?? []).map((r: any) => r.schedule_id)).size;
+          hadir = (hadirRes.data ?? []).length;
+        }
+        setOnlineData({ groups: onlineGroups, dilaksanakan, dijadwalkan, hadir });
+      }
+    }
+
     // Latest TO
     const { data: to } = await supabase
       .from('tryout_results')
@@ -247,6 +294,34 @@ export default function StudentHome() {
               </div>
             );
           })}
+
+          {/* Online Umum card */}
+          {onlineData && onlineData.groups.length > 0 && (
+            <div style={{ ...card, border: '1.5px solid #BAE6FD', borderLeft: '3px solid #0369A1', background: '#F0F9FF' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                {onlineData.groups.map(g => (
+                  <GrupBadge key={g.id} nama={g.nama} warna={g.warna} warna_text={g.warna_text} />
+                ))}
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', letterSpacing: '0.05em' }}>ONLINE</span>
+              </div>
+              {onlineData.dilaksanakan > 0 && (
+                <div style={{ position: 'relative', height: '6px', background: '#E0F2FE', borderRadius: '99px', marginBottom: '12px', overflow: 'hidden' }}>
+                  <div style={{
+                    position: 'absolute', left: 0, top: 0, height: '100%',
+                    width: `${Math.min(100, Math.round((onlineData.hadir / onlineData.dilaksanakan) * 100))}%`,
+                    background: 'linear-gradient(90deg, #38BDF8, #0369A1)',
+                    borderRadius: '99px',
+                    transition: 'width 0.6s ease',
+                  }} />
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
+                <StatPill label="Dilaksanakan" value={onlineData.dilaksanakan} color="#0369A1" />
+                <StatPill label="Dijadwalkan" value={onlineData.dijadwalkan} color="#0284C7" />
+                <StatPill label="Hadir" value={onlineData.hadir} color="#15803D" />
+              </div>
+            </div>
+          )}
 
           {/* Kehadiran */}
           <div style={card}>

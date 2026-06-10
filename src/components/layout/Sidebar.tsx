@@ -12,13 +12,13 @@ interface NavItem {
 const navByRole: Record<Role, NavItem[]> = {
   admin: [
     { label: 'Dashboard', href: '/admin' },
+    { label: 'User', href: '/admin/users' },
     { label: 'Jadwal', href: '/staff/jadwal' },
     { label: 'Realisasi', href: '/admin/realisasi' },
     { label: 'Quiz', href: '/admin/quiz' },
-    { label: 'Konten', href: '/admin/konten' },
     { label: 'Hasil TO', href: '/admin/hasil-to' },
-    { label: 'Users', href: '/admin/users' },
     { label: 'Gedung', href: '/admin/gedung' },
+    { label: 'Konten', href: '/admin/konten' },
     { label: 'Download', href: '/admin/download' },
   ],
   staff: [
