@@ -25,6 +25,7 @@ type AttendanceRow = {
 
 type HistoryRow = {
   id: string;
+  schedule_id: string;
   session_date: string;
   status: string | null;
   note: string | null;
@@ -110,6 +111,7 @@ function HariIniTab() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<SessionToday[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>({});
+  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [checkInError, setCheckInError] = useState<string>('');
@@ -131,6 +133,7 @@ function HariIniTab() {
     if (groupIds.length === 0) {
       setSessions([]);
       setAttendance({});
+      setCancelledIds(new Set());
       setLoading(false);
       return;
     }
@@ -147,16 +150,29 @@ function HariIniTab() {
     setSessions(todaySessions);
 
     if (todaySessions.length > 0) {
-      const { data: att } = await supabase
-        .from('attendance')
-        .select('id, schedule_id, status, checkin_at, locked_at')
-        .in('schedule_id', todaySessions.map(s => s.id))
-        .eq('person_id', user.id)
-        .eq('session_date', today);
+      const scheduleIds = todaySessions.map(s => s.id);
+      const [attRes, teacherRes] = await Promise.all([
+        supabase.from('attendance')
+          .select('id, schedule_id, status, checkin_at, locked_at')
+          .in('schedule_id', scheduleIds)
+          .eq('person_id', user.id)
+          .eq('session_date', today),
+        supabase.from('attendance')
+          .select('schedule_id, sesi_status')
+          .in('schedule_id', scheduleIds)
+          .eq('person_role', 'teacher')
+          .eq('session_date', today),
+      ]);
 
       const map: Record<string, AttendanceRow> = {};
-      (att ?? []).forEach(a => { map[a.schedule_id] = a as AttendanceRow; });
+      (attRes.data ?? []).forEach((a: any) => { map[a.schedule_id] = a as AttendanceRow; });
       setAttendance(map);
+
+      const cancelled = new Set<string>();
+      (teacherRes.data ?? []).forEach((a: any) => {
+        if (a.sesi_status === 'dibatalkan') cancelled.add(a.schedule_id);
+      });
+      setCancelledIds(cancelled);
     }
 
     setLoading(false);
@@ -164,21 +180,35 @@ function HariIniTab() {
 
   useEffect(() => { load(); }, [load]);
 
-  // Poll attendance every 10 s so locked_at reflects teacher's action
+  // Poll every 10 s to reflect teacher's lock / cancellation
   useEffect(() => {
     if (!user || sessions.length === 0) return;
     const todayISO = toISODate(new Date());
+    const scheduleIds = sessions.map(s => s.id);
     const t = setInterval(async () => {
-      const { data: att } = await supabase
-        .from('attendance')
-        .select('id, schedule_id, status, checkin_at, locked_at')
-        .in('schedule_id', sessions.map(s => s.id))
-        .eq('person_id', user.id)
-        .eq('session_date', todayISO);
-      if (att) {
+      const [attRes, teacherRes] = await Promise.all([
+        supabase.from('attendance')
+          .select('id, schedule_id, status, checkin_at, locked_at')
+          .in('schedule_id', scheduleIds)
+          .eq('person_id', user.id)
+          .eq('session_date', todayISO),
+        supabase.from('attendance')
+          .select('schedule_id, sesi_status')
+          .in('schedule_id', scheduleIds)
+          .eq('person_role', 'teacher')
+          .eq('session_date', todayISO),
+      ]);
+      if (attRes.data) {
         const map: Record<string, AttendanceRow> = {};
-        att.forEach((a: any) => { map[a.schedule_id] = a as AttendanceRow; });
+        attRes.data.forEach((a: any) => { map[a.schedule_id] = a as AttendanceRow; });
         setAttendance(map);
+      }
+      if (teacherRes.data) {
+        const cancelled = new Set<string>();
+        teacherRes.data.forEach((a: any) => {
+          if (a.sesi_status === 'dibatalkan') cancelled.add(a.schedule_id);
+        });
+        setCancelledIds(cancelled);
       }
     }, 10_000);
     return () => clearInterval(t);
@@ -235,11 +265,12 @@ function HariIniTab() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {sessions.map(s => {
             const att = attendance[s.id];
+            const isCancelled = cancelledIds.has(s.id);
             const winState = getWindowState(s.jam_mulai, s.jam_selesai);
             const endWindow = fmtTime(s.jam_selesai);
 
             return (
-              <div key={s.id} style={card}>
+              <div key={s.id} style={{ ...card, opacity: isCancelled ? 0.6 : 1 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '12px' }}>
                   <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                   <div style={{ flex: 1 }}>
@@ -258,55 +289,63 @@ function HariIniTab() {
                 </div>
 
                 <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '12px' }}>
-                  <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#aaa', margin: '0 0 10px' }}>
-                    Waktu absen: {fmtTime(s.jam_mulai)} &ndash; {endWindow} WITA
-                    {winState === 'closed' && <span style={{ color: '#DC0A1E' }}> (sudah lewat)</span>}
-                  </p>
-
-                  {att?.locked_at ? (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '6px', background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: '#15803D' }}>TERKUNCI</span>
-                      </span>
-                      {att.status && (
-                        <span style={finalBadge(att.status)}>
-                          {att.status === 'tidak_hadir' || att.status === 'absen' ? 'TIDAK HADIR' : att.status.toUpperCase()}
-                        </span>
-                      )}
-                      {att.checkin_at && (
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>
-                          check-in {fmtTimestampWITA(att.checkin_at, 'time')}
-                        </span>
-                      )}
-                    </div>
-                  ) : att?.checkin_at ? (
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '6px', background: '#D1FAE5', border: '1px solid #6EE7B7' }}>
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: '#047857' }}>ABSEN TERCATAT</span>
-                        </span>
-                      </div>
-                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', margin: 0 }}>
-                        check-in {fmtTimestampWITA(att.checkin_at, 'time')} &middot; menunggu verifikasi pengajar
-                      </p>
-                    </div>
+                  {isCancelled ? (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '5px 14px', borderRadius: '6px', background: '#FEE2E2', border: '1px solid #FECACA' }}>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 700, color: '#7F1D1D' }}>SESI DIBATALKAN</span>
+                    </span>
                   ) : (
-                    <div>
-                      <button
-                        onClick={() => handleCheckIn(s.id)}
-                        disabled={checkingIn === s.id}
-                        style={btnAbsen}
-                      >
-                        {checkingIn === s.id ? 'Mencatat...' : 'Absen Sekarang'}
-                      </button>
-                      {checkInError && (
-                        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0' }}>
-                          {checkInError}
-                        </p>
+                    <>
+                      <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#aaa', margin: '0 0 10px' }}>
+                        Waktu absen: {fmtTime(s.jam_mulai)} &ndash; {endWindow} WITA
+                        {winState === 'closed' && <span style={{ color: '#DC0A1E' }}> (sudah lewat)</span>}
+                      </p>
+
+                      {att?.locked_at ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '6px', background: '#F0FDF4', border: '1px solid #BBF7D0' }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: '#15803D' }}>TERKUNCI</span>
+                          </span>
+                          {att.status && (
+                            <span style={finalBadge(att.status)}>
+                              {att.status === 'tidak_hadir' || att.status === 'absen' ? 'TIDAK HADIR' : att.status.toUpperCase()}
+                            </span>
+                          )}
+                          {att.checkin_at && (
+                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888' }}>
+                              check-in {fmtTimestampWITA(att.checkin_at, 'time')}
+                            </span>
+                          )}
+                        </div>
+                      ) : att?.checkin_at ? (
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '4px 12px', borderRadius: '6px', background: '#D1FAE5', border: '1px solid #6EE7B7' }}>
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#047857" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: 700, color: '#047857' }}>ABSEN TERCATAT</span>
+                            </span>
+                          </div>
+                          <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', margin: 0 }}>
+                            check-in {fmtTimestampWITA(att.checkin_at, 'time')} &middot; menunggu verifikasi pengajar
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <button
+                            onClick={() => handleCheckIn(s.id)}
+                            disabled={checkingIn === s.id}
+                            style={btnAbsen}
+                          >
+                            {checkingIn === s.id ? 'Mencatat...' : 'Absen Sekarang'}
+                          </button>
+                          {checkInError && (
+                            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0' }}>
+                              {checkInError}
+                            </p>
+                          )}
+                        </div>
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -335,7 +374,7 @@ function RiwayatTab() {
     const { data } = await supabase
       .from('attendance')
       .select(`
-        id, session_date, status, note, checkin_at, locked_at,
+        id, schedule_id, session_date, status, note, checkin_at, locked_at,
         schedule:schedules!schedule_id(
           hari, jam_mulai, jam_selesai, materi,
           groups!group_id(nama, kode, warna, warna_text)
@@ -345,7 +384,23 @@ function RiwayatTab() {
       .eq('person_role', 'student')
       .order('session_date', { ascending: false })
       .limit(100);
-    setRows((data ?? []) as unknown as HistoryRow[]);
+
+    const allRows = (data ?? []) as unknown as HistoryRow[];
+
+    // Fetch teacher sesi_status to exclude cancelled sessions
+    const scheduleIds = [...new Set(allRows.map(r => r.schedule_id))];
+    let cancelledSet = new Set<string>();
+    if (scheduleIds.length > 0) {
+      const { data: teacherAtt } = await supabase
+        .from('attendance')
+        .select('schedule_id')
+        .in('schedule_id', scheduleIds)
+        .eq('person_role', 'teacher')
+        .eq('sesi_status', 'dibatalkan');
+      cancelledSet = new Set((teacherAtt ?? []).map((r: any) => r.schedule_id as string));
+    }
+
+    setRows(allRows.filter(r => !cancelledSet.has(r.schedule_id)));
     setLoading(false);
   }
 

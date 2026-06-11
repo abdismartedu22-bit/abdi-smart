@@ -44,9 +44,10 @@ type InactiveGroup = {
 };
 
 const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
-  terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
-  tidak:      { label: 'TIDAK',      bg: '#FEE2E2', color: '#DC0A1E' },
-  ditunda:    { label: 'DITUNDA',    bg: '#FEF9C3', color: '#A16207' },
+  terlaksana: { label: 'TEREALISASI', bg: '#DCFCE7', color: '#15803D' },
+  tidak:      { label: 'TIDAK',       bg: '#FEE2E2', color: '#DC0A1E' },
+  ditunda:    { label: 'DITUNDA',     bg: '#FEF9C3', color: '#A16207' },
+  dibatalkan: { label: 'DIBATALKAN',  bg: '#FEE2E2', color: '#7F1D1D' },
 };
 
 const ROLE_BADGE: Record<string, { label: string; bg: string; color: string }> = {
@@ -323,7 +324,7 @@ export default function AdminHome() {
                           {statusInfo.label}
                         </span>
                       ) : (
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#999' }}>BELUM</span>
+                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: '#EFF6FF', color: '#1D4ED8' }}>DIJADWALKAN</span>
                       )}
                     </div>
                   );

@@ -27,9 +27,17 @@ type RiwayatAtt = {
 };
 
 const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
-  terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
-  tidak:      { label: 'TIDAK',      bg: '#FEE2E2', color: '#DC0A1E' },
-  ditunda:    { label: 'DITUNDA',    bg: '#FEF9C3', color: '#A16207' },
+  terlaksana: { label: 'TEREALISASI', bg: '#DCFCE7', color: '#15803D' },
+  tidak:      { label: 'TIDAK',       bg: '#FEE2E2', color: '#DC0A1E' },
+  ditunda:    { label: 'DITUNDA',     bg: '#FEF9C3', color: '#A16207' },
+  dibatalkan: { label: 'DIBATALKAN',  bg: '#FEE2E2', color: '#7F1D1D' },
+};
+
+const SESI_STATUS_DISPLAY: Record<string, string> = {
+  terlaksana: 'Terealisasi',
+  tidak: 'Tidak',
+  ditunda: 'Ditunda',
+  dibatalkan: 'Dibatalkan',
 };
 
 function getWeekStartForDate(date: Date): string {
@@ -118,10 +126,9 @@ function RiwayatTab({ teacherId }: { teacherId: string }) {
       <div style={{ marginBottom: '18px' }}>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={filterInput}>
           <option value="">Semua Status</option>
-          <option value="terlaksana">Terlaksana</option>
-          <option value="tidak">Tidak</option>
-          <option value="ditunda">Ditunda</option>
-          <option value="belum">Belum diisi</option>
+          <option value="terlaksana">Terealisasi</option>
+          <option value="dibatalkan">Dibatalkan</option>
+          <option value="belum">Dijadwalkan</option>
         </select>
       </div>
 
@@ -176,8 +183,8 @@ function RiwayatTab({ teacherId }: { teacherId: string }) {
                   </div>
                   <div style={{ flexShrink: 0, textAlign: 'right' }}>
                     {isBelum ? (
-                      <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, background: '#FEF9C3', color: '#A16207' }}>
-                        BELUM DIISI
+                      <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, background: '#EFF6FF', color: '#1D4ED8' }}>
+                        DIJADWALKAN
                       </span>
                     ) : statusInfo ? (
                       <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700, background: statusInfo.bg, color: statusInfo.color }}>
@@ -374,7 +381,8 @@ function SessionCard({
     const init: Record<string, { status: string; note: string }> = {};
     sessionStudents.forEach(st => {
       const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
-      init[st.student_id] = { status: att?.status ?? 'tidak_hadir', note: att?.note ?? '' };
+      const defaultStatus = att?.checkin_at ? 'hadir' : 'tidak_hadir';
+      init[st.student_id] = { status: att?.status ?? defaultStatus, note: att?.note ?? '' };
     });
     return init;
   });
@@ -408,6 +416,13 @@ function SessionCard({
         status: null, sesi_status: sesiStatus, note: note || null,
       });
     }
+    if (sesiStatus === 'dibatalkan') {
+      await supabase.from('attendance')
+        .delete()
+        .eq('schedule_id', session.id)
+        .eq('session_date', today)
+        .eq('person_role', 'student');
+    }
     setSaving(null);
     setEditingSesi(false);
     onRefresh();
@@ -432,13 +447,14 @@ function SessionCard({
     setLockError(null);
     const now = new Date().toISOString();
 
-    // Step 1: ensure teacher row exists WITHOUT locked_at (policy allows insert with locked_at IS NULL)
+    // Step 1: ensure teacher row exists WITHOUT locked_at
     if (!teacherRow) {
       const { error: insErr } = await supabase.from('attendance').insert({
         schedule_id: session.id, session_date: today,
         person_id: teacherId, person_role: 'teacher',
-        status: 'hadir', sesi_status: sesiStatus, note: note || null,
-        checkin_at: now,
+        status: sesiStatus === 'dibatalkan' ? null : 'hadir',
+        sesi_status: sesiStatus, note: note || null,
+        checkin_at: sesiStatus === 'dibatalkan' ? null : now,
       });
       if (insErr) {
         setLockError('Gagal menyimpan kehadiran guru: ' + insErr.message);
@@ -451,7 +467,7 @@ function SessionCard({
         .eq('id', teacherRow.id);
     }
 
-    // Step 2: lock the teacher row via UPDATE (policy: locked_at IS NULL in USING, no WITH CHECK restriction)
+    // Step 2: lock the teacher row
     const { error: lockTeacherErr } = await supabase.from('attendance')
       .update({ locked_at: now })
       .eq('schedule_id', session.id)
@@ -462,6 +478,19 @@ function SessionCard({
     if (lockTeacherErr) {
       setLockError('Gagal mengunci sesi guru: ' + lockTeacherErr.message);
       setLocking(false);
+      return;
+    }
+
+    // If cancelled: wipe student attendance and done
+    if (sesiStatus === 'dibatalkan') {
+      await supabase.from('attendance')
+        .delete()
+        .eq('schedule_id', session.id)
+        .eq('session_date', today)
+        .eq('person_role', 'student');
+      setOptimisticLocked(true);
+      setLocking(false);
+      onRefresh();
       return;
     }
 
@@ -546,24 +575,26 @@ function SessionCard({
           <p style={sectionLabel}>Status Sesi</p>
           {locked ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              {teacherRow?.sesi_status && (
-                <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
-                  background: teacherRow.sesi_status === 'terlaksana' ? '#DCFCE7' : teacherRow.sesi_status === 'tidak' ? '#FEE2E2' : '#FEF9C3',
-                  color: teacherRow.sesi_status === 'terlaksana' ? '#15803D' : teacherRow.sesi_status === 'tidak' ? '#DC0A1E' : '#A16207',
-                }}>
-                  {teacherRow.sesi_status.toUpperCase()}
-                </span>
-              )}
+              {teacherRow?.sesi_status && (() => {
+                const si = SESI_STATUS_LABELS[teacherRow.sesi_status] ?? { label: teacherRow.sesi_status.toUpperCase(), bg: '#F3F2EE', color: '#666' };
+                return (
+                  <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, background: si.bg, color: si.color }}>
+                    {si.label}
+                  </span>
+                );
+              })()}
               {teacherRow?.note && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{teacherRow.note}</span>}
             </div>
           ) : hasSavedSesi && !editingSesi ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
-                background: sesiStatus === 'terlaksana' ? '#DCFCE7' : sesiStatus === 'tidak' ? '#FEE2E2' : '#FEF9C3',
-                color: sesiStatus === 'terlaksana' ? '#15803D' : sesiStatus === 'tidak' ? '#DC0A1E' : '#A16207',
-              }}>
-                {sesiStatus.toUpperCase()}
-              </span>
+              {(() => {
+                const si = SESI_STATUS_LABELS[sesiStatus] ?? { label: sesiStatus.toUpperCase(), bg: '#F3F2EE', color: '#666' };
+                return (
+                  <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, background: si.bg, color: si.color }}>
+                    {si.label}
+                  </span>
+                );
+              })()}
               {note && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{note}</span>}
               <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#047857', display: 'flex', alignItems: 'center', gap: '3px' }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
@@ -576,10 +607,10 @@ function SessionCard({
           ) : (
             <>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                {(['terlaksana', 'tidak', 'ditunda'] as const).map(s => (
+                {(['terlaksana', 'dibatalkan'] as const).map(s => (
                   <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
                     <input type="radio" name={`sesi_${session.id}`} value={s} checked={sesiStatus === s} onChange={() => setSesiStatus(s)} />
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
+                    {SESI_STATUS_DISPLAY[s] ?? s}
                   </label>
                 ))}
               </div>
@@ -590,8 +621,8 @@ function SessionCard({
                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
               />
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <button onClick={saveSesiInfo} disabled={saving === 'sesi'} style={btnSmall}>
-                  {saving === 'sesi' ? 'Menyimpan...' : 'Simpan Status Sesi'}
+                <button onClick={handleLock} disabled={locking} style={btnSmall}>
+                  {locking ? 'Mengunci...' : 'Simpan & Kunci'}
                 </button>
                 {editingSesi && (
                   <button onClick={() => setEditingSesi(false)} style={{ ...btnSmall, background: '#F3F2EE', color: '#0D0D0D', border: '1px solid #E2E1DC' }}>

@@ -136,7 +136,7 @@ export default function TeacherHome() {
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.8rem', color: '#0D5C3A', lineHeight: 1, fontWeight: 900 }}>{monthlyCount}</div>
               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>
-                sesi terlaksana bulan {new Date().toLocaleDateString('id-ID', { month: 'long' })}
+                sesi terealisasi bulan {new Date().toLocaleDateString('id-ID', { month: 'long' })}
               </div>
             </div>
           </div>

@@ -9,9 +9,8 @@ import AnnouncementSlider from '../../components/shared/AnnouncementSlider';
 type Group = { id: string; nama: string; kode: string; warna: string; warna_text: string; paket: number | null };
 type OnlineData = {
   groups: Array<{ id: string; nama: string; warna: string; warna_text: string }>;
-  dilaksanakan: number;
+  terealisasi: number;
   dijadwalkan: number;
-  hadir: number;
 };
 type NextSession = {
   id: string;
@@ -91,12 +90,18 @@ export default function StudentHome() {
     const groupIds = myGroups.map(g => g.id);
 
     if (groupIds.length > 0) {
-      // Use SECURITY DEFINER RPC so students can read teacher realisasi counts
-      const { data: rpcData } = await supabase.rpc('get_groups_with_realisasi');
+      // Count student's own hadir per group (accurate personal usage count)
+      const { data: hadirData } = await supabase
+        .from('attendance')
+        .select('schedules!schedule_id(group_id)')
+        .eq('person_id', user!.id)
+        .eq('person_role', 'student')
+        .eq('status', 'hadir');
       const rMap: Record<string, number> = {};
       myGroups.forEach(g => { rMap[g.id] = 0; });
-      ((rpcData ?? []) as { id: string; realisasi: number }[]).forEach(r => {
-        if (rMap[r.id] !== undefined) rMap[r.id] = Number(r.realisasi);
+      ((hadirData ?? []) as { schedules: { group_id: string } | null }[]).forEach(r => {
+        const gid = r.schedules?.group_id;
+        if (gid && rMap[gid] !== undefined) rMap[gid]++;
       });
       setRealisasiByGroup(rMap);
 
@@ -177,29 +182,28 @@ export default function StudentHome() {
           .from('schedules')
           .select('id')
           .in('group_id', onlineGroupIds);
-        const onlineSchedIds = (schedData ?? []).map((r: any) => r.id as string);
-        const dijadwalkan = onlineSchedIds.length;
+        const allOnlineSchedIds = (schedData ?? []).map((r: any) => r.id as string);
 
-        let dilaksanakan = 0;
-        let hadir = 0;
-        if (onlineSchedIds.length > 0) {
-          const [terlaksanaRes, hadirRes] = await Promise.all([
+        let terealisasi = 0;
+        let dijadwalkan = allOnlineSchedIds.length;
+        if (allOnlineSchedIds.length > 0) {
+          const [terlaksanaRes, cancelledRes] = await Promise.all([
             supabase.from('attendance')
               .select('schedule_id')
-              .in('schedule_id', onlineSchedIds)
+              .in('schedule_id', allOnlineSchedIds)
               .eq('person_role', 'teacher')
               .eq('sesi_status', 'terlaksana'),
             supabase.from('attendance')
-              .select('id')
-              .in('schedule_id', onlineSchedIds)
-              .eq('person_id', user!.id)
-              .eq('person_role', 'student')
-              .eq('status', 'hadir'),
+              .select('schedule_id')
+              .in('schedule_id', allOnlineSchedIds)
+              .eq('person_role', 'teacher')
+              .eq('sesi_status', 'dibatalkan'),
           ]);
-          dilaksanakan = new Set((terlaksanaRes.data ?? []).map((r: any) => r.schedule_id)).size;
-          hadir = (hadirRes.data ?? []).length;
+          terealisasi = new Set((terlaksanaRes.data ?? []).map((r: any) => r.schedule_id as string)).size;
+          const cancelledCount = new Set((cancelledRes.data ?? []).map((r: any) => r.schedule_id as string)).size;
+          dijadwalkan = allOnlineSchedIds.length - cancelledCount;
         }
-        setOnlineData({ groups: onlineGroups, dilaksanakan, dijadwalkan, hadir });
+        setOnlineData({ groups: onlineGroups, terealisasi, dijadwalkan });
       }
     }
 
@@ -283,8 +287,8 @@ export default function StudentHome() {
                       }} />
                     </div>
                     <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
-                      <StatPill label="Dibeli" value={paket} color="#0D5C3A" />
-                      <StatPill label="Terlaksana" value={realisasi} color="#22C55E" />
+                      <StatPill label="Tatap Muka" value={paket} color="#0D5C3A" />
+                      <StatPill label="Terealisasi" value={realisasi} color="#22C55E" />
                       <StatPill label="Sisa" value={sisa} color={sisa < 10 ? '#DC0A1E' : '#A16207'} highlight={sisa < 10} />
                     </div>
                   </>
@@ -304,21 +308,9 @@ export default function StudentHome() {
                 ))}
                 <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 8px', borderRadius: '4px', letterSpacing: '0.05em' }}>ONLINE</span>
               </div>
-              {onlineData.dilaksanakan > 0 && (
-                <div style={{ position: 'relative', height: '6px', background: '#E0F2FE', borderRadius: '99px', marginBottom: '12px', overflow: 'hidden' }}>
-                  <div style={{
-                    position: 'absolute', left: 0, top: 0, height: '100%',
-                    width: `${Math.min(100, Math.round((onlineData.hadir / onlineData.dilaksanakan) * 100))}%`,
-                    background: 'linear-gradient(90deg, #38BDF8, #0369A1)',
-                    borderRadius: '99px',
-                    transition: 'width 0.6s ease',
-                  }} />
-                </div>
-              )}
               <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
-                <StatPill label="Dilaksanakan" value={onlineData.dilaksanakan} color="#0369A1" />
+                <StatPill label="Terealisasi" value={onlineData.terealisasi} color="#0369A1" />
                 <StatPill label="Dijadwalkan" value={onlineData.dijadwalkan} color="#0284C7" />
-                <StatPill label="Hadir" value={onlineData.hadir} color="#15803D" />
               </div>
             </div>
           )}

@@ -72,9 +72,17 @@ type StudentAttRow = {
 
 
 const SESI_STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
-  terlaksana: { label: 'TERLAKSANA', bg: '#DCFCE7', color: '#15803D' },
-  tidak:      { label: 'TIDAK',      bg: '#FEE2E2', color: '#DC0A1E' },
-  ditunda:    { label: 'DITUNDA',    bg: '#FEF9C3', color: '#A16207' },
+  terlaksana: { label: 'TEREALISASI', bg: '#DCFCE7', color: '#15803D' },
+  tidak:      { label: 'TIDAK',       bg: '#FEE2E2', color: '#DC0A1E' },
+  ditunda:    { label: 'DITUNDA',     bg: '#FEF9C3', color: '#A16207' },
+  dibatalkan: { label: 'DIBATALKAN',  bg: '#FEE2E2', color: '#7F1D1D' },
+};
+
+const SESI_STATUS_DISPLAY: Record<string, string> = {
+  terlaksana: 'Terealisasi',
+  tidak: 'Tidak',
+  ditunda: 'Ditunda',
+  dibatalkan: 'Dibatalkan',
 };
 
 const STATUS_LABELS: Record<string, { label: string; bg: string; color: string }> = {
@@ -213,10 +221,11 @@ function RealisasiSesiTab({ readOnly = false }: { readOnly?: boolean }) {
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="">Semua Status</option>
-          <option value="terlaksana">Terlaksana</option>
+          <option value="terlaksana">Terealisasi</option>
           <option value="tidak">Tidak</option>
           <option value="ditunda">Ditunda</option>
-          <option value="belum">Belum diisi</option>
+          <option value="dibatalkan">Dibatalkan</option>
+          <option value="belum">Dijadwalkan</option>
         </select>
       </div>
 
@@ -265,8 +274,8 @@ function RealisasiSesiTab({ readOnly = false }: { readOnly?: boolean }) {
                     <td style={td}><span style={{ color: '#0D0D0D' }}>{s.teacher?.display_name ?? '-'}</span></td>
                     <td style={td}>
                       {isBelum ? (
-                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: '#FEF9C3', color: '#A16207' }}>
-                          BELUM DIISI
+                        <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: '#EFF6FF', color: '#1D4ED8' }}>
+                          DIJADWALKAN
                         </span>
                       ) : statusInfo ? (
                         <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: statusInfo.bg, color: statusInfo.color }}>
@@ -321,13 +330,11 @@ function RealisasiEditModal({ row, onClose, onSaved }: { row: MergedRow; onClose
 
     let err;
     if (row.att) {
-      // Update existing teacher row
       ({ error: err } = await supabase
         .from('attendance')
         .update({ sesi_status: sesiStatus, catatan_admin: catatanAdmin || null })
         .eq('id', row.att.id));
     } else {
-      // No teacher row yet -- admin creates one on behalf
       ({ error: err } = await supabase
         .from('attendance')
         .insert({
@@ -340,8 +347,20 @@ function RealisasiEditModal({ row, onClose, onSaved }: { row: MergedRow; onClose
         }));
     }
 
+    if (err) { setSaving(false); setError(err.message); return; }
+
+    // Wipe student attendance when class is cancelled
+    if (sesiStatus === 'dibatalkan') {
+      const { error: wipeErr } = await supabase
+        .from('attendance')
+        .delete()
+        .eq('schedule_id', s.id)
+        .eq('session_date', row.session_date)
+        .eq('person_role', 'student');
+      if (wipeErr) { setSaving(false); setError(wipeErr.message); return; }
+    }
+
     setSaving(false);
-    if (err) { setError(err.message); return; }
     onSaved();
   }
 
@@ -373,10 +392,10 @@ function RealisasiEditModal({ row, onClose, onSaved }: { row: MergedRow; onClose
         <div style={{ marginBottom: '16px' }}>
           <label style={labelStyle}>Status Sesi</label>
           <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '6px' }}>
-            {(['terlaksana', 'tidak', 'ditunda'] as const).map(s => (
+            {(['terlaksana', 'tidak', 'ditunda', 'dibatalkan'] as const).map(s => (
               <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.88rem' }}>
                 <input type="radio" name="sesi_status" value={s} checked={sesiStatus === s} onChange={() => setSesiStatus(s)} />
-                {s.charAt(0).toUpperCase() + s.slice(1)}
+                {SESI_STATUS_DISPLAY[s] ?? s}
               </label>
             ))}
           </div>
