@@ -99,7 +99,7 @@ export default function StudentHome() {
         .eq('status', 'hadir');
       const rMap: Record<string, number> = {};
       myGroups.forEach(g => { rMap[g.id] = 0; });
-      ((hadirData ?? []) as { schedules: { group_id: string } | null }[]).forEach(r => {
+      ((hadirData ?? []) as unknown as { schedules: { group_id: string } | null }[]).forEach(r => {
         const gid = r.schedules?.group_id;
         if (gid && rMap[gid] !== undefined) rMap[gid]++;
       });
