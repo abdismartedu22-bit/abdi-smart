@@ -270,7 +270,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
     if (!res.ok) { setError(json.error ?? 'Gagal membuat user'); setSubmitting(false); return; }
 
     // For students, update extra profile fields
-    if (form.role === 'student' && json.user?.id) {
+    if (form.role === 'student' && json.id) {
       const extras: Record<string, string | null> = {};
       if (form.nama) extras.nama = form.nama;
       if (form.tempat_lahir) extras.tempat_lahir = form.tempat_lahir;
@@ -279,7 +279,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       if (form.jurusan) extras.jurusan = form.jurusan;
       if (form.tingkat_kelas) extras.tingkat_kelas = form.tingkat_kelas;
       if (Object.keys(extras).length > 0) {
-        await supabase.from('profiles').update(extras).eq('id', json.user.id);
+        await supabase.from('profiles').update(extras).eq('id', json.id);
       }
     }
 
