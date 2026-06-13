@@ -621,20 +621,25 @@ function DeleteUserModal({ user, onClose, onDone }: { user: UserRow; onClose: ()
   async function handleDelete() {
     setDeleting(true);
     setError('');
-    const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ user_id: user.id }),
-    });
-    const json = await res.json();
-    setDeleting(false);
-    if (!res.ok) { setError(json.error ?? 'Gagal menghapus user'); return; }
-    onDone();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify({ user_id: user.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) { setError((json as any).error ?? `Gagal menghapus user (${res.status})`); return; }
+      onDone();
+    } catch (err) {
+      setError('Gagal menghapus user: ' + String(err));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   return (
