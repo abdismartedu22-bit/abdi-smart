@@ -123,7 +123,7 @@ function HariIniTab() {
   const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
-  const [checkInError, setCheckInError] = useState<string>('');
+  const [checkInErr, setCheckInErr] = useState<{ id: string; msg: string } | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -236,17 +236,17 @@ function HariIniTab() {
 
   async function handleCheckIn(scheduleId: string) {
     if (!user) return;
-    setCheckInError('');
+    setCheckInErr(null);
 
     const session = sessions.find(s => s.id === scheduleId);
     if (session) {
       const winState = getWindowState(session.jam_mulai, session.jam_selesai);
       if (winState === 'before') {
-        setCheckInError(`Absen belum dibuka. Bisa absen mulai pukul ${openTimeStr(session.jam_mulai)} WITA (15 menit sebelum kelas).`);
+        setCheckInErr({ id: scheduleId, msg: `Absen belum dibuka. Bisa absen mulai pukul ${openTimeStr(session.jam_mulai)} WITA (15 menit sebelum kelas).` });
         return;
       }
       if (winState === 'closed') {
-        setCheckInError('Waktu absen sudah tutup.');
+        setCheckInErr({ id: scheduleId, msg: 'Waktu absen sudah tutup.' });
         return;
       }
     }
@@ -274,7 +274,7 @@ function HariIniTab() {
     setCheckingIn(null);
     if (error) {
       console.error('Absen error:', error);
-      setCheckInError(`Gagal mencatat absen: ${error.message}`);
+      setCheckInErr({ id: scheduleId, msg: `Gagal mencatat absen: ${error.message}` });
     }
     load();
   }
@@ -373,9 +373,9 @@ function HariIniTab() {
                           >
                             {checkingIn === s.id ? 'Mencatat...' : 'Absen Sekarang'}
                           </button>
-                          {checkInError && (
+                          {checkInErr?.id === s.id && (
                             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0' }}>
-                              {checkInError}
+                              {checkInErr.msg}
                             </p>
                           )}
                         </div>

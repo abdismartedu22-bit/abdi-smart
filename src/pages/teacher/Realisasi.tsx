@@ -603,7 +603,7 @@ function SessionCard({
           ) : (
             <>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                {(['terlaksana', 'dibatalkan'] as const).map(s => (
+                {(['terlaksana', 'tidak', 'ditunda', 'dibatalkan'] as const).map(s => (
                   <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
                     <input type="radio" name={`sesi_${session.id}`} value={s} checked={sesiStatus === s} onChange={() => setSesiStatus(s)} />
                     {SESI_STATUS_DISPLAY[s] ?? s}
@@ -733,6 +733,7 @@ function statusBadge(status: string): React.CSSProperties {
     tidak_hadir: { bg: '#FEE2E2', color: '#DC0A1E' },
     absen:       { bg: '#FEE2E2', color: '#DC0A1E' },
     izin:        { bg: '#FEF9C3', color: '#A16207' },
+    dibatalkan:  { bg: '#FEE2E2', color: '#7F1D1D' },
   };
   const c = map[status] ?? { bg: '#F3F2EE', color: '#666' };
   return {
