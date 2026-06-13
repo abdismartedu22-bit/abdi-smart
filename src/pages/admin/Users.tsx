@@ -18,7 +18,7 @@ type UserRow = {
   sekolah: string | null;
   jurusan: string | null;
   tingkat_kelas: string | null;
-  groups?: { group_id: string; groups: { id: string; nama: string; kode: string } }[];
+  student_groups?: { group_id: string; groups: { id: string; nama: string; kode: string } }[];
 };
 
 type Tab = 'users' | 'groups';
@@ -67,7 +67,7 @@ export default function AdminUsers() {
               marginBottom: '-2px',
             }}
           >
-            {t === 'users' ? 'Siswa' : 'Grup'}
+            {t === 'users' ? 'User' : 'Grup'}
           </button>
         ))}
       </div>
@@ -361,7 +361,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
 /* ===================== EDIT USER MODAL ===================== */
 
 function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRow; groups: Group[]; isSelf: boolean; onClose: () => void; onDone: () => void }) {
-  const currentGroupId = (user.groups ?? [])[0]?.group_id ?? '';
+  const currentGroupId = (user.student_groups ?? [])[0]?.group_id ?? '';
   const [form, setForm] = useState({
     display_name: user.display_name,
     role: user.role,
