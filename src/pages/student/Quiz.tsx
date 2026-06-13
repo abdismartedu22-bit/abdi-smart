@@ -15,6 +15,7 @@ type RiwayatItem = {
   quiz_nomor: number;
   quiz_judul: string;
   session_date: string;
+  activated_at: string | null;
   total_skor: number;
 };
 
@@ -70,7 +71,7 @@ export default function StudentQuiz() {
             .limit(1)
         : Promise.resolve({ data: [] as any[] }),
       supabase.from('quiz_answers')
-        .select('quiz_session_id, skor, quiz_sessions!quiz_session_id(session_date, quiz_id, quiz:quizzes!quiz_id(nomor,judul))')
+        .select('quiz_session_id, skor, quiz_sessions!quiz_session_id(session_date, quiz_id, activated_at, quiz:quizzes!quiz_id(nomor,judul))')
         .eq('student_id', user!.id),
     ]);
 
@@ -104,11 +105,15 @@ export default function StudentQuiz() {
       const sid = a.quiz_session_id;
       if (!sessionMap[sid]) {
         const s = a.quiz_sessions;
-        sessionMap[sid] = { session_id: sid, quiz_nomor: s?.quiz?.nomor ?? 0, quiz_judul: s?.quiz?.judul ?? '-', session_date: s?.session_date ?? '', total_skor: 0 };
+        sessionMap[sid] = { session_id: sid, quiz_nomor: s?.quiz?.nomor ?? 0, quiz_judul: s?.quiz?.judul ?? '-', session_date: s?.session_date ?? '', activated_at: s?.activated_at ?? null, total_skor: 0 };
       }
       sessionMap[sid].total_skor += a.skor ?? 0;
     });
-    setRiwayat(Object.values(sessionMap).sort((a, b) => b.session_date.localeCompare(a.session_date)));
+    setRiwayat(Object.values(sessionMap).sort((a, b) => {
+      const d = b.session_date.localeCompare(a.session_date);
+      if (d !== 0) return d;
+      return (b.activated_at ?? '').localeCompare(a.activated_at ?? '');
+    }));
     setLoading(false);
   }
 

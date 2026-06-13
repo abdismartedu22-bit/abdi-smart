@@ -66,6 +66,7 @@ export default function StudentHome() {
   const [latestTO, setLatestTO] = useState<TOResult | null>(null);
   const [onlineData, setOnlineData] = useState<OnlineData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [todayAtt, setTodayAtt] = useState<{ status: string | null } | null>(null);
 
   const dateLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -90,16 +91,14 @@ export default function StudentHome() {
     const groupIds = myGroups.map(g => g.id);
 
     if (groupIds.length > 0) {
-      // Count student's own hadir per group (accurate personal usage count)
-      const { data: hadirData } = await supabase
+      const { data: terlaksanaData } = await supabase
         .from('attendance')
         .select('schedules!schedule_id(group_id)')
-        .eq('person_id', user!.id)
-        .eq('person_role', 'student')
-        .eq('status', 'hadir');
+        .eq('person_role', 'teacher')
+        .eq('sesi_status', 'terlaksana');
       const rMap: Record<string, number> = {};
       myGroups.forEach(g => { rMap[g.id] = 0; });
-      ((hadirData ?? []) as unknown as { schedules: { group_id: string } | null }[]).forEach(r => {
+      ((terlaksanaData ?? []) as unknown as { schedules: { group_id: string } | null }[]).forEach(r => {
         const gid = r.schedules?.group_id;
         if (gid && rMap[gid] !== undefined) rMap[gid]++;
       });
@@ -149,6 +148,20 @@ export default function StudentHome() {
 
       setNextSession(found);
 
+      if (found && found.week_start === weekStart && found.hari === todayHari) {
+        const { data: attRows } = await supabase
+          .from('attendance')
+          .select('status')
+          .eq('person_id', user!.id)
+          .eq('person_role', 'student')
+          .eq('schedule_id', found.id)
+          .limit(1);
+        const attRow = (attRows ?? [])[0] ?? null;
+        setTodayAtt(attRow ? { status: (attRow as { status: string | null }).status } : null);
+      } else {
+        setTodayAtt(null);
+      }
+
       // Attendance this month
       const monthStart = new Date(); monthStart.setDate(1);
       const { data: att } = await supabase
@@ -168,8 +181,8 @@ export default function StudentHome() {
       setAttendance(counts);
     }
 
-    // Online Umum stats (12SMA only)
-    if (profile?.tingkat_kelas === '12SMA') {
+    // Online Umum stats (12IPA and 12IPS)
+    if (['12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '')) {
       const { data: og } = await supabase
         .from('groups')
         .select('id, nama, warna, warna_text')
@@ -224,6 +237,7 @@ export default function StudentHome() {
   const monthName = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
   const firstName = profile?.display_name?.split(' ')[0] ?? '...';
+  const isNextToday = nextSession?.week_start === getWeekStartISO() && nextSession?.hari === getTodayHari();
 
   const isBirthday = (() => {
     if (!profile?.tanggal_lahir) return false;
@@ -365,17 +379,23 @@ export default function StudentHome() {
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => navigate('/student/absen')}
-                  style={{
-                    marginTop: '14px', width: '100%', padding: '10px', background: '#0D5C3A', color: '#fff',
-                    border: 'none', borderRadius: '10px', cursor: 'pointer',
-                    fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem',
-                    letterSpacing: '0.01em',
-                  }}
-                >
-                  Absen Sekarang
-                </button>
+                {isNextToday && (
+                  todayAtt?.status
+                    ? <AbsenStatusBadge status={todayAtt.status} />
+                    : (
+                      <button
+                        onClick={() => navigate('/student/absen')}
+                        style={{
+                          marginTop: '14px', width: '100%', padding: '10px', background: '#0D5C3A', color: '#fff',
+                          border: 'none', borderRadius: '10px', cursor: 'pointer',
+                          fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem',
+                          letterSpacing: '0.01em',
+                        }}
+                      >
+                        Absen Sekarang
+                      </button>
+                    )
+                )}
               </div>
             ) : (
               <p style={muted}>Tidak ada sesi berikutnya.</p>
@@ -462,6 +482,25 @@ function StatPill({ label, value, color, highlight }: { label: string; value: nu
     }}>
       <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', color, lineHeight: 1, fontWeight: 900 }}>{value}</span>
       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#888', marginTop: '2px' }}>{label}</span>
+    </div>
+  );
+}
+
+function AbsenStatusBadge({ status }: { status: string | null }) {
+  const cfg: Record<string, { label: string; bg: string; color: string }> = {
+    hadir: { label: 'Sudah Hadir', bg: '#F0FFF4', color: '#15803D' },
+    izin: { label: 'Izin', bg: '#FFF7ED', color: '#C2410C' },
+    absen: { label: 'Tidak Hadir', bg: '#FFF1F2', color: '#BE123C' },
+    tidak_hadir: { label: 'Tidak Hadir', bg: '#FFF1F2', color: '#BE123C' },
+  };
+  const s = cfg[status ?? ''] ?? { label: status ?? '-', bg: '#F3F2EE', color: '#888' };
+  return (
+    <div style={{
+      marginTop: '14px', width: '100%', padding: '10px', background: s.bg, color: s.color,
+      border: `1.5px solid ${s.color}33`, borderRadius: '10px', textAlign: 'center',
+      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', boxSizing: 'border-box',
+    }}>
+      {s.label}
     </div>
   );
 }

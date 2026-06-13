@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { toISODate, fmtTime, fmtTimestampWITA } from '../../lib/dates';
+import { toISODate, fmtTime, fmtTimestampWITA, nowWITAMinutes } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 
 /* ---- Riwayat types ---- */
@@ -356,6 +356,17 @@ export default function TeacherRealisasi() {
 
 /* ===================== SESSION CARD ===================== */
 
+function isBeforeWindow(jamMulai: string): boolean {
+  const [sh, sm] = jamMulai.split(':').map(Number);
+  return nowWITAMinutes() < sh * 60 + sm - 15;
+}
+
+function earlyOpenStr(jamMulai: string): string {
+  const [sh, sm] = jamMulai.split(':').map(Number);
+  const openMin = sh * 60 + sm - 15;
+  return `${String(Math.floor(openMin / 60)).padStart(2, '0')}:${String(openMin % 60).padStart(2, '0')}`;
+}
+
 function SessionCard({
   session, sessionStudents, attendance, today, teacherId, onRefresh,
 }: {
@@ -367,9 +378,12 @@ function SessionCard({
   onRefresh: () => void;
 }) {
   const teacherRow = attendance.find(a => a.person_role === 'teacher' && a.person_id === teacherId);
-  const [optimisticLocked, setOptimisticLocked] = useState(false);
-  const locked = optimisticLocked || !!teacherRow?.locked_at;
+  const [optimisticSesiLocked, setOptimisticSesiLocked] = useState(false);
+  const [optimisticAbsenLocked, setOptimisticAbsenLocked] = useState(false);
+  const sesiLocked = optimisticSesiLocked || !!teacherRow?.locked_at;
+  const absenLocked = optimisticAbsenLocked || attendance.some(a => a.person_role === 'student' && !!a.locked_at);
   const [lockError, setLockError] = useState<string | null>(null);
+  const [teacherError, setTeacherError] = useState<string | null>(null);
 
   const hasSavedSesi = !!teacherRow?.sesi_status;
   const [saving, setSaving] = useState<string | null>(null);
@@ -390,6 +404,11 @@ function SessionCard({
   const checkedInCount = attendance.filter(a => a.person_role === 'student' && a.checkin_at).length;
 
   async function markTeacherHadir() {
+    setTeacherError(null);
+    if (isBeforeWindow(session.jam_mulai)) {
+      setTeacherError(`Belum bisa mencatat kehadiran. Tersedia mulai ${earlyOpenStr(session.jam_mulai)} WITA.`);
+      return;
+    }
     setSaving('teacher');
     if (teacherRow) {
       await supabase.from('attendance').update({ status: 'hadir', checkin_at: new Date().toISOString() }).eq('id', teacherRow.id);
@@ -405,16 +424,36 @@ function SessionCard({
     onRefresh();
   }
 
-  async function saveSesiInfo() {
-    setSaving('sesi');
-    if (teacherRow) {
-      await supabase.from('attendance').update({ sesi_status: sesiStatus, note: note || null }).eq('id', teacherRow.id);
-    } else {
-      await supabase.from('attendance').insert({
+  async function saveLockSesi() {
+    setLockError(null);
+    if (isBeforeWindow(session.jam_mulai)) {
+      setLockError(`Belum bisa mengunci status sesi. Tersedia mulai ${earlyOpenStr(session.jam_mulai)} WITA.`);
+      return;
+    }
+    setLocking(true);
+    const now = new Date().toISOString();
+    if (!teacherRow) {
+      const { error: insErr } = await supabase.from('attendance').insert({
         schedule_id: session.id, session_date: today,
         person_id: teacherId, person_role: 'teacher',
-        status: null, sesi_status: sesiStatus, note: note || null,
+        status: sesiStatus === 'dibatalkan' ? null : null,
+        sesi_status: sesiStatus, note: note || null,
+        locked_at: now,
       });
+      if (insErr) {
+        setLockError('Gagal menyimpan: ' + insErr.message);
+        setLocking(false);
+        return;
+      }
+    } else {
+      const { error: upErr } = await supabase.from('attendance')
+        .update({ sesi_status: sesiStatus, note: note || null, locked_at: now })
+        .eq('id', teacherRow.id);
+      if (upErr) {
+        setLockError('Gagal mengunci sesi: ' + upErr.message);
+        setLocking(false);
+        return;
+      }
     }
     if (sesiStatus === 'dibatalkan') {
       await supabase.from('attendance')
@@ -423,8 +462,47 @@ function SessionCard({
         .eq('session_date', today)
         .eq('person_role', 'student');
     }
-    setSaving(null);
+    setOptimisticSesiLocked(true);
     setEditingSesi(false);
+    setLocking(false);
+    onRefresh();
+  }
+
+  async function lockStudentAbsen() {
+    setLockError(null);
+    if (isBeforeWindow(session.jam_mulai)) {
+      setLockError(`Belum bisa mengunci absen. Tersedia mulai ${earlyOpenStr(session.jam_mulai)} WITA.`);
+      return;
+    }
+    setLocking(true);
+    const now = new Date().toISOString();
+    for (const st of sessionStudents) {
+      const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
+      const finalStatus = studentStatuses[st.student_id]?.status ?? 'tidak_hadir';
+      const finalNote = studentStatuses[st.student_id]?.note ?? '';
+      if (att) {
+        await supabase.from('attendance').update({ status: finalStatus, note: finalNote || null }).eq('id', att.id);
+      } else {
+        await supabase.from('attendance').insert({
+          schedule_id: session.id, session_date: today,
+          person_id: st.student_id, person_role: 'student',
+          status: finalStatus, note: finalNote || null,
+        });
+      }
+    }
+    const { error: lockErr } = await supabase
+      .from('attendance')
+      .update({ locked_at: now, verified_by: teacherId, verified_at: now })
+      .eq('schedule_id', session.id)
+      .eq('session_date', today)
+      .eq('person_role', 'student');
+    if (lockErr) {
+      setLockError('Gagal mengunci absen siswa: ' + lockErr.message);
+      setLocking(false);
+      return;
+    }
+    setOptimisticAbsenLocked(true);
+    setLocking(false);
     onRefresh();
   }
 
@@ -442,92 +520,7 @@ function SessionCard({
     onRefresh();
   }
 
-  async function handleLock() {
-    setLocking(true);
-    setLockError(null);
-    const now = new Date().toISOString();
-
-    // Step 1: ensure teacher row exists WITHOUT locked_at
-    if (!teacherRow) {
-      const { error: insErr } = await supabase.from('attendance').insert({
-        schedule_id: session.id, session_date: today,
-        person_id: teacherId, person_role: 'teacher',
-        status: sesiStatus === 'dibatalkan' ? null : 'hadir',
-        sesi_status: sesiStatus, note: note || null,
-        checkin_at: sesiStatus === 'dibatalkan' ? null : now,
-      });
-      if (insErr) {
-        setLockError('Gagal menyimpan kehadiran guru: ' + insErr.message);
-        setLocking(false);
-        return;
-      }
-    } else {
-      await supabase.from('attendance')
-        .update({ sesi_status: sesiStatus, note: note || null })
-        .eq('id', teacherRow.id);
-    }
-
-    // Step 2: lock the teacher row
-    const { error: lockTeacherErr } = await supabase.from('attendance')
-      .update({ locked_at: now })
-      .eq('schedule_id', session.id)
-      .eq('session_date', today)
-      .eq('person_id', teacherId)
-      .eq('person_role', 'teacher');
-
-    if (lockTeacherErr) {
-      setLockError('Gagal mengunci sesi guru: ' + lockTeacherErr.message);
-      setLocking(false);
-      return;
-    }
-
-    // If cancelled: wipe student attendance and done
-    if (sesiStatus === 'dibatalkan') {
-      await supabase.from('attendance')
-        .delete()
-        .eq('schedule_id', session.id)
-        .eq('session_date', today)
-        .eq('person_role', 'student');
-      setOptimisticLocked(true);
-      setLocking(false);
-      onRefresh();
-      return;
-    }
-
-    // Step 3: upsert student rows WITHOUT locked_at
-    for (const st of sessionStudents) {
-      const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
-      const finalStatus = studentStatuses[st.student_id]?.status ?? 'tidak_hadir';
-      const finalNote = studentStatuses[st.student_id]?.note ?? '';
-      if (att) {
-        await supabase.from('attendance').update({ status: finalStatus, note: finalNote || null }).eq('id', att.id);
-      } else {
-        await supabase.from('attendance').insert({
-          schedule_id: session.id, session_date: today,
-          person_id: st.student_id, person_role: 'student',
-          status: finalStatus, note: finalNote || null,
-        });
-      }
-    }
-
-    // Step 4: bulk lock all student rows
-    const { error: lockStudentsErr } = await supabase
-      .from('attendance')
-      .update({ locked_at: now, verified_by: teacherId, verified_at: now })
-      .eq('schedule_id', session.id)
-      .eq('session_date', today)
-      .eq('person_role', 'student');
-
-    if (lockStudentsErr) {
-      setLockError('Gagal mengunci absen siswa: ' + lockStudentsErr.message);
-      setLocking(false);
-      return;
-    }
-
-    setOptimisticLocked(true);
-    setLocking(false);
-    onRefresh();
-  }
+  const isDibatalkan = teacherRow?.sesi_status === 'dibatalkan' || (sesiLocked && sesiStatus === 'dibatalkan');
 
   return (
     <div style={cardStyle}>
@@ -538,13 +531,11 @@ function SessionCard({
           <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
             {fmtTime(session.jam_mulai)} &ndash; {fmtTime(session.jam_selesai)}
           </div>
-          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888', marginTop: '1px' }}>
-            {fmtTime(session.jam_mulai)}&ndash;{fmtTime(session.jam_selesai)} WITA
-          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888', marginTop: '1px' }}>WITA</div>
           {session.materi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>{session.materi}</div>}
           {session.lokasi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '1px' }}>@ {session.lokasi}</div>}
         </div>
-        {locked && (
+        {(sesiLocked || absenLocked) && (
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '6px', background: '#DCFCE7', flexShrink: 0 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: '#15803D' }}>TERKUNCI</span>
@@ -561,29 +552,38 @@ function SessionCard({
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#047857', margin: 0, fontWeight: 500 }}>
               Sudah hadir {teacherRow.checkin_at ? `(${fmtTimestampWITA(teacherRow.checkin_at, 'time')})` : ''}
             </p>
-          ) : (
-            !locked && (
+          ) : !absenLocked ? (
+            <>
               <button onClick={markTeacherHadir} disabled={saving === 'teacher'} style={btnSmall}>
                 {saving === 'teacher' ? 'Mencatat...' : 'Saya Hadir'}
               </button>
-            )
-          )}
+              {teacherError && (
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0' }}>{teacherError}</p>
+              )}
+            </>
+          ) : null}
         </div>
 
         {/* Sesi status */}
         <div>
           <p style={sectionLabel}>Status Sesi</p>
-          {locked ? (
+          {sesiLocked ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              {teacherRow?.sesi_status && (() => {
-                const si = SESI_STATUS_LABELS[teacherRow.sesi_status] ?? { label: teacherRow.sesi_status.toUpperCase(), bg: '#F3F2EE', color: '#666' };
+              {(() => {
+                const status = teacherRow?.sesi_status ?? sesiStatus;
+                const si = SESI_STATUS_LABELS[status] ?? { label: status.toUpperCase(), bg: '#F3F2EE', color: '#666' };
                 return (
                   <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, background: si.bg, color: si.color }}>
                     {si.label}
                   </span>
                 );
               })()}
-              {teacherRow?.note && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{teacherRow.note}</span>}
+              {(teacherRow?.note || note) && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{teacherRow?.note ?? note}</span>}
+              {teacherRow?.locked_at && (
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#bbb' }}>
+                  dikunci {fmtTimestampWITA(teacherRow.locked_at, 'time')}
+                </span>
+              )}
             </div>
           ) : hasSavedSesi && !editingSesi ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
@@ -596,10 +596,6 @@ function SessionCard({
                 );
               })()}
               {note && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{note}</span>}
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#047857', display: 'flex', alignItems: 'center', gap: '3px' }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
-                Tersimpan
-              </span>
               <button onClick={() => setEditingSesi(true)} style={{ ...btnSmall, background: '#F3F2EE', color: '#0D0D0D', border: '1px solid #E2E1DC' }}>
                 Edit
               </button>
@@ -621,7 +617,7 @@ function SessionCard({
                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
               />
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <button onClick={handleLock} disabled={locking} style={btnSmall}>
+                <button onClick={saveLockSesi} disabled={locking} style={btnSmall}>
                   {locking ? 'Mengunci...' : 'Simpan & Kunci'}
                 </button>
                 {editingSesi && (
@@ -630,6 +626,11 @@ function SessionCard({
                   </button>
                 )}
               </div>
+              {lockError && !absenLocked && (
+                <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0', fontWeight: 600 }}>
+                  {lockError}
+                </p>
+              )}
             </>
           )}
         </div>
@@ -646,7 +647,7 @@ function SessionCard({
               {sessionStudents.map(st => {
                 const sAtt = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
                 const hasCheckedIn = !!sAtt?.checkin_at;
-                const cur = studentStatuses[st.student_id] ?? { status: 'absen', note: '' };
+                const cur = studentStatuses[st.student_id] ?? { status: 'tidak_hadir', note: '' };
 
                 return (
                   <div key={st.student_id} style={studentRow}>
@@ -664,25 +665,25 @@ function SessionCard({
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
-                      {locked ? (
+                      {isDibatalkan ? (
+                        <span style={statusBadge('dibatalkan')}>DIBATALKAN</span>
+                      ) : absenLocked ? (
                         <span style={statusBadge(cur.status)}>
                           {cur.status === 'tidak_hadir' || cur.status === 'absen' ? 'TIDAK HADIR' : cur.status === 'izin' ? 'IZIN' : cur.status.toUpperCase()}
                         </span>
                       ) : (
-                        <>
-                          <select
-                            value={cur.status === 'absen' || cur.status === 'izin' ? 'tidak_hadir' : cur.status}
-                            onChange={e => {
-                              const val = e.target.value;
-                              setStudentStatuses(prev => ({ ...prev, [st.student_id]: { ...prev[st.student_id], status: val } }));
-                              updateStudentStatus(st.student_id, val, cur.note);
-                            }}
-                            style={selectSmall}
-                          >
-                            <option value="hadir">Hadir</option>
-                            <option value="tidak_hadir">Tidak Hadir</option>
-                          </select>
-                        </>
+                        <select
+                          value={cur.status === 'absen' || cur.status === 'izin' ? 'tidak_hadir' : cur.status}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setStudentStatuses(prev => ({ ...prev, [st.student_id]: { ...prev[st.student_id], status: val } }));
+                            updateStudentStatus(st.student_id, val, cur.note);
+                          }}
+                          style={selectSmall}
+                        >
+                          <option value="hadir">Hadir</option>
+                          <option value="tidak_hadir">Tidak Hadir</option>
+                        </select>
                       )}
                     </div>
                   </div>
@@ -692,23 +693,18 @@ function SessionCard({
           )}
         </div>
 
-        {/* Lock button / locked banner */}
+        {/* Bottom lock section */}
         <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '14px' }}>
-          {locked ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '8px', padding: '12px 14px' }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-              <div>
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', fontWeight: 700, color: '#15803D' }}>Sesi dikunci</span>
-                {teacherRow?.locked_at && (
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666', marginLeft: '8px' }}>
-                    {fmtTimestampWITA(teacherRow.locked_at, 'time')}
-                  </span>
-                )}
-              </div>
+          {absenLocked || isDibatalkan ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: isDibatalkan ? '#FEF9C3' : '#F0FDF4', border: `1px solid ${isDibatalkan ? '#FDE68A' : '#BBF7D0'}`, borderRadius: '8px', padding: '12px 14px' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isDibatalkan ? '#A16207' : '#15803D'} strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', fontWeight: 700, color: isDibatalkan ? '#A16207' : '#15803D' }}>
+                {isDibatalkan ? 'Sesi dibatalkan' : 'Absen siswa dikunci'}
+              </span>
             </div>
-          ) : (
+          ) : sesiLocked ? (
             <>
-              <button onClick={handleLock} disabled={locking} style={{ ...btnSmall, background: '#047857' }}>
+              <button onClick={lockStudentAbsen} disabled={locking} style={{ ...btnSmall, background: '#047857' }}>
                 {locking ? 'Mengunci...' : 'Selesai & Kunci Absen'}
               </button>
               {lockError && (
@@ -720,6 +716,10 @@ function SessionCard({
                 Atau akan terkunci otomatis pukul 23:59
               </p>
             </>
+          ) : (
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#999', margin: 0 }}>
+              Simpan dan kunci status sesi terlebih dahulu sebelum mengunci absen siswa.
+            </p>
           )}
         </div>
       </div>

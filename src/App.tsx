@@ -56,6 +56,7 @@ export default function App() {
               <Route path="/admin" element={<AdminHome />} />
               <Route path="/admin/realisasi" element={<AdminRealisasi />} />
               <Route path="/admin/users" element={<AdminUsers />} />
+              <Route path="/admin/jadwal" element={<InputJadwal />} />
               <Route path="/admin/download" element={<AdminDownload />} />
               <Route path="/admin/gedung" element={<AdminGedung />} />
               <Route path="/admin/quiz" element={<AdminQuiz />} />

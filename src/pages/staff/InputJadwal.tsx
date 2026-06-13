@@ -76,7 +76,7 @@ export default function InputJadwal() {
   const [form, setForm] = useState(defaultForm);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
-  const [minPertemuan, setMinPertemuan] = useState(1);
+  const [usedPertemuan, setUsedPertemuan] = useState<Set<number>>(new Set());
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -107,17 +107,24 @@ export default function InputJadwal() {
     setLoading(false);
   }
 
-  async function fetchMinPertemuan(groupId: string, excludeScheduleId?: string): Promise<number> {
-    if (!groupId) return 1;
-    const { data } = await supabase
+  async function fetchUsedPertemuan(groupId: string, excludeScheduleId?: string): Promise<Set<number>> {
+    if (!groupId) return new Set();
+    let query = supabase
       .from('schedules')
       .select('pertemuan_ke')
       .eq('group_id', groupId)
       .not('pertemuan_ke', 'is', null);
-    const rows = (data ?? []) as { pertemuan_ke: number }[];
-    const filtered = excludeScheduleId ? rows : rows;
-    const max = filtered.reduce((m, r) => Math.max(m, r.pertemuan_ke ?? 0), 0);
-    return max + 1;
+    if (excludeScheduleId) {
+      query = query.neq('id', excludeScheduleId);
+    }
+    const { data } = await query;
+    return new Set((data ?? []).map(r => (r as { pertemuan_ke: number }).pertemuan_ke));
+  }
+
+  function findNextAvailable(used: Set<number>): number {
+    let n = 1;
+    while (used.has(n)) n++;
+    return n;
   }
 
   async function openAdd() {
@@ -126,7 +133,7 @@ export default function InputJadwal() {
     if (groups.length === 0) missing.push('grup');
     if (teachers.length === 0) missing.push('pengajar');
     setFormError(missing.length > 0 ? `Belum ada ${missing.join(' dan ')}. Tambahkan di /admin/users terlebih dahulu.` : '');
-    setMinPertemuan(1);
+    setUsedPertemuan(new Set());
     const todayISO = toISODate(new Date());
     const todayHariName = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()];
     setForm({ ...defaultForm, group_id: '', teacher_id: '', tanggal: todayISO, hari: todayHariName, pertemuan_ke: '1' });
@@ -136,8 +143,8 @@ export default function InputJadwal() {
   async function openEdit(s: ScheduleRow) {
     setEditing(s);
     const editDate = getDateForHari(new Date(s.week_start + 'T00:00:00'), s.hari);
-    const min = await fetchMinPertemuan(s.group_id, s.id);
-    setMinPertemuan(min);
+    const used = await fetchUsedPertemuan(s.group_id, s.id);
+    setUsedPertemuan(used);
     setForm({
       group_id: s.group_id,
       teacher_id: s.teacher_id,
@@ -155,9 +162,9 @@ export default function InputJadwal() {
   }
 
   async function handleGroupChange(groupId: string) {
-    const min = await fetchMinPertemuan(groupId);
-    setMinPertemuan(min);
-    setForm(f => ({ ...f, group_id: groupId, pertemuan_ke: String(min) }));
+    const used = await fetchUsedPertemuan(groupId, editing?.id);
+    setUsedPertemuan(used);
+    setForm(f => ({ ...f, group_id: groupId, pertemuan_ke: String(findNextAvailable(used)) }));
   }
 
   function handleTanggalChange(iso: string) {
@@ -180,10 +187,9 @@ export default function InputJadwal() {
     if (!form.lokasi) { setFormError('Lokasi wajib diisi'); return; }
     if (!form.ruangan) { setFormError('Ruangan wajib diisi'); return; }
     if (!form.pertemuan_ke) { setFormError('Pertemuan ke- wajib diisi'); return; }
-    if (form.pertemuan_ke && Number(form.pertemuan_ke) < minPertemuan) {
-      setFormError(`Pertemuan ke- tidak boleh kurang dari ${minPertemuan} (grup ini sudah ada ${minPertemuan - 1} sesi sebelumnya)`);
-      return;
-    }
+    const pNum = parseInt(form.pertemuan_ke);
+    if (isNaN(pNum) || pNum < 1) { setFormError('Pertemuan ke- harus angka positif'); return; }
+    if (usedPertemuan.has(pNum)) { setFormError(`Sesi ke-${pNum} sudah ada di grup ini, pilih nomor lain`); return; }
 
     setSubmitting(true);
     const pickedDate = new Date(form.tanggal + 'T00:00:00');
@@ -421,15 +427,20 @@ export default function InputJadwal() {
               <Field label="Pertemuan ke-">
                 <input
                   type="number"
-                  min={minPertemuan}
+                  min="1"
                   value={form.pertemuan_ke}
                   onChange={e => setForm(f => ({ ...f, pertemuan_ke: e.target.value }))}
-                  placeholder={String(minPertemuan)}
+                  placeholder="cth. 5"
                   style={input}
                 />
-                {form.pertemuan_ke && Number(form.pertemuan_ke) < minPertemuan && (
+                {form.pertemuan_ke && usedPertemuan.has(Number(form.pertemuan_ke)) && (
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#DC0A1E' }}>
-                    Grup ini sudah ada {minPertemuan - 1} sesi. Masukkan minimal sesi ke-{minPertemuan}.
+                    Sesi ke-{form.pertemuan_ke} sudah ada. Pilih nomor lain.
+                  </span>
+                )}
+                {usedPertemuan.size > 0 && (
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: '#888' }}>
+                    Sudah terpakai: {Array.from(usedPertemuan).sort((a, b) => a - b).join(', ')}
                   </span>
                 )}
               </Field>

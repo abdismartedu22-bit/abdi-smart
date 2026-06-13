@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import PasswordInput from '../../components/shared/PasswordInput';
 import type { Role, Group } from '../../types';
 
-const TINGKAT_KELAS_OPTIONS = ['1SD','2SD','3SD','4SD','5SD','6SD','7SMP','8SMP','9SMP','10SMA','11IPA','11IPS','12IPA','12IPS','12SMA'];
+const TINGKAT_KELAS_OPTIONS = ['1SD','2SD','3SD','4SD','5SD','6SD','7SMP','8SMP','9SMP','10SMA','11IPA','11IPS','12IPA','12IPS'];
 
 type UserRow = {
   id: string;
@@ -67,7 +67,7 @@ export default function AdminUsers() {
               marginBottom: '-2px',
             }}
           >
-            {t === 'users' ? 'Users' : 'Grup'}
+            {t === 'users' ? 'Siswa' : 'Grup'}
           </button>
         ))}
       </div>
@@ -102,7 +102,7 @@ function UsersTab() {
       supabase.from('profiles')
         .select('*, student_groups(group_id, groups(id, nama, kode))')
         .order('role').order('display_name'),
-      supabase.from('groups').select('*').eq('active', true).order('nama'),
+      supabase.from('groups').select('*').order('nama'),
     ]);
     setUsers((u ?? []) as UserRow[]);
     setGroups(g ?? []);
@@ -239,9 +239,14 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       setError('Nama, username, dan password wajib diisi');
       return;
     }
-    if (form.role === 'student' && !form.group_id) {
-      setError('Pilih grup untuk siswa');
-      return;
+    if (form.role === 'student') {
+      if (!form.group_id) { setError('Pilih grup untuk siswa'); return; }
+      if (!form.nama) { setError('Nama lengkap wajib diisi untuk siswa'); return; }
+      if (!form.tempat_lahir) { setError('Tempat lahir wajib diisi untuk siswa'); return; }
+      if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi untuk siswa'); return; }
+      if (!form.sekolah) { setError('Sekolah wajib diisi untuk siswa'); return; }
+      if (!form.jurusan) { setError('Jurusan wajib diisi untuk siswa'); return; }
+      if (!form.tingkat_kelas) { setError('Tingkat kelas wajib diisi untuk siswa'); return; }
     }
     setSubmitting(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -317,25 +322,25 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
                   <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
                 )}
               </FieldRow>
-              <FieldRow label="Nama Lengkap (sesuai NIS/NIK)">
-                <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" />
+              <FieldRow label="Nama Lengkap (sesuai NIS/NIK) *">
+                <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" required />
               </FieldRow>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <FieldRow label="Tempat Lahir">
-                  <input style={inputStyle} value={form.tempat_lahir} onChange={e => setForm(f => ({ ...f, tempat_lahir: e.target.value }))} placeholder="cth. Denpasar" />
+                <FieldRow label="Tempat Lahir *">
+                  <input style={inputStyle} value={form.tempat_lahir} onChange={e => setForm(f => ({ ...f, tempat_lahir: e.target.value }))} placeholder="cth. Denpasar" required />
                 </FieldRow>
-                <FieldRow label="Tanggal Lahir">
-                  <input style={inputStyle} type="date" value={form.tanggal_lahir} onChange={e => setForm(f => ({ ...f, tanggal_lahir: e.target.value }))} />
+                <FieldRow label="Tanggal Lahir *">
+                  <input style={inputStyle} type="date" value={form.tanggal_lahir} onChange={e => setForm(f => ({ ...f, tanggal_lahir: e.target.value }))} required />
                 </FieldRow>
               </div>
-              <FieldRow label="Sekolah">
-                <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
+              <FieldRow label="Sekolah *">
+                <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" required />
               </FieldRow>
-              <FieldRow label="Jurusan">
-                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" />
+              <FieldRow label="Jurusan *">
+                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" required />
               </FieldRow>
-              <FieldRow label="Tingkat Kelas">
-                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))}>
+              <FieldRow label="Tingkat Kelas *">
+                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))} required>
                   <option value="">-- Pilih tingkat kelas --</option>
                   {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
@@ -382,6 +387,14 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    if (form.role === 'student') {
+      if (!form.nama) { setError('Nama lengkap wajib diisi'); return; }
+      if (!form.tempat_lahir) { setError('Tempat lahir wajib diisi'); return; }
+      if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi'); return; }
+      if (!form.sekolah) { setError('Sekolah wajib diisi'); return; }
+      if (!form.jurusan) { setError('Jurusan wajib diisi'); return; }
+      if (!form.tingkat_kelas) { setError('Tingkat kelas wajib diisi'); return; }
+    }
     setSubmitting(true);
 
     const update: Record<string, unknown> = { display_name: form.display_name, role: form.role, is_active: form.is_active };
@@ -485,25 +498,25 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
                   <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
                 )}
               </FieldRow>
-              <FieldRow label="Nama Lengkap (sesuai NIS/NIK)">
-                <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" />
+              <FieldRow label="Nama Lengkap (sesuai NIS/NIK) *">
+                <input style={inputStyle} value={form.nama} onChange={e => setForm(f => ({ ...f, nama: e.target.value }))} placeholder="cth. Budi Santoso" required />
               </FieldRow>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <FieldRow label="Tempat Lahir">
-                  <input style={inputStyle} value={form.tempat_lahir} onChange={e => setForm(f => ({ ...f, tempat_lahir: e.target.value }))} placeholder="cth. Denpasar" />
+                <FieldRow label="Tempat Lahir *">
+                  <input style={inputStyle} value={form.tempat_lahir} onChange={e => setForm(f => ({ ...f, tempat_lahir: e.target.value }))} placeholder="cth. Denpasar" required />
                 </FieldRow>
-                <FieldRow label="Tanggal Lahir">
-                  <input style={inputStyle} type="date" value={form.tanggal_lahir} onChange={e => setForm(f => ({ ...f, tanggal_lahir: e.target.value }))} />
+                <FieldRow label="Tanggal Lahir *">
+                  <input style={inputStyle} type="date" value={form.tanggal_lahir} onChange={e => setForm(f => ({ ...f, tanggal_lahir: e.target.value }))} required />
                 </FieldRow>
               </div>
-              <FieldRow label="Sekolah">
-                <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
+              <FieldRow label="Sekolah *">
+                <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" required />
               </FieldRow>
-              <FieldRow label="Jurusan">
-                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" />
+              <FieldRow label="Jurusan *">
+                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" required />
               </FieldRow>
-              <FieldRow label="Tingkat Kelas">
-                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))}>
+              <FieldRow label="Tingkat Kelas *">
+                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))} required>
                   <option value="">-- Pilih tingkat kelas --</option>
                   {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
@@ -605,40 +618,33 @@ function DeleteUserModal({ user, onClose, onDone }: { user: UserRow; onClose: ()
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleDelete() {
+  async function handleDeactivate() {
     setDeleting(true);
     setError('');
-    const { data: { session } } = await supabase.auth.getSession();
-    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session?.access_token}`,
-        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
-      },
-      body: JSON.stringify({ user_id: user.id }),
-    });
-    const json = await res.json();
+    const { error: err } = await supabase
+      .from('profiles')
+      .update({ is_active: false })
+      .eq('id', user.id);
     setDeleting(false);
-    if (!res.ok) { setError(json.error ?? 'Gagal menghapus user'); return; }
+    if (err) { setError(err.message); return; }
     onDone();
   }
 
   return (
     <Overlay>
       <div style={{ background: '#fff', borderRadius: '12px', padding: '28px 32px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#0D0D0D' }}>Hapus User?</h2>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#0D0D0D' }}>Nonaktifkan User?</h2>
         <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#666', margin: '0 0 6px' }}>
-          Akun <strong>{user.display_name}</strong> (@{user.username}) akan dihapus permanen.
+          Akun <strong>{user.display_name}</strong> (@{user.username}) akan dinonaktifkan.
         </p>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#DC0A1E', margin: '0 0 20px' }}>
-          Semua data absensi dan hasil TO milik user ini ikut terhapus dan tidak bisa dipulihkan.
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#A16207', margin: '0 0 20px' }}>
+          User tidak akan bisa login, namun data absensi dan riwayat tetap tersimpan. Akun bisa diaktifkan kembali melalui Edit User.
         </p>
         {error && <p style={{ ...errorStyle, marginBottom: '12px' }}>{error}</p>}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={onClose} style={btnSecondary}>Batal</button>
-          <button onClick={handleDelete} disabled={deleting} style={{ ...btnPrimary, background: '#DC0A1E' }}>
-            {deleting ? 'Menghapus...' : 'Hapus Permanen'}
+          <button onClick={handleDeactivate} disabled={deleting} style={{ ...btnPrimary, background: '#DC0A1E' }}>
+            {deleting ? 'Menonaktifkan...' : 'Nonaktifkan'}
           </button>
         </div>
       </div>
@@ -859,6 +865,7 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
     e.preventDefault();
     setError('');
     if (!form.nama) { setError('Nama grup wajib diisi'); return; }
+    if (!form.paket) { setError('Jumlah tatap muka (paket) wajib diisi'); return; }
     setSubmitting(true);
     const derivedKode = group?.kode ?? (form.nama.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4) || 'GRUP');
     const payload = {
@@ -893,8 +900,8 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
           <FieldRow label="Sekolah Asal (opsional)">
             <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" />
           </FieldRow>
-          <FieldRow label="Paket (jumlah tatap muka)">
-            <input style={inputStyle} type="number" min="0" value={form.paket} onChange={e => setForm(f => ({ ...f, paket: e.target.value }))} placeholder="cth. 80" />
+          <FieldRow label="Paket (jumlah tatap muka) *">
+            <input style={inputStyle} type="number" min="1" value={form.paket} onChange={e => setForm(f => ({ ...f, paket: e.target.value }))} placeholder="cth. 80" required />
           </FieldRow>
           <FieldRow label="Link Grup WhatsApp (opsional)">
             <input style={inputStyle} type="url" value={form.wa_group_link} onChange={e => setForm(f => ({ ...f, wa_group_link: e.target.value }))} placeholder="https://chat.whatsapp.com/..." />
@@ -910,7 +917,7 @@ function GroupFormModal({ group, onClose, onDone }: { group?: Group; onClose: ()
             </div>
             {form.tipe === 'online' && (
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#0369A1', margin: '4px 0 0', background: '#E0F2FE', padding: '6px 10px', borderRadius: '6px' }}>
-                Jadwal grup Online akan otomatis terlihat oleh semua siswa 12SMA.
+                Jadwal grup Online akan otomatis terlihat oleh semua siswa 12IPA dan 12IPS.
               </p>
             )}
           </FieldRow>

@@ -7,6 +7,7 @@ type Testimonial = {
   asal_sekolah: string | null;
   universitas: string | null;
   isi: string;
+  gambar_url: string | null;
 };
 
 export default function Testimonials() {
@@ -16,7 +17,7 @@ export default function Testimonials() {
   useEffect(() => {
     supabase
       .from('testimonials')
-      .select('id, nama, asal_sekolah, universitas, isi')
+      .select('id, nama, asal_sekolah, universitas, isi, gambar_url')
       .eq('is_active', true)
       .order('urutan')
       .limit(10)
@@ -79,61 +80,59 @@ export default function Testimonials() {
           border: '1.5px solid #E2E1DC',
           borderRadius: '20px',
           padding: '40px 48px',
-          position: 'relative',
-          minHeight: '240px',
           boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
         }}>
-          {/* Quote mark */}
-          <div style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '5rem',
-            lineHeight: 1,
-            color: 'var(--color-yellow)',
-            position: 'absolute',
-            top: '20px',
-            left: '40px',
-            fontWeight: 900,
-          }}>
-            &ldquo;
-          </div>
-
-          <div style={{ paddingTop: '24px' }}>
-            <p style={{
-              fontFamily: 'var(--font-body)',
-              fontSize: '1.05rem',
-              color: '#2E2E2E',
-              lineHeight: 1.75,
-              margin: '0 0 28px',
-              fontWeight: 400,
-            }}>
-              {item.isi}
-            </p>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '1rem', color: 'var(--color-black)', letterSpacing: '-0.02em' }}>
-                  {item.nama}
+          <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            {item.gambar_url && (
+              <div style={{ width: '220px', minWidth: '140px', flexShrink: 0, aspectRatio: '4/5', overflow: 'hidden', borderRadius: '12px' }}>
+                <img src={item.gambar_url} alt={item.nama} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              </div>
+            )}
+            <div style={{ flex: 1, minWidth: '280px' }}>
+              <div style={{
+                fontFamily: 'var(--font-display)',
+                fontSize: '4rem',
+                lineHeight: 0.8,
+                color: 'var(--color-yellow)',
+                fontWeight: 900,
+                marginBottom: '10px',
+              }}>
+                &ldquo;
+              </div>
+              <p style={{
+                fontFamily: 'var(--font-body)',
+                fontSize: '1.05rem',
+                color: '#2E2E2E',
+                lineHeight: 1.75,
+                margin: '0 0 28px',
+                fontWeight: 400,
+              }}>
+                {item.isi}
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '1rem', color: 'var(--color-black)', letterSpacing: '-0.02em' }}>
+                    {item.nama}
+                  </div>
+                  {(item.asal_sekolah || item.universitas) && (
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#888', marginTop: '3px' }}>
+                      {item.asal_sekolah && <span>{item.asal_sekolah}</span>}
+                      {item.asal_sekolah && item.universitas && <span style={{ margin: '0 6px', color: '#ccc' }}>&#8594;</span>}
+                      {item.universitas && <span style={{ color: 'var(--color-red)', fontWeight: 600 }}>{item.universitas}</span>}
+                    </div>
+                  )}
                 </div>
-                {(item.asal_sekolah || item.universitas) && (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#888', marginTop: '3px' }}>
-                    {item.asal_sekolah && <span>{item.asal_sekolah}</span>}
-                    {item.asal_sekolah && item.universitas && <span style={{ margin: '0 6px', color: '#ccc' }}>&#8594;</span>}
-                    {item.universitas && <span style={{ color: 'var(--color-red)', fontWeight: 600 }}>{item.universitas}</span>}
+                {items.length > 1 && (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={prev} style={navBtn}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+                    </button>
+                    <button onClick={next} style={navBtn}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
                   </div>
                 )}
               </div>
-
-              {/* Nav arrows */}
-              {items.length > 1 && (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={prev} style={navBtn}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
-                  </button>
-                  <button onClick={next} style={navBtn}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>

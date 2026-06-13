@@ -41,15 +41,24 @@ type HistoryRow = {
 };
 
 // Uses WITA (UTC+8) for strict timezone-correct comparison
+// Window opens 15 minutes before class starts
 function getWindowState(jamMulai: string, jamSelesai: string): 'before' | 'open' | 'closed' {
   const [sh, sm] = jamMulai.split(':').map(Number);
   const [eh, em] = jamSelesai.split(':').map(Number);
   const startMin = sh * 60 + sm;
   const endMin = eh * 60 + em;
   const nowMin = nowWITAMinutes();
-  if (nowMin < startMin) return 'before';
+  if (nowMin < startMin - 15) return 'before';
   if (nowMin <= endMin) return 'open';
   return 'closed';
+}
+
+function openTimeStr(jamMulai: string): string {
+  const [sh, sm] = jamMulai.split(':').map(Number);
+  const openMin = sh * 60 + sm - 15;
+  const h = Math.floor(openMin / 60);
+  const m = openMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 function getTodayHari(): string {
@@ -146,7 +155,18 @@ function HariIniTab() {
       .eq('hari', todayHari)
       .order('jam_mulai');
 
-    const todaySessions = (sched ?? []) as unknown as SessionToday[];
+    const raw = (sched ?? []) as unknown as SessionToday[];
+    const nowMin = nowWITAMinutes();
+    const todaySessions = [...raw].sort((a, b) => {
+      const [ah, am] = a.jam_selesai.split(':').map(Number);
+      const [bh, bm] = b.jam_selesai.split(':').map(Number);
+      const aEnded = (ah * 60 + am) < nowMin;
+      const bEnded = (bh * 60 + bm) < nowMin;
+      if (aEnded !== bEnded) return aEnded ? 1 : -1;
+      const [as2, am2] = a.jam_mulai.split(':').map(Number);
+      const [bs2, bm2] = b.jam_mulai.split(':').map(Number);
+      return (as2 * 60 + am2) - (bs2 * 60 + bm2);
+    });
     setSessions(todaySessions);
 
     if (todaySessions.length > 0) {
@@ -216,8 +236,22 @@ function HariIniTab() {
 
   async function handleCheckIn(scheduleId: string) {
     if (!user) return;
-    setCheckingIn(scheduleId);
     setCheckInError('');
+
+    const session = sessions.find(s => s.id === scheduleId);
+    if (session) {
+      const winState = getWindowState(session.jam_mulai, session.jam_selesai);
+      if (winState === 'before') {
+        setCheckInError(`Absen belum dibuka. Bisa absen mulai pukul ${openTimeStr(session.jam_mulai)} WITA (15 menit sebelum kelas).`);
+        return;
+      }
+      if (winState === 'closed') {
+        setCheckInError('Waktu absen sudah tutup.');
+        return;
+      }
+    }
+
+    setCheckingIn(scheduleId);
     const today = toISODate(new Date());
     const existingRow = attendance[scheduleId];
 
@@ -296,7 +330,8 @@ function HariIniTab() {
                   ) : (
                     <>
                       <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#aaa', margin: '0 0 10px' }}>
-                        Waktu absen: {fmtTime(s.jam_mulai)} &ndash; {endWindow} WITA
+                        Absen dibuka: {openTimeStr(s.jam_mulai)} &ndash; {endWindow} WITA
+                        {winState === 'before' && <span style={{ color: '#666' }}> (belum dibuka)</span>}
                         {winState === 'closed' && <span style={{ color: '#DC0A1E' }}> (sudah lewat)</span>}
                       </p>
 

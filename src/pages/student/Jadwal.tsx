@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { HARI, getWeekStart, getWeekDays, toISODate, formatDayLabel, fmtTime } from '../../lib/dates';
+import { HARI, getWeekStart, getWeekDays, toISODate, formatDayLabel, fmtTime, nowWITAMinutes } from '../../lib/dates';
 import WeekPicker from '../../components/shared/WeekPicker';
 import GrupBadge from '../../components/shared/GrupBadge';
 
@@ -42,7 +42,7 @@ export default function StudentJadwal() {
   async function load() {
     setLoading(true);
 
-    const is12SMA = profile?.tingkat_kelas === '12SMA';
+    const is12SMA = ['12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '');
 
     const [{ data: sg }, onlineGroupsRes] = await Promise.all([
       supabase.from('student_groups').select('group_id').eq('student_id', user!.id),
@@ -137,7 +137,17 @@ export default function StudentJadwal() {
                   <span style={muted}>{formatDayLabel(weekDays[idx])}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {daySessions.map(s => {
+                  {(isToday ? [...daySessions].sort((a, b) => {
+                    const nowMin = nowWITAMinutes();
+                    const [ah, am] = a.jam_selesai.split(':').map(Number);
+                    const [bh, bm] = b.jam_selesai.split(':').map(Number);
+                    const aEnded = (ah * 60 + am) < nowMin;
+                    const bEnded = (bh * 60 + bm) < nowMin;
+                    if (aEnded !== bEnded) return aEnded ? 1 : -1;
+                    const [as2, am2] = a.jam_mulai.split(':').map(Number);
+                    const [bs2, bm2] = b.jam_mulai.split(':').map(Number);
+                    return (as2 * 60 + am2) - (bs2 * 60 + bm2);
+                  }) : daySessions).map(s => {
                     const isOnline = s.groups.tipe === 'online';
                     const totalSesi = isOnline ? (onlineTotalSesi[s.group_id] ?? 0) : null;
                     return (
