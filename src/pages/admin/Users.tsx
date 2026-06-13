@@ -618,33 +618,40 @@ function DeleteUserModal({ user, onClose, onDone }: { user: UserRow; onClose: ()
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
 
-  async function handleDeactivate() {
+  async function handleDelete() {
     setDeleting(true);
     setError('');
-    const { error: err } = await supabase
-      .from('profiles')
-      .update({ is_active: false })
-      .eq('id', user.id);
+    const { data: { session } } = await supabase.auth.getSession();
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session?.access_token}`,
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ user_id: user.id }),
+    });
+    const json = await res.json();
     setDeleting(false);
-    if (err) { setError(err.message); return; }
+    if (!res.ok) { setError(json.error ?? 'Gagal menghapus user'); return; }
     onDone();
   }
 
   return (
     <Overlay>
       <div style={{ background: '#fff', borderRadius: '12px', padding: '28px 32px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#0D0D0D' }}>Nonaktifkan User?</h2>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#666', margin: '0 0 6px' }}>
-          Akun <strong>{user.display_name}</strong> (@{user.username}) akan dinonaktifkan.
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#DC0A1E' }}>Hapus User?</h2>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#666', margin: '0 0 8px' }}>
+          Akun <strong>{user.display_name}</strong> (@{user.username}) akan dihapus permanen.
         </p>
-        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#A16207', margin: '0 0 20px' }}>
-          User tidak akan bisa login, namun data absensi dan riwayat tetap tersimpan. Akun bisa diaktifkan kembali melalui Edit User.
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#DC0A1E', margin: '0 0 20px', fontWeight: 600 }}>
+          Semua data absensi dan riwayat user ini akan ikut terhapus. Tindakan ini tidak bisa dibatalkan.
         </p>
         {error && <p style={{ ...errorStyle, marginBottom: '12px' }}>{error}</p>}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button onClick={onClose} style={btnSecondary}>Batal</button>
-          <button onClick={handleDeactivate} disabled={deleting} style={{ ...btnPrimary, background: '#DC0A1E' }}>
-            {deleting ? 'Menonaktifkan...' : 'Nonaktifkan'}
+          <button onClick={handleDelete} disabled={deleting} style={{ ...btnPrimary, background: '#DC0A1E' }}>
+            {deleting ? 'Menghapus...' : 'Hapus'}
           </button>
         </div>
       </div>

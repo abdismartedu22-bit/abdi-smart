@@ -10,6 +10,14 @@ type Testimonial = {
   gambar_url: string | null;
 };
 
+function toDirectImg(url: string): string {
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
+  return url;
+}
+
 export default function Testimonials() {
   const [items, setItems] = useState<Testimonial[]>([]);
   const [current, setCurrent] = useState(0);
@@ -85,7 +93,7 @@ export default function Testimonials() {
           <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
             {item.gambar_url && (
               <div style={{ width: '220px', minWidth: '140px', flexShrink: 0, aspectRatio: '4/5', overflow: 'hidden', borderRadius: '12px' }}>
-                <img src={item.gambar_url} alt={item.nama} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <img src={toDirectImg(item.gambar_url)} alt={item.nama} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
               </div>
             )}
             <div style={{ flex: 1, minWidth: '280px' }}>
