@@ -22,7 +22,7 @@ const items = [
   {
     n: '05',
     title: 'Prediksi GACOR',
-    desc: 'Prediksi akurat materi UH, PASPAT, UTBK-SNBT, dan UM untuk persiapan maksimal.',
+    desc: 'Prediksi akurat materi UH, PAS/PAT, UTBK-SNBT, dan UM untuk persiapan maksimal.',
   },
   {
     n: '06',
