@@ -85,7 +85,7 @@ export default function Contact() {
                 marginBottom: '14px',
               }}
             >
-              Siap lolos PTN
+              Siap lolos SMP, SMA, PTN
               <br />
               <span
                 style={{
