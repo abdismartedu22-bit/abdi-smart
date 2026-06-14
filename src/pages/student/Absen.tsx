@@ -158,7 +158,7 @@ function HariIniTab() {
     const groupIds = (sgRes.data ?? []).map(x => x.group_id as string);
     const onlineGroupIds = (onlineGroupsRes.data ?? []).map((x: any) => x.id as string);
 
-    const fetches: Promise<any>[] = [];
+    const fetches: any[] = [];
 
     if (groupIds.length > 0) {
       fetches.push(
@@ -267,7 +267,7 @@ function HariIniTab() {
     const scheduleIds = sessions.map(s => s.id);
     const onlineSchedIds = onlineSessions.map(s => s.id);
     const t = setInterval(async () => {
-      const fetches: Promise<any>[] = [
+      const fetches: any[] = [
         scheduleIds.length > 0
           ? supabase.from('attendance').select('id, schedule_id, status, checkin_at, locked_at').in('schedule_id', scheduleIds).eq('person_id', user.id).eq('session_date', todayISO)
           : Promise.resolve({ data: [] }),
