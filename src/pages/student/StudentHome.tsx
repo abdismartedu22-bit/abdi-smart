@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -21,7 +21,7 @@ type NextSession = {
   lokasi: string | null;
   ruangan: string | null;
   week_start: string;
-  groups: Omit<Group, 'paket'>;
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string; tipe: string };
   teacher: { display_name: string } | null;
 };
 type TOResult = {
@@ -68,6 +68,12 @@ export default function StudentHome() {
   const [loading, setLoading] = useState(true);
   const [todayAtt, setTodayAtt] = useState<{ status: string | null } | null>(null);
 
+  // Refs so realtime callback always reads latest state without re-subscribing
+  const groupsRef = useRef<Group[]>([]);
+  const onlineDataRef = useRef<OnlineData | null>(null);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+  useEffect(() => { onlineDataRef.current = onlineData; }, [onlineData]);
+
   const dateLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   useEffect(() => {
@@ -75,20 +81,67 @@ export default function StudentHome() {
     load();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Realtime: whenever teacher attendance changes, re-fetch counts instantly
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('student-home-realisasi')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, async () => {
+        const currentGroups = groupsRef.current;
+        const currentOnlineData = onlineDataRef.current;
+
+        if (currentGroups.length > 0) {
+          const { data } = await supabase
+            .from('attendance')
+            .select('schedules!schedule_id(group_id)')
+            .eq('person_role', 'teacher')
+            .eq('sesi_status', 'terlaksana');
+          const rMap: Record<string, number> = {};
+          currentGroups.forEach(g => { rMap[g.id] = 0; });
+          ((data ?? []) as unknown as { schedules: { group_id: string } | null }[]).forEach(r => {
+            const gid = r.schedules?.group_id;
+            if (gid && rMap[gid] !== undefined) rMap[gid]++;
+          });
+          setRealisasiByGroup(rMap);
+        }
+
+        if (currentOnlineData) {
+          const olIds = currentOnlineData.groups.map(g => g.id);
+          const { data: schedData } = await supabase.from('schedules').select('id').in('group_id', olIds);
+          const allIds = (schedData ?? []).map((r: any) => r.id as string);
+          const onlineGroupSet = new Set(olIds);
+          const [terlaksanaRes, cancelledRes] = await Promise.all([
+            supabase.from('attendance').select('schedule_id, schedules!schedule_id(group_id)').eq('person_role', 'teacher').eq('sesi_status', 'terlaksana'),
+            supabase.from('attendance').select('schedule_id, schedules!schedule_id(group_id)').eq('person_role', 'teacher').eq('sesi_status', 'dibatalkan'),
+          ]);
+          const terealisasi = ((terlaksanaRes.data ?? []) as any[]).filter(r => onlineGroupSet.has(r.schedules?.group_id)).length;
+          const cancelledCount = ((cancelledRes.data ?? []) as any[]).filter(r => onlineGroupSet.has(r.schedules?.group_id)).length;
+          setOnlineData(prev => prev ? { ...prev, terealisasi, dijadwalkan: allIds.length - cancelledCount } : prev);
+        }
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function load() {
     setLoading(true);
     const today = toISODate(new Date());
     const todayHari = getTodayHari();
     const todayHariIdx = HARI_ORDER.indexOf(todayHari);
+    const is12SMA = ['12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '');
 
-    const { data: sg } = await supabase
-      .from('student_groups')
-      .select('group_id, groups!group_id(id, nama, kode, warna, warna_text, paket)')
-      .eq('student_id', user!.id);
+    // Fetch student groups AND online groups in parallel
+    const [sgRes, onlineGroupsRes] = await Promise.all([
+      supabase.from('student_groups').select('group_id, groups!group_id(id, nama, kode, warna, warna_text, paket)').eq('student_id', user!.id),
+      is12SMA ? supabase.from('groups').select('id, nama, warna, warna_text').eq('tipe', 'online').eq('active', true) : Promise.resolve({ data: [] as any[] }),
+    ]);
 
-    const myGroups = ((sg ?? []).map(r => r.groups)).filter(Boolean) as unknown as Group[];
+    const myGroups = ((sgRes.data ?? []).map((r: any) => r.groups)).filter(Boolean) as unknown as Group[];
     setGroups(myGroups);
     const groupIds = myGroups.map(g => g.id);
+    const onlineGroups = (onlineGroupsRes.data ?? []) as OnlineData['groups'];
+    const onlineGroupIds = onlineGroups.map(g => g.id);
+    const allGroupIds = [...new Set([...groupIds, ...onlineGroupIds])];
 
     if (groupIds.length > 0) {
       const { data: terlaksanaData } = await supabase
@@ -103,17 +156,23 @@ export default function StudentHome() {
         if (gid && rMap[gid] !== undefined) rMap[gid]++;
       });
       setRealisasiByGroup(rMap);
+    }
 
-      // Next session
+    if (allGroupIds.length > 0) {
+      // Next session -- includes both regular and online groups
       const weekStart = getWeekStartISO();
-      const { data: schedWeek } = await supabase
-        .from('schedules')
-        .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(display_name)')
-        .in('group_id', groupIds)
-        .eq('week_start', weekStart)
-        .order('jam_mulai');
+      const [schedWeekRes, cancelledWeekRes] = await Promise.all([
+        supabase
+          .from('schedules')
+          .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, week_start, groups!group_id(id,nama,kode,warna,warna_text,tipe), teacher:profiles!teacher_id(display_name)')
+          .in('group_id', allGroupIds)
+          .eq('week_start', weekStart)
+          .order('jam_mulai'),
+        supabase.from('attendance').select('schedule_id').eq('person_role', 'teacher').eq('sesi_status', 'dibatalkan'),
+      ]);
 
-      const weekSessions = (schedWeek ?? []) as unknown as NextSession[];
+      const cancelledSet = new Set((cancelledWeekRes.data ?? []).map((r: any) => r.schedule_id as string));
+      const weekSessions = ((schedWeekRes.data ?? []) as unknown as NextSession[]).filter(s => !cancelledSet.has(s.id));
       let found: NextSession | null = null;
 
       for (const hari of HARI_ORDER.slice(todayHariIdx)) {
@@ -126,7 +185,7 @@ export default function StudentHome() {
               const end = new Date(); end.setHours(h, m, 0, 0);
               return now < end;
             });
-            found = upcoming ?? sessions[0];
+            found = upcoming ?? null; // don't fall back to already-ended sessions
           } else {
             found = sessions[0];
           }
@@ -136,19 +195,24 @@ export default function StudentHome() {
 
       if (!found) {
         const nextWeekStart = getWeekStartISO(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
-        const { data: nextWeekData } = await supabase
-          .from('schedules')
-          .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, week_start, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(display_name)')
-          .in('group_id', groupIds)
-          .eq('week_start', nextWeekStart)
-          .order('jam_mulai')
-          .limit(1);
-        found = ((nextWeekData ?? []) as unknown as NextSession[])[0] ?? null;
+        const [nextWeekRes, cancelledNextRes] = await Promise.all([
+          supabase
+            .from('schedules')
+            .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, week_start, groups!group_id(id,nama,kode,warna,warna_text,tipe), teacher:profiles!teacher_id(display_name)')
+            .in('group_id', allGroupIds)
+            .eq('week_start', nextWeekStart)
+            .order('jam_mulai'),
+          supabase.from('attendance').select('schedule_id').eq('person_role', 'teacher').eq('sesi_status', 'dibatalkan'),
+        ]);
+        const cancelledNextSet = new Set((cancelledNextRes.data ?? []).map((r: any) => r.schedule_id as string));
+        const nextWeekSessions = ((nextWeekRes.data ?? []) as unknown as NextSession[]).filter(s => !cancelledNextSet.has(s.id));
+        found = nextWeekSessions[0] ?? null;
       }
 
       setNextSession(found);
 
-      if (found && found.week_start === weekStart && found.hari === todayHari) {
+      // todayAtt only makes sense for non-online sessions (online has no student absen)
+      if (found && found.week_start === weekStart && found.hari === todayHari && found.groups.tipe !== 'online') {
         const { data: attRows } = await supabase
           .from('attendance')
           .select('status')
@@ -162,62 +226,41 @@ export default function StudentHome() {
         setTodayAtt(null);
       }
 
-      // Attendance this month
-      const monthStart = new Date(); monthStart.setDate(1);
-      const { data: att } = await supabase
-        .from('attendance')
-        .select('status')
-        .eq('person_id', user!.id)
-        .eq('person_role', 'student')
-        .gte('session_date', toISODate(monthStart))
-        .lte('session_date', today)
-        .not('status', 'is', null);
+      if (groupIds.length > 0) {
+        // Attendance this month
+        const monthStart = new Date(); monthStart.setDate(1);
+        const { data: att } = await supabase
+          .from('attendance')
+          .select('status')
+          .eq('person_id', user!.id)
+          .eq('person_role', 'student')
+          .gte('session_date', toISODate(monthStart))
+          .lte('session_date', today)
+          .not('status', 'is', null);
 
-      const counts = { hadir: 0, tidak_hadir: 0 };
-      (att ?? []).forEach(a => {
-        if (a.status === 'hadir') counts.hadir++;
-        else counts.tidak_hadir++;
-      });
-      setAttendance(counts);
+        const counts = { hadir: 0, tidak_hadir: 0 };
+        (att ?? []).forEach(a => {
+          if (a.status === 'hadir') counts.hadir++;
+          else counts.tidak_hadir++;
+        });
+        setAttendance(counts);
+      }
     }
 
-    // Online Umum stats (12IPA and 12IPS)
-    if (['12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '')) {
-      const { data: og } = await supabase
-        .from('groups')
-        .select('id, nama, warna, warna_text')
-        .eq('tipe', 'online')
-        .eq('active', true);
-      const onlineGroups = (og ?? []) as OnlineData['groups'];
-      const onlineGroupIds = onlineGroups.map(g => g.id);
-      if (onlineGroupIds.length > 0) {
-        const { data: schedData } = await supabase
-          .from('schedules')
-          .select('id')
-          .in('group_id', onlineGroupIds);
-        const allOnlineSchedIds = (schedData ?? []).map((r: any) => r.id as string);
+    // Online Umum stats -- reuse already-fetched onlineGroups
+    if (is12SMA && onlineGroupIds.length > 0) {
+      const { data: schedData } = await supabase.from('schedules').select('id').in('group_id', onlineGroupIds);
+      const allOnlineSchedIds = (schedData ?? []).map((r: any) => r.id as string);
+      const onlineGroupSet = new Set(onlineGroupIds);
 
-        let terealisasi = 0;
-        let dijadwalkan = allOnlineSchedIds.length;
-        if (allOnlineSchedIds.length > 0) {
-          const [terlaksanaRes, cancelledRes] = await Promise.all([
-            supabase.from('attendance')
-              .select('schedule_id')
-              .in('schedule_id', allOnlineSchedIds)
-              .eq('person_role', 'teacher')
-              .eq('sesi_status', 'terlaksana'),
-            supabase.from('attendance')
-              .select('schedule_id')
-              .in('schedule_id', allOnlineSchedIds)
-              .eq('person_role', 'teacher')
-              .eq('sesi_status', 'dibatalkan'),
-          ]);
-          terealisasi = new Set((terlaksanaRes.data ?? []).map((r: any) => r.schedule_id as string)).size;
-          const cancelledCount = new Set((cancelledRes.data ?? []).map((r: any) => r.schedule_id as string)).size;
-          dijadwalkan = allOnlineSchedIds.length - cancelledCount;
-        }
-        setOnlineData({ groups: onlineGroups, terealisasi, dijadwalkan });
-      }
+      const [terlaksanaRes, cancelledRes] = await Promise.all([
+        supabase.from('attendance').select('schedule_id, schedules!schedule_id(group_id)').eq('person_role', 'teacher').eq('sesi_status', 'terlaksana'),
+        supabase.from('attendance').select('schedule_id, schedules!schedule_id(group_id)').eq('person_role', 'teacher').eq('sesi_status', 'dibatalkan'),
+      ]);
+      const terealisasi = ((terlaksanaRes.data ?? []) as any[]).filter(r => onlineGroupSet.has(r.schedules?.group_id)).length;
+      const cancelledCount = ((cancelledRes.data ?? []) as any[]).filter(r => onlineGroupSet.has(r.schedules?.group_id)).length;
+      const dijadwalkan = allOnlineSchedIds.length - cancelledCount;
+      setOnlineData({ groups: onlineGroups, terealisasi, dijadwalkan });
     }
 
     // Latest TO
@@ -274,7 +317,7 @@ export default function StudentHome() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-          <AnnouncementSlider />
+          <AnnouncementSlider tingkatKelas={profile?.tingkat_kelas} />
 
           {/* Paket card per group */}
           {groups.map(g => {
@@ -357,12 +400,17 @@ export default function StudentHome() {
           </div>
 
           {/* Sesi Berikutnya */}
-          <div style={{ ...card, borderLeft: nextSession ? '3px solid #FFE500' : '3px solid #E2E1DC' }}>
+          <div style={{ ...card, borderLeft: nextSession ? (nextSession.groups.tipe === 'online' ? '3px solid #0369A1' : '3px solid #FFE500') : '3px solid #E2E1DC', background: nextSession?.groups.tipe === 'online' ? '#F0F9FF' : '#fff' }}>
             <p style={label}>Sesi Berikutnya</p>
             {nextSession ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                  <GrupBadge nama={nextSession.groups.nama} warna={nextSession.groups.warna} warna_text={nextSession.groups.warna_text} />
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                    <GrupBadge nama={nextSession.groups.nama} warna={nextSession.groups.warna} warna_text={nextSession.groups.warna_text} />
+                    {nextSession.groups.tipe === 'online' && (
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>ONLINE</span>
+                    )}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem', color: '#0D0D0D' }}>
                       {nextSession.hari} &nbsp;{fmtTime(nextSession.jam_mulai)}&ndash;{fmtTime(nextSession.jam_selesai)}
@@ -374,12 +422,16 @@ export default function StudentHome() {
                     )}
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888', marginTop: '4px' }}>
                       {nextSession.teacher?.display_name ?? 'Pengajar'}
-                      {nextSession.lokasi ? ` @ ${nextSession.lokasi}` : ''}
-                      {nextSession.ruangan ? ` / ${nextSession.ruangan}` : ''}
+                      {nextSession.groups.tipe !== 'online' && (nextSession.lokasi || nextSession.ruangan) && ` @ ${[nextSession.lokasi, nextSession.ruangan].filter(Boolean).join(' / ')}`}
                     </div>
+                    {nextSession.groups.tipe === 'online' && nextSession.lokasi && (
+                      <a href={nextSession.lokasi} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '8px', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#0369A1', fontWeight: 700, textDecoration: 'none', background: '#E0F2FE', padding: '6px 16px', borderRadius: '7px' }}>
+                        Gabung Meet
+                      </a>
+                    )}
                   </div>
                 </div>
-                {isNextToday && (
+                {isNextToday && nextSession.groups.tipe !== 'online' && (
                   todayAtt?.status
                     ? <AbsenStatusBadge status={todayAtt.status} />
                     : (

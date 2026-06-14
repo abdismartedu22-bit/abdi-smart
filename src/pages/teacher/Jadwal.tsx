@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { HARI, getWeekStart, getWeekDays, toISODate, formatDayLabel, fmtTime } from '../../lib/dates';
+import { HARI, getWeekStart, getWeekDays, toISODate, formatDayLabel, fmtTime, nowWITAMinutes } from '../../lib/dates';
 import WeekPicker from '../../components/shared/WeekPicker';
 import GrupBadge from '../../components/shared/GrupBadge';
 
@@ -12,6 +12,7 @@ type ScheduleRow = {
   jam_selesai: string;
   materi: string | null;
   lokasi: string | null;
+  ruangan: string | null;
   groups: { id: string; nama: string; kode: string; warna: string; warna_text: string; tipe: string };
 };
 
@@ -19,6 +20,7 @@ export default function TeacherJadwal() {
   const { user } = useAuth();
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
+  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const weekDays = getWeekDays(weekStart);
@@ -32,11 +34,24 @@ export default function TeacherJadwal() {
     setLoading(true);
     const { data } = await supabase
       .from('schedules')
-      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text,tipe)')
+      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, groups!group_id(id,nama,kode,warna,warna_text,tipe)')
       .eq('teacher_id', user!.id)
       .eq('week_start', toISODate(weekStart))
       .order('jam_mulai');
     setSchedules((data ?? []) as unknown as ScheduleRow[]);
+
+    const scheduleIds = (data ?? []).map((s: any) => s.id as string);
+    let cancelled = new Set<string>();
+    if (scheduleIds.length > 0) {
+      const { data: cData } = await supabase
+        .from('attendance')
+        .select('schedule_id')
+        .in('schedule_id', scheduleIds)
+        .eq('person_role', 'teacher')
+        .eq('sesi_status', 'dibatalkan');
+      cancelled = new Set((cData ?? []).map((r: any) => r.schedule_id as string));
+    }
+    setCancelledIds(cancelled);
     setLoading(false);
   }
 
@@ -69,17 +84,43 @@ export default function TeacherJadwal() {
                     <span style={muted}>{formatDayLabel(weekDays[idx])}</span>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {daySessions.map(s => {
+                    {[...daySessions].sort((a, b) => {
+                      const nowMin = nowWITAMinutes();
+                      const [ah, am] = a.jam_selesai.split(':').map(Number);
+                      const [bh, bm] = b.jam_selesai.split(':').map(Number);
+                      const aEnded = (ah * 60 + am) < nowMin;
+                      const bEnded = (bh * 60 + bm) < nowMin;
+                      if (aEnded !== bEnded) return aEnded ? 1 : -1;
+                      const [as2, am2] = a.jam_mulai.split(':').map(Number);
+                      const [bs2, bm2] = b.jam_mulai.split(':').map(Number);
+                      return (as2 * 60 + am2) - (bs2 * 60 + bm2);
+                    }).map(s => {
                       const isOnline = s.groups.tipe === 'online';
+                      const isCancelled = cancelledIds.has(s.id);
                       return (
-                      <div key={s.id} style={{ ...card, borderLeft: isOnline ? '3px solid #0369A1' : undefined, background: isOnline ? '#F0F9FF' : '#fff' }}>
+                      <div key={s.id} style={{
+                        ...card,
+                        background: isCancelled ? '#FFF8F8' : isOnline ? '#F0F9FF' : '#fff',
+                        border: isCancelled ? '1.5px solid #FECACA' : '1px solid #E2E1DC',
+                        borderLeft: isCancelled ? '3px solid #DC0A1E' : isOnline ? '3px solid #0369A1' : undefined,
+                        opacity: isCancelled ? 0.75 : 1,
+                      }}>
                         <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
                         {isOnline && (
                           <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>ONLINE</span>
                         )}
+                        {isCancelled && (
+                          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#DC0A1E', background: '#FECACA', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>DIBATALKAN</span>
+                        )}
                         <span style={bold}>{fmtTime(s.jam_mulai)} – {fmtTime(s.jam_selesai)}</span>
                         <span style={normal}>{s.materi ?? '–'}</span>
-                        {s.lokasi && <span style={muted}>@ {s.lokasi}</span>}
+                        {isOnline && s.lokasi ? (
+                          <a href={s.lokasi} target="_blank" rel="noopener noreferrer" style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0369A1', fontWeight: 700, textDecoration: 'none', background: '#E0F2FE', padding: '3px 10px', borderRadius: '5px' }}>
+                            Gabung Meet
+                          </a>
+                        ) : (s.lokasi || s.ruangan) ? (
+                          <span style={muted}>@ {[s.lokasi, s.ruangan].filter(Boolean).join(' / ')}</span>
+                        ) : null}
                       </div>
                       );
                     })}

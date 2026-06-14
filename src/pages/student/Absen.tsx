@@ -11,8 +11,20 @@ type SessionToday = {
   jam_selesai: string;
   materi: string | null;
   lokasi: string | null;
+  ruangan: string | null;
   groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
   teacher: { id: string; display_name: string } | null;
+};
+
+type OnlineSessionToday = {
+  id: string;
+  jam_mulai: string;
+  jam_selesai: string;
+  materi: string | null;
+  lokasi: string | null;
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
+  teacher: { id: string; display_name: string } | null;
+  isCancelled: boolean;
 };
 
 type AttendanceRow = {
@@ -117,13 +129,16 @@ export default function StudentAbsen() {
 /* ===================== HARI INI TAB ===================== */
 
 function HariIniTab() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [sessions, setSessions] = useState<SessionToday[]>([]);
+  const [onlineSessions, setOnlineSessions] = useState<OnlineSessionToday[]>([]);
   const [attendance, setAttendance] = useState<Record<string, AttendanceRow>>({});
   const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [checkInErr, setCheckInErr] = useState<{ id: string; msg: string } | null>(null);
+
+  const is12SMA = ['12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '');
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -133,29 +148,49 @@ function HariIniTab() {
     const weekStart = getWeekStartISO();
     const todayHari = getTodayHari();
 
-    const { data: sg } = await supabase
-      .from('student_groups')
-      .select('group_id')
-      .eq('student_id', user.id);
-    const groupIds = (sg ?? []).map(x => x.group_id as string);
+    const [sgRes, onlineGroupsRes] = await Promise.all([
+      supabase.from('student_groups').select('group_id').eq('student_id', user.id),
+      is12SMA
+        ? supabase.from('groups').select('id').eq('tipe', 'online').eq('active', true)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
 
-    if (groupIds.length === 0) {
-      setSessions([]);
-      setAttendance({});
-      setCancelledIds(new Set());
-      setLoading(false);
-      return;
+    const groupIds = (sgRes.data ?? []).map(x => x.group_id as string);
+    const onlineGroupIds = (onlineGroupsRes.data ?? []).map((x: any) => x.id as string);
+
+    const fetches: Promise<any>[] = [];
+
+    if (groupIds.length > 0) {
+      fetches.push(
+        supabase
+          .from('schedules')
+          .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(id,display_name)')
+          .in('group_id', groupIds)
+          .eq('week_start', weekStart)
+          .eq('hari', todayHari)
+          .order('jam_mulai')
+      );
+    } else {
+      fetches.push(Promise.resolve({ data: [] }));
     }
 
-    const { data: sched } = await supabase
-      .from('schedules')
-      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(id,display_name)')
-      .in('group_id', groupIds)
-      .eq('week_start', weekStart)
-      .eq('hari', todayHari)
-      .order('jam_mulai');
+    if (onlineGroupIds.length > 0) {
+      fetches.push(
+        supabase
+          .from('schedules')
+          .select('id, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text), teacher:profiles!teacher_id(id,display_name)')
+          .in('group_id', onlineGroupIds)
+          .eq('week_start', weekStart)
+          .eq('hari', todayHari)
+          .order('jam_mulai')
+      );
+    } else {
+      fetches.push(Promise.resolve({ data: [] }));
+    }
 
-    const raw = (sched ?? []) as unknown as SessionToday[];
+    const [schedRes, onlineSchedRes] = await Promise.all(fetches);
+
+    const raw = (schedRes.data ?? []) as unknown as SessionToday[];
     const nowMin = nowWITAMinutes();
     const todaySessions = [...raw].sort((a, b) => {
       const [ah, am] = a.jam_selesai.split(':').map(Number);
@@ -168,6 +203,31 @@ function HariIniTab() {
       return (as2 * 60 + am2) - (bs2 * 60 + bm2);
     });
     setSessions(todaySessions);
+
+    // Fetch cancellation status for online sessions
+    const onlineRaw = (onlineSchedRes.data ?? []) as any[];
+    if (onlineRaw.length > 0) {
+      const onlineSchedIds = onlineRaw.map(r => r.id as string);
+      const { data: teacherOnline } = await supabase
+        .from('attendance')
+        .select('schedule_id, sesi_status')
+        .in('schedule_id', onlineSchedIds)
+        .eq('person_role', 'teacher')
+        .eq('session_date', today);
+      const cancelledOnline = new Set((teacherOnline ?? []).filter((r: any) => r.sesi_status === 'dibatalkan').map((r: any) => r.schedule_id as string));
+      setOnlineSessions(onlineRaw.map(r => ({
+        id: r.id,
+        jam_mulai: r.jam_mulai,
+        jam_selesai: r.jam_selesai,
+        materi: r.materi,
+        lokasi: r.lokasi,
+        groups: r.groups,
+        teacher: r.teacher,
+        isCancelled: cancelledOnline.has(r.id),
+      })));
+    } else {
+      setOnlineSessions([]);
+    }
 
     if (todaySessions.length > 0) {
       const scheduleIds = todaySessions.map(s => s.id);
@@ -196,28 +256,29 @@ function HariIniTab() {
     }
 
     setLoading(false);
-  }, [user]);
+  }, [user, is12SMA]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
   // Poll every 10 s to reflect teacher's lock / cancellation
   useEffect(() => {
-    if (!user || sessions.length === 0) return;
+    if (!user || (sessions.length === 0 && onlineSessions.length === 0)) return;
     const todayISO = toISODate(new Date());
     const scheduleIds = sessions.map(s => s.id);
+    const onlineSchedIds = onlineSessions.map(s => s.id);
     const t = setInterval(async () => {
-      const [attRes, teacherRes] = await Promise.all([
-        supabase.from('attendance')
-          .select('id, schedule_id, status, checkin_at, locked_at')
-          .in('schedule_id', scheduleIds)
-          .eq('person_id', user.id)
-          .eq('session_date', todayISO),
-        supabase.from('attendance')
-          .select('schedule_id, sesi_status')
-          .in('schedule_id', scheduleIds)
-          .eq('person_role', 'teacher')
-          .eq('session_date', todayISO),
-      ]);
+      const fetches: Promise<any>[] = [
+        scheduleIds.length > 0
+          ? supabase.from('attendance').select('id, schedule_id, status, checkin_at, locked_at').in('schedule_id', scheduleIds).eq('person_id', user.id).eq('session_date', todayISO)
+          : Promise.resolve({ data: [] }),
+        scheduleIds.length > 0
+          ? supabase.from('attendance').select('schedule_id, sesi_status').in('schedule_id', scheduleIds).eq('person_role', 'teacher').eq('session_date', todayISO)
+          : Promise.resolve({ data: [] }),
+        onlineSchedIds.length > 0
+          ? supabase.from('attendance').select('schedule_id, sesi_status').in('schedule_id', onlineSchedIds).eq('person_role', 'teacher').eq('session_date', todayISO)
+          : Promise.resolve({ data: [] }),
+      ];
+      const [attRes, teacherRes, onlineTeacherRes] = await Promise.all(fetches);
       if (attRes.data) {
         const map: Record<string, AttendanceRow> = {};
         attRes.data.forEach((a: any) => { map[a.schedule_id] = a as AttendanceRow; });
@@ -230,9 +291,13 @@ function HariIniTab() {
         });
         setCancelledIds(cancelled);
       }
+      if (onlineTeacherRes.data) {
+        const cancelledOnline = new Set((onlineTeacherRes.data as any[]).filter(r => r.sesi_status === 'dibatalkan').map(r => r.schedule_id as string));
+        setOnlineSessions(prev => prev.map(s => ({ ...s, isCancelled: cancelledOnline.has(s.id) })));
+      }
     }, 10_000);
     return () => clearInterval(t);
-  }, [user, sessions]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, sessions, onlineSessions]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleCheckIn(scheduleId: string) {
     if (!user) return;
@@ -253,20 +318,52 @@ function HariIniTab() {
 
     setCheckingIn(scheduleId);
     const today = toISODate(new Date());
-    const existingRow = attendance[scheduleId];
+
+    // Re-fetch own row AND check session-level lock before proceeding
+    const [{ data: freshRow }, { data: lockedRows }] = await Promise.all([
+      supabase
+        .from('attendance')
+        .select('id, checkin_at, locked_at')
+        .eq('schedule_id', scheduleId)
+        .eq('person_id', user.id)
+        .eq('person_role', 'student')
+        .eq('session_date', today)
+        .maybeSingle(),
+      supabase
+        .from('attendance')
+        .select('id')
+        .eq('schedule_id', scheduleId)
+        .eq('session_date', today)
+        .eq('person_role', 'student')
+        .not('locked_at', 'is', null)
+        .limit(1),
+    ]);
+
+    if (freshRow?.locked_at || (lockedRows && lockedRows.length > 0)) {
+      setCheckingIn(null);
+      setCheckInErr({ id: scheduleId, msg: 'Absen sudah dikunci oleh pengajar.' });
+      load();
+      return;
+    }
+    if (freshRow?.checkin_at) {
+      setCheckingIn(null);
+      load();
+      return;
+    }
 
     let error;
-    if (existingRow?.id) {
+    const now = new Date().toISOString();
+    if (freshRow?.id) {
       ({ error } = await supabase.from('attendance').update({
-        checkin_at: new Date().toISOString(),
-      }).eq('id', existingRow.id));
+        checkin_at: now,
+      }).eq('id', freshRow.id));
     } else {
       ({ error } = await supabase.from('attendance').insert({
         schedule_id: scheduleId,
         session_date: today,
         person_id: user.id,
         person_role: 'student',
-        checkin_at: new Date().toISOString(),
+        checkin_at: now,
         status: null,
       }));
     }
@@ -291,12 +388,36 @@ function HariIniTab() {
 
       {loading ? (
         <p style={mutedStyle}>Memuat...</p>
-      ) : sessions.length === 0 ? (
+      ) : sessions.length === 0 && onlineSessions.length === 0 ? (
         <div style={emptyCard}>
           <p style={{ fontFamily: 'var(--font-body)', color: '#666', margin: 0 }}>Tidak ada sesi hari ini.</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {/* Online Umum sessions -- info + Gabung Meet only */}
+          {onlineSessions.map(s => (
+            <div key={s.id} style={{ ...card, border: s.isCancelled ? '1.5px solid #FECACA' : '1.5px solid #BAE6FD', borderLeft: s.isCancelled ? '3px solid #DC0A1E' : '3px solid #0369A1', background: s.isCancelled ? '#FFF8F8' : '#F0F9FF', opacity: s.isCancelled ? 0.75 : 1 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+                  <GrupBadge nama={s.groups.nama} warna={s.groups.warna} warna_text={s.groups.warna_text} />
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>ONLINE</span>
+                  {s.isCancelled && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#DC0A1E', background: '#FECACA', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>DIBATALKAN</span>}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.9rem', color: '#0D0D0D' }}>
+                    {fmtTime(s.jam_mulai)} &ndash; {fmtTime(s.jam_selesai)} WITA
+                  </div>
+                  {s.materi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>{s.materi}</div>}
+                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>{s.teacher?.display_name ?? 'Pengajar'}</div>
+                  {!s.isCancelled && s.lokasi && (
+                    <a href={s.lokasi} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '8px', fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#0369A1', fontWeight: 700, textDecoration: 'none', background: '#E0F2FE', padding: '6px 16px', borderRadius: '7px' }}>
+                      Gabung Meet
+                    </a>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
           {sessions.map(s => {
             const att = attendance[s.id];
             const isCancelled = cancelledIds.has(s.id);
@@ -317,7 +438,8 @@ function HariIniTab() {
                       </div>
                     )}
                     <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '2px' }}>
-                      {s.teacher?.display_name ?? 'Pengajar'}{s.lokasi && ` @ ${s.lokasi}`}
+                      {s.teacher?.display_name ?? 'Pengajar'}
+                      {(s.lokasi || s.ruangan) && ` @ ${[s.lokasi, s.ruangan].filter(Boolean).join(' / ')}`}
                     </div>
                   </div>
                 </div>

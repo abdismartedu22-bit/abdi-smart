@@ -218,13 +218,18 @@ function MultiLineChart({ series, xLabels, maxVal }: {
 }
 
 /* --- MAIN --- */
+const TKA_ONLY_GRADES = ['6SD', '9SMP'];
+
 export default function StudentHasilTO() {
   const { user, profile } = useAuth();
   const [results, setResults] = useState<TOResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const isTKAOnly = TKA_ONLY_GRADES.includes(profile?.tingkat_kelas ?? '');
   const [filterType, setFilterType] = useState<'SNBT' | 'TKA'>('SNBT');
   const [selectedKodeTo, setSelectedKodeTo] = useState<string | null>(null);
   const [selectedMapel, setSelectedMapel] = useState<string>('ALL');
+
+  useEffect(() => { if (isTKAOnly) setFilterType('TKA'); }, [isTKAOnly]);
 
   useEffect(() => {
     if (!user) return;
@@ -302,16 +307,18 @@ export default function StudentHasilTO() {
       ) : (
         <>
           {/* Type filter */}
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-            {(['SNBT', 'TKA'] as const).map(k => (
-              <button key={k} onClick={() => setFilterType(k)} style={{
-                padding: '7px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-                fontFamily: 'var(--font-body)', fontSize: '0.85rem', fontWeight: 700,
-                background: filterType === k ? '#0D5C3A' : '#F3F2EE',
-                color: filterType === k ? '#fff' : '#555',
-              }}>{k}</button>
-            ))}
-          </div>
+          {!isTKAOnly && (
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              {(['SNBT', 'TKA'] as const).map(k => (
+                <button key={k} onClick={() => setFilterType(k)} style={{
+                  padding: '7px 18px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                  fontFamily: 'var(--font-body)', fontSize: '0.85rem', fontWeight: 700,
+                  background: filterType === k ? '#0D5C3A' : '#F3F2EE',
+                  color: filterType === k ? '#fff' : '#555',
+                }}>{k}</button>
+              ))}
+            </div>
+          )}
 
           {/* TO ID filter */}
           {availableTOs.length > 0 && (

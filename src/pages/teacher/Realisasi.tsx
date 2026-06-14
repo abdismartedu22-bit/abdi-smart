@@ -218,7 +218,8 @@ type SessionToday = {
   jam_selesai: string;
   materi: string | null;
   lokasi: string | null;
-  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
+  ruangan: string | null;
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string; tipe: string };
 };
 
 type StudentInGroup = {
@@ -266,7 +267,7 @@ export default function TeacherRealisasi() {
 
     const { data: sched } = await supabase
       .from('schedules')
-      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text)')
+      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, groups!group_id(id,nama,kode,warna,warna_text,tipe)')
       .eq('teacher_id', user.id)
       .eq('week_start', getWeekStartISO())
       .eq('hari', getTodayHari())
@@ -278,17 +279,32 @@ export default function TeacherRealisasi() {
     if (todaySessions.length === 0) { setLoading(false); return; }
 
     // Fetch students for each session's group
-    const groupIds = [...new Set(todaySessions.map(s => s.groups.id))];
-    const { data: sg } = await supabase
-      .from('student_groups')
-      .select('student_id, group_id, profiles!student_id(id,display_name)')
-      .in('group_id', groupIds);
+    const regularGroupIds = [...new Set(todaySessions.filter(s => s.groups.tipe !== 'online').map(s => s.groups.id))];
+    const hasOnline = todaySessions.some(s => s.groups.tipe === 'online');
+
+    const [sgRes, onlineStudentsRes] = await Promise.all([
+      regularGroupIds.length > 0
+        ? supabase.from('student_groups').select('student_id, group_id, profiles!student_id(id,display_name)').in('group_id', regularGroupIds)
+        : Promise.resolve({ data: [] as any[] }),
+      hasOnline
+        ? supabase.from('profiles').select('id, display_name').eq('role', 'student').in('tingkat_kelas', ['12IPA', '12IPS']).eq('is_active', true).order('display_name')
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const onlineStudents: StudentInGroup[] = (onlineStudentsRes.data ?? []).map((p: any) => ({
+      student_id: p.id,
+      profiles: { id: p.id, display_name: p.display_name },
+    }));
 
     const studentMap: Record<string, StudentInGroup[]> = {};
     todaySessions.forEach(s => {
-      studentMap[s.id] = (sg ?? [])
-        .filter(r => r.group_id === s.groups.id)
-        .map(r => ({ student_id: r.student_id, profiles: r.profiles as unknown as { id: string; display_name: string } }));
+      if (s.groups.tipe === 'online') {
+        studentMap[s.id] = onlineStudents;
+      } else {
+        studentMap[s.id] = (sgRes.data ?? [])
+          .filter(r => r.group_id === s.groups.id)
+          .map(r => ({ student_id: r.student_id, profiles: r.profiles as unknown as { id: string; display_name: string } }));
+      }
     });
     setStudents(studentMap);
 
@@ -337,7 +353,17 @@ export default function TeacherRealisasi() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {sessions.map(s => (
+          {[...sessions].sort((a, b) => {
+            const nowMin = nowWITAMinutes();
+            const [ah, am] = a.jam_selesai.split(':').map(Number);
+            const [bh, bm] = b.jam_selesai.split(':').map(Number);
+            const aEnded = (ah * 60 + am) < nowMin;
+            const bEnded = (bh * 60 + bm) < nowMin;
+            if (aEnded !== bEnded) return aEnded ? 1 : -1;
+            const [as2, am2] = a.jam_mulai.split(':').map(Number);
+            const [bs2, bm2] = b.jam_mulai.split(':').map(Number);
+            return (as2 * 60 + am2) - (bs2 * 60 + bm2);
+          }).map(s => (
             <SessionCard
               key={s.id}
               session={s}
@@ -383,14 +409,12 @@ function SessionCard({
   const sesiLocked = optimisticSesiLocked || !!teacherRow?.locked_at;
   const absenLocked = optimisticAbsenLocked || attendance.some(a => a.person_role === 'student' && !!a.locked_at);
   const [lockError, setLockError] = useState<string | null>(null);
-  const [teacherError, setTeacherError] = useState<string | null>(null);
 
   const hasSavedSesi = !!teacherRow?.sesi_status;
-  const [saving, setSaving] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
-  const [editingSesi, setEditingSesi] = useState(false);
   const [sesiStatus, setSesiStatus] = useState<string>(teacherRow?.sesi_status ?? 'terlaksana');
   const [note, setNote] = useState<string>(teacherRow?.note ?? '');
+  const [manuallyChanged, setManuallyChanged] = useState<Set<string>>(new Set());
   const [studentStatuses, setStudentStatuses] = useState<Record<string, { status: string; note: string }>>(() => {
     const init: Record<string, { status: string; note: string }> = {};
     sessionStudents.forEach(st => {
@@ -401,28 +425,24 @@ function SessionCard({
     return init;
   });
 
-  const checkedInCount = attendance.filter(a => a.person_role === 'student' && a.checkin_at).length;
-
-  async function markTeacherHadir() {
-    setTeacherError(null);
-    if (isBeforeWindow(session.jam_mulai)) {
-      setTeacherError(`Belum bisa mencatat kehadiran. Tersedia mulai ${earlyOpenStr(session.jam_mulai)} WITA.`);
-      return;
-    }
-    setSaving('teacher');
-    if (teacherRow) {
-      await supabase.from('attendance').update({ status: 'hadir', checkin_at: new Date().toISOString() }).eq('id', teacherRow.id);
-    } else {
-      await supabase.from('attendance').insert({
-        schedule_id: session.id, session_date: today,
-        person_id: teacherId, person_role: 'teacher',
-        status: 'hadir', checkin_at: new Date().toISOString(),
-        sesi_status: sesiStatus, note: note || null,
+  // Keep studentStatuses in sync with live attendance (10s poll) unless teacher manually changed
+  useEffect(() => {
+    setStudentStatuses(prev => {
+      const next = { ...prev };
+      sessionStudents.forEach(st => {
+        if (manuallyChanged.has(st.student_id)) return;
+        const att = attendance.find(a => a.person_id === st.student_id && a.person_role === 'student');
+        if (att?.status) {
+          next[st.student_id] = { status: att.status, note: att.note ?? '' };
+        } else if (att?.checkin_at) {
+          next[st.student_id] = { ...next[st.student_id], status: 'hadir' };
+        }
       });
-    }
-    setSaving(null);
-    onRefresh();
-  }
+      return next;
+    });
+  }, [attendance]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const checkedInCount = attendance.filter(a => a.person_role === 'student' && a.checkin_at).length;
 
   async function saveLockSesi() {
     setLockError(null);
@@ -432,11 +452,13 @@ function SessionCard({
     }
     setLocking(true);
     const now = new Date().toISOString();
+    const teacherStatus = sesiStatus === 'terlaksana' ? 'hadir' : null;
     if (!teacherRow) {
       const { error: insErr } = await supabase.from('attendance').insert({
         schedule_id: session.id, session_date: today,
         person_id: teacherId, person_role: 'teacher',
-        status: sesiStatus === 'dibatalkan' ? null : null,
+        status: teacherStatus,
+        checkin_at: sesiStatus === 'terlaksana' ? now : null,
         sesi_status: sesiStatus, note: note || null,
         locked_at: now,
       });
@@ -447,7 +469,11 @@ function SessionCard({
       }
     } else {
       const { error: upErr } = await supabase.from('attendance')
-        .update({ sesi_status: sesiStatus, note: note || null, locked_at: now })
+        .update({
+          sesi_status: sesiStatus, note: note || null, locked_at: now,
+          status: teacherStatus,
+          checkin_at: sesiStatus === 'terlaksana' ? now : teacherRow.checkin_at ?? null,
+        })
         .eq('id', teacherRow.id);
       if (upErr) {
         setLockError('Gagal mengunci sesi: ' + upErr.message);
@@ -461,9 +487,13 @@ function SessionCard({
         .eq('schedule_id', session.id)
         .eq('session_date', today)
         .eq('person_role', 'student');
+    } else if (sesiStatus === 'terlaksana') {
+      const checkedIn = attendance.filter(a => a.person_role === 'student' && a.checkin_at && !a.status);
+      for (const a of checkedIn) {
+        await supabase.from('attendance').update({ status: 'hadir' }).eq('id', a.id);
+      }
     }
     setOptimisticSesiLocked(true);
-    setEditingSesi(false);
     setLocking(false);
     onRefresh();
   }
@@ -533,9 +563,15 @@ function SessionCard({
           </div>
           <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888', marginTop: '1px' }}>WITA</div>
           {session.materi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>{session.materi}</div>}
-          {session.lokasi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '1px' }}>@ {session.lokasi}</div>}
+          {session.groups.tipe === 'online' && session.lokasi ? (
+            <a href={session.lokasi} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: '4px', fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0369A1', fontWeight: 700, textDecoration: 'none', background: '#E0F2FE', padding: '3px 10px', borderRadius: '5px' }}>
+              Gabung Meet
+            </a>
+          ) : (session.lokasi || session.ruangan) ? (
+            <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '1px' }}>@ {[session.lokasi, session.ruangan].filter(Boolean).join(' / ')}</div>
+          ) : null}
         </div>
-        {(sesiLocked || absenLocked) && (
+        {(sesiLocked || (session.groups.tipe !== 'online' && absenLocked)) && (
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '3px 10px', borderRadius: '6px', background: '#DCFCE7', flexShrink: 0 }}>
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#15803D" strokeWidth="2.5"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
             <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: '#15803D' }}>TERKUNCI</span>
@@ -545,29 +581,10 @@ function SessionCard({
 
       <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '14px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
-        {/* Teacher check-in */}
-        <div>
-          <p style={sectionLabel}>Kehadiran Saya</p>
-          {teacherRow?.status === 'hadir' ? (
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#047857', margin: 0, fontWeight: 500 }}>
-              Sudah hadir {teacherRow.checkin_at ? `(${fmtTimestampWITA(teacherRow.checkin_at, 'time')})` : ''}
-            </p>
-          ) : !absenLocked ? (
-            <>
-              <button onClick={markTeacherHadir} disabled={saving === 'teacher'} style={btnSmall}>
-                {saving === 'teacher' ? 'Mencatat...' : 'Saya Hadir'}
-              </button>
-              {teacherError && (
-                <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0' }}>{teacherError}</p>
-              )}
-            </>
-          ) : null}
-        </div>
-
         {/* Sesi status */}
         <div>
           <p style={sectionLabel}>Status Sesi</p>
-          {sesiLocked ? (
+          {(sesiLocked || hasSavedSesi) ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               {(() => {
                 const status = teacherRow?.sesi_status ?? sesiStatus;
@@ -585,25 +602,10 @@ function SessionCard({
                 </span>
               )}
             </div>
-          ) : hasSavedSesi && !editingSesi ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-              {(() => {
-                const si = SESI_STATUS_LABELS[sesiStatus] ?? { label: sesiStatus.toUpperCase(), bg: '#F3F2EE', color: '#666' };
-                return (
-                  <span style={{ padding: '3px 10px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700, background: si.bg, color: si.color }}>
-                    {si.label}
-                  </span>
-                );
-              })()}
-              {note && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666' }}>{note}</span>}
-              <button onClick={() => setEditingSesi(true)} style={{ ...btnSmall, background: '#F3F2EE', color: '#0D0D0D', border: '1px solid #E2E1DC' }}>
-                Edit
-              </button>
-            </div>
           ) : (
             <>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                {(['terlaksana', 'tidak', 'ditunda', 'dibatalkan'] as const).map(s => (
+                {(['terlaksana', 'dibatalkan'] as const).map(s => (
                   <label key={s} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
                     <input type="radio" name={`sesi_${session.id}`} value={s} checked={sesiStatus === s} onChange={() => setSesiStatus(s)} />
                     {SESI_STATUS_DISPLAY[s] ?? s}
@@ -620,11 +622,6 @@ function SessionCard({
                 <button onClick={saveLockSesi} disabled={locking} style={btnSmall}>
                   {locking ? 'Mengunci...' : 'Simpan & Kunci'}
                 </button>
-                {editingSesi && (
-                  <button onClick={() => setEditingSesi(false)} style={{ ...btnSmall, background: '#F3F2EE', color: '#0D0D0D', border: '1px solid #E2E1DC' }}>
-                    Batal
-                  </button>
-                )}
               </div>
               {lockError && !absenLocked && (
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#DC0A1E', margin: '6px 0 0', fontWeight: 600 }}>
@@ -636,7 +633,7 @@ function SessionCard({
         </div>
 
         {/* Student list */}
-        <div>
+        {session.groups.tipe !== 'online' && <div>
           <p style={sectionLabel}>
             Daftar Absen ({sessionStudents.length} siswa &mdash; {checkedInCount} sudah check-in)
           </p>
@@ -676,6 +673,7 @@ function SessionCard({
                           value={cur.status === 'absen' || cur.status === 'izin' ? 'tidak_hadir' : cur.status}
                           onChange={e => {
                             const val = e.target.value;
+                            setManuallyChanged(prev => new Set([...prev, st.student_id]));
                             setStudentStatuses(prev => ({ ...prev, [st.student_id]: { ...prev[st.student_id], status: val } }));
                             updateStudentStatus(st.student_id, val, cur.note);
                           }}
@@ -691,9 +689,10 @@ function SessionCard({
               })}
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Bottom lock section */}
+        {session.groups.tipe !== 'online' &&
         <div style={{ borderTop: '1px solid #E2E1DC', paddingTop: '14px' }}>
           {absenLocked || isDibatalkan ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: isDibatalkan ? '#FEF9C3' : '#F0FDF4', border: `1px solid ${isDibatalkan ? '#FDE68A' : '#BBF7D0'}`, borderRadius: '8px', padding: '12px 14px' }}>
@@ -721,7 +720,7 @@ function SessionCard({
               Simpan dan kunci status sesi terlebih dahulu sebelum mengunci absen siswa.
             </p>
           )}
-        </div>
+        </div>}
       </div>
     </div>
   );

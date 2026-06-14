@@ -1,30 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
 
-type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null };
+type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null; target_kelas: string[] | null };
 
 function toDirectImg(url: string): string {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
-  // also handle ?id= format
   const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
   return url;
 }
 
-export default function AnnouncementSlider() {
+export default function AnnouncementSlider({ tingkatKelas }: { tingkatKelas?: string | null }) {
   const [items, setItems] = useState<Announcement[]>([]);
   const [current, setCurrent] = useState(0);
 
   useEffect(() => {
     supabase
       .from('announcements')
-      .select('id, judul, isi, gambar_url')
+      .select('id, judul, isi, gambar_url, target_kelas')
       .eq('is_active', true)
       .order('urutan')
-      .limit(3)
-      .then(({ data }) => { if (data && data.length > 0) setItems(data as Announcement[]); });
-  }, []);
+      .then(({ data }) => {
+        if (!data || data.length === 0) return;
+        const all = data as Announcement[];
+        const filtered = tingkatKelas !== undefined
+          ? all.filter(a => a.target_kelas === null || (Array.isArray(a.target_kelas) && a.target_kelas.includes(tingkatKelas ?? '')))
+          : all;
+        setItems(filtered.slice(0, 3));
+      });
+  }, [tingkatKelas]);
 
   const goTo = useCallback((idx: number) => {
     setCurrent(((idx % items.length) + items.length) % items.length);
@@ -50,7 +55,7 @@ export default function AnnouncementSlider() {
           style={{ width: '100%', maxHeight: '240px', objectFit: 'cover', display: 'block' }}
           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
         />
-)}
+      )}
       <div style={{ padding: '10px 14px' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFE500" strokeWidth="2.2" style={{ marginTop: '2px', flexShrink: 0 }}>

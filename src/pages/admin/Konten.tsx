@@ -3,7 +3,9 @@ import { supabase } from '../../lib/supabase';
 
 type Tab = 'pengumuman' | 'testimoni';
 
-type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null; urutan: number; is_active: boolean };
+const ALL_KELAS = ['1SD','2SD','3SD','4SD','5SD','6SD','7SMP','8SMP','9SMP','10SMA','11IPA','11IPS','12IPA','12IPS'];
+
+type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null; urutan: number; is_active: boolean; target_kelas: string[] | null };
 type Testimonial = { id: string; nama: string; asal_sekolah: string | null; universitas: string | null; isi: string; gambar_url: string | null; urutan: number; is_active: boolean };
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
@@ -43,7 +45,7 @@ function PengumumanTab() {
   const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Announcement | null>(null);
-  const [form, setForm] = useState({ judul: '', isi: '', gambar_url: '', is_active: true });
+  const [form, setForm] = useState({ judul: '', isi: '', gambar_url: '', is_active: true, target_kelas: null as string[] | null });
   const dragIdx = useRef<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
 
@@ -76,22 +78,37 @@ function PengumumanTab() {
     reorderItems(next);
   }
 
+  function kelasCount(kelas: string, excludeId?: string): number {
+    return items.filter(a =>
+      a.is_active && a.id !== excludeId &&
+      (a.target_kelas === null || a.target_kelas.includes(kelas))
+    ).length;
+  }
+
+  function toggleKelas(k: string) {
+    setForm(f => {
+      const current = f.target_kelas ?? [];
+      const next = current.includes(k) ? current.filter(x => x !== k) : [...current, k];
+      return { ...f, target_kelas: next.length === 0 ? null : next };
+    });
+  }
+
   function openAdd() {
     setEditing(null);
-    setForm({ judul: '', isi: '', gambar_url: '', is_active: true });
+    setForm({ judul: '', isi: '', gambar_url: '', is_active: true, target_kelas: null });
     setShowForm(true);
   }
 
   function openEdit(a: Announcement) {
     setEditing(a);
-    setForm({ judul: a.judul, isi: a.isi, gambar_url: a.gambar_url ?? '', is_active: a.is_active });
+    setForm({ judul: a.judul, isi: a.isi, gambar_url: a.gambar_url ?? '', is_active: a.is_active, target_kelas: a.target_kelas });
     setShowForm(true);
   }
 
   async function save() {
     if (!form.judul.trim() || !form.isi.trim()) return;
     setSaving(true);
-    const payload = { judul: form.judul, isi: form.isi, gambar_url: form.gambar_url.trim() || null, is_active: form.is_active };
+    const payload = { judul: form.judul, isi: form.isi, gambar_url: form.gambar_url.trim() || null, is_active: form.is_active, target_kelas: form.target_kelas };
     if (editing) {
       await supabase.from('announcements').update(payload).eq('id', editing.id);
     } else {
@@ -117,8 +134,8 @@ function PengumumanTab() {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-        <p style={muted}>Tampil di dashboard guru dan siswa. Maks 3 aktif. Drag untuk ubah urutan.</p>
-        <button onClick={openAdd} disabled={activeCount >= 3} style={btnPrimary}>+ Tambah</button>
+        <p style={muted}>Maks 3 slot per kelas. Drag untuk ubah urutan.</p>
+        <button onClick={openAdd} style={btnPrimary}>+ Tambah</button>
       </div>
 
       {loading ? <p style={muted}>Memuat...</p> : items.length === 0 ? (
@@ -160,6 +177,13 @@ function PengumumanTab() {
                 </div>
                 <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#666', margin: 0, lineHeight: 1.5 }}>{a.isi}</p>
                 {a.gambar_url && <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#0D5C3A', margin: '4px 0 0' }}>Ada gambar</p>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                  {a.target_kelas === null ? (
+                    <span style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, background: '#EFF6FF', color: '#1D4ED8' }}>Semua Kelas</span>
+                  ) : a.target_kelas.map(k => (
+                    <span key={k} style={{ padding: '2px 7px', borderRadius: '4px', fontSize: '0.65rem', fontWeight: 700, background: '#F3F2EE', color: '#555' }}>{k}</span>
+                  ))}
+                </div>
               </div>
               <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                 <button onClick={() => openEdit(a)} style={{ ...btnSecondary, padding: '6px 12px', fontSize: '0.78rem' }}>Edit</button>
@@ -196,6 +220,29 @@ function PengumumanTab() {
                 </button>
               ))}
             </div>
+          </Field>
+          <Field label="Target Kelas">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '6px', border: form.target_kelas === null ? '1.5px solid #1D4ED8' : '1.5px solid #E2E1DC', background: form.target_kelas === null ? '#EFF6FF' : '#fafafa', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 700, color: form.target_kelas === null ? '#1D4ED8' : '#555' }}>
+                <input type="checkbox" checked={form.target_kelas === null} onChange={() => setForm(f => ({ ...f, target_kelas: null }))} style={{ accentColor: '#1D4ED8' }} />
+                Semua Kelas
+              </label>
+              {ALL_KELAS.map(k => {
+                const count = kelasCount(k, editing?.id);
+                const full = count >= 3;
+                const checked = form.target_kelas?.includes(k) ?? false;
+                const disabled = full && !checked;
+                return (
+                  <label key={k} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '6px', border: checked ? '1.5px solid #0D5C3A' : '1.5px solid #E2E1DC', background: checked ? '#DCFCE7' : '#fafafa', cursor: disabled ? 'not-allowed' : 'pointer', opacity: disabled ? 0.4 : 1, fontFamily: 'var(--font-body)', fontSize: '0.78rem', fontWeight: checked ? 700 : 400, color: checked ? '#15803D' : '#555' }}>
+                    <input type="checkbox" checked={checked} disabled={disabled} onChange={() => toggleKelas(k)} style={{ accentColor: '#0D5C3A' }} />
+                    {k} <span style={{ color: full && !checked ? '#DC0A1E' : '#999', fontSize: '0.72rem' }}>({count}/3)</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '5px 0 0' }}>
+              Kelas dengan (3/3) tidak bisa dipilih lagi.
+            </p>
           </Field>
           <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
             <button onClick={save} disabled={saving} style={btnPrimary}>{saving ? 'Menyimpan...' : 'Simpan'}</button>

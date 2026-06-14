@@ -28,6 +28,7 @@ export default function StudentJadwal() {
   const [weekStart, setWeekStart] = useState<Date>(() => getWeekStart());
   const [schedules, setSchedules] = useState<ScheduleRow[]>([]);
   const [onlineTotalSesi, setOnlineTotalSesi] = useState<Record<string, number>>({});
+  const [cancelledIds, setCancelledIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const weekDays = getWeekDays(weekStart);
@@ -77,20 +78,33 @@ export default function StudentJadwal() {
     const totals: Record<string, number> = {};
     const onlineSchedIds = (onlineSchedRes.data ?? []).map((r: any) => r.id as string);
     if (onlineSchedIds.length > 0) {
-      const { data: terlaksanaData } = await supabase
+      const { data: cancelledData } = await supabase
         .from('attendance')
         .select('schedule_id')
         .in('schedule_id', onlineSchedIds)
         .eq('person_role', 'teacher')
-        .eq('sesi_status', 'terlaksana');
-      const terlaksanaSet = new Set((terlaksanaData ?? []).map((r: any) => r.schedule_id as string));
+        .eq('sesi_status', 'dibatalkan');
+      const cancelledSet = new Set((cancelledData ?? []).map((r: any) => r.schedule_id as string));
       (onlineSchedRes.data ?? []).forEach((r: any) => {
-        if (terlaksanaSet.has(r.id)) totals[r.group_id] = (totals[r.group_id] ?? 0) + 1;
+        if (!cancelledSet.has(r.id)) totals[r.group_id] = (totals[r.group_id] ?? 0) + 1;
       });
+    }
+
+    const scheduleIds = (data ?? []).map((s: any) => s.id as string);
+    let cancelled = new Set<string>();
+    if (scheduleIds.length > 0) {
+      const { data: cData } = await supabase
+        .from('attendance')
+        .select('schedule_id')
+        .in('schedule_id', scheduleIds)
+        .eq('person_role', 'teacher')
+        .eq('sesi_status', 'dibatalkan');
+      cancelled = new Set((cData ?? []).map((r: any) => r.schedule_id as string));
     }
 
     setSchedules((data ?? []) as unknown as ScheduleRow[]);
     setOnlineTotalSesi(totals);
+    setCancelledIds(cancelled);
     setLoading(false);
   }
 
@@ -137,7 +151,7 @@ export default function StudentJadwal() {
                   <span style={muted}>{formatDayLabel(weekDays[idx])}</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {(isToday ? [...daySessions].sort((a, b) => {
+                  {[...daySessions].sort((a, b) => {
                     const nowMin = nowWITAMinutes();
                     const [ah, am] = a.jam_selesai.split(':').map(Number);
                     const [bh, bm] = b.jam_selesai.split(':').map(Number);
@@ -147,17 +161,19 @@ export default function StudentJadwal() {
                     const [as2, am2] = a.jam_mulai.split(':').map(Number);
                     const [bs2, bm2] = b.jam_mulai.split(':').map(Number);
                     return (as2 * 60 + am2) - (bs2 * 60 + bm2);
-                  }) : daySessions).map(s => {
+                  }).map(s => {
                     const isOnline = s.groups.tipe === 'online';
+                    const isCancelled = cancelledIds.has(s.id);
                     const totalSesi = isOnline ? (onlineTotalSesi[s.group_id] ?? 0) : null;
                     return (
                     <div key={s.id} style={{
-                      background: isOnline ? '#F0F9FF' : '#fff',
-                      border: isOnline ? '1.5px solid #BAE6FD' : '1px solid #E2E1DC',
-                      borderLeft: isToday ? `3px solid ${isOnline ? '#0369A1' : '#FFE500'}` : isOnline ? '3px solid #0369A1' : '1px solid #E2E1DC',
+                      background: isCancelled ? '#FFF8F8' : isOnline ? '#F0F9FF' : '#fff',
+                      border: isCancelled ? '1.5px solid #FECACA' : isOnline ? '1.5px solid #BAE6FD' : '1px solid #E2E1DC',
+                      borderLeft: isCancelled ? '3px solid #DC0A1E' : isToday ? `3px solid ${isOnline ? '#0369A1' : '#FFE500'}` : isOnline ? '3px solid #0369A1' : '1px solid #E2E1DC',
                       borderRadius: '14px',
-                      padding: (isToday || isOnline) ? '14px 14px 14px 13px' : '14px',
+                      padding: (isToday || isOnline || isCancelled) ? '14px 14px 14px 13px' : '14px',
                       boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+                      opacity: isCancelled ? 0.75 : 1,
                     }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
@@ -165,6 +181,11 @@ export default function StudentJadwal() {
                           {isOnline && (
                             <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>
                               ONLINE
+                            </span>
+                          )}
+                          {isCancelled && (
+                            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#DC0A1E', background: '#FECACA', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>
+                              DIBATALKAN
                             </span>
                           )}
                         </div>
@@ -179,7 +200,7 @@ export default function StudentJadwal() {
                             {s.pertemuan_ke != null && (
                               <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: isOnline ? '#0369A1' : '#888', marginLeft: 'auto', fontWeight: isOnline ? 700 : 400 }}>
                                 Sesi ke-{s.pertemuan_ke}
-                                {isOnline && totalSesi != null && ` dari ${totalSesi} dilaksanakan`}
+                                {isOnline && totalSesi != null && ` dari ${totalSesi} dijadwalkan`}
                               </span>
                             )}
                           </div>
@@ -190,14 +211,20 @@ export default function StudentJadwal() {
                             <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#555' }}>
                               {s.teacher?.display_name ?? 'Pengajar'}
                             </span>
-                            {(s.lokasi || s.ruangan) && (
-                              <span style={{
-                                fontFamily: 'var(--font-body)', fontSize: '0.78rem',
-                                color: '#0D5C3A', fontWeight: 600,
-                              }}>
+                            {isOnline && s.lokasi ? (
+                              <a
+                                href={s.lokasi}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0369A1', fontWeight: 700, textDecoration: 'none', background: '#E0F2FE', padding: '3px 10px', borderRadius: '5px' }}
+                              >
+                                Gabung Meet
+                              </a>
+                            ) : (s.lokasi || s.ruangan) ? (
+                              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#0D5C3A', fontWeight: 600 }}>
                                 {[s.lokasi, s.ruangan].filter(Boolean).join(' / ')}
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       </div>

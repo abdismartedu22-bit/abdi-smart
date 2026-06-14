@@ -78,7 +78,7 @@ export default function Testimonials() {
           }}>
             Kata mereka
             <br />
-            <span style={{ color: 'var(--color-red)', fontStyle: 'italic' }}>yang sudah tembus.</span>
+            <span style={{ color: 'var(--color-red)', fontStyle: 'italic' }}>tentang Abdi Smart</span>
           </h2>
         </div>
 

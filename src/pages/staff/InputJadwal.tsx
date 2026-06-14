@@ -184,8 +184,12 @@ export default function InputJadwal() {
     if (!form.jam_mulai || !form.jam_selesai) { setFormError('Jam mulai dan jam selesai wajib diisi'); return; }
     if (form.jam_mulai >= form.jam_selesai) { setFormError('Jam selesai harus setelah jam mulai'); return; }
     if (!form.materi.trim()) { setFormError('Materi wajib diisi'); return; }
-    if (!form.lokasi) { setFormError('Lokasi wajib diisi'); return; }
-    if (!form.ruangan) { setFormError('Ruangan wajib diisi'); return; }
+    const selectedGroup = groups.find(g => g.id === form.group_id);
+    const isOnlineGroup = selectedGroup?.tipe === 'online';
+    if (!isOnlineGroup) {
+      if (!form.lokasi) { setFormError('Lokasi wajib diisi'); return; }
+      if (!form.ruangan) { setFormError('Ruangan wajib diisi'); return; }
+    }
     if (!form.pertemuan_ke) { setFormError('Pertemuan ke- wajib diisi'); return; }
     const pNum = parseInt(form.pertemuan_ke);
     if (isNaN(pNum) || pNum < 1) { setFormError('Pertemuan ke- harus angka positif'); return; }
@@ -403,26 +407,42 @@ export default function InputJadwal() {
                 <input type="text" value={form.materi} onChange={e => setForm(f => ({ ...f, materi: e.target.value }))} placeholder="cth. TPS – Penalaran Umum" style={input} />
               </Field>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <Field label="Lokasi" style={{ flex: 1 }}>
-                  <select value={form.lokasi} onChange={e => setForm(f => ({ ...f, lokasi: e.target.value, ruangan: '' }))} style={select}>
-                    <option value="">-- pilih --</option>
-                    {lokasiOptions.map(l => <option key={l} value={l}>{l}</option>)}
-                  </select>
-                </Field>
-                <Field label="Ruangan" style={{ flex: 1 }}>
-                  {roomsForLokasi.length > 0 ? (
-                    <select value={form.ruangan} onChange={e => setForm(f => ({ ...f, ruangan: e.target.value }))} style={select}>
-                      <option value="">-- pilih --</option>
-                      {roomsForLokasi.map(r => (
-                        <option key={r.id} value={r.ruangan}>{r.ruangan}{r.kapasitas ? ` (maks ${r.kapasitas})` : ''}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input type="text" value={form.ruangan} onChange={e => setForm(f => ({ ...f, ruangan: e.target.value }))} placeholder="cth. A" style={input} />
-                  )}
-                </Field>
-              </div>
+              {(() => {
+                const selGroup = groups.find(g => g.id === form.group_id);
+                const isOL = selGroup?.tipe === 'online';
+                return isOL ? (
+                  <Field label="Link Online Meet (opsional)">
+                    <input
+                      type="url"
+                      value={form.lokasi}
+                      onChange={e => setForm(f => ({ ...f, lokasi: e.target.value, ruangan: '' }))}
+                      placeholder="https://meet.google.com/..."
+                      style={input}
+                    />
+                  </Field>
+                ) : (
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <Field label="Lokasi" style={{ flex: 1 }}>
+                      <select value={form.lokasi} onChange={e => setForm(f => ({ ...f, lokasi: e.target.value, ruangan: '' }))} style={select}>
+                        <option value="">-- pilih --</option>
+                        {lokasiOptions.map(l => <option key={l} value={l}>{l}</option>)}
+                      </select>
+                    </Field>
+                    <Field label="Ruangan" style={{ flex: 1 }}>
+                      {roomsForLokasi.length > 0 ? (
+                        <select value={form.ruangan} onChange={e => setForm(f => ({ ...f, ruangan: e.target.value }))} style={select}>
+                          <option value="">-- pilih --</option>
+                          {roomsForLokasi.map(r => (
+                            <option key={r.id} value={r.ruangan}>{r.ruangan}{r.kapasitas ? ` (maks ${r.kapasitas})` : ''}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input type="text" value={form.ruangan} onChange={e => setForm(f => ({ ...f, ruangan: e.target.value }))} placeholder="cth. A" style={input} />
+                      )}
+                    </Field>
+                  </div>
+                );
+              })()}
 
               <Field label="Pertemuan ke-">
                 <input
@@ -436,11 +456,6 @@ export default function InputJadwal() {
                 {form.pertemuan_ke && usedPertemuan.has(Number(form.pertemuan_ke)) && (
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#DC0A1E' }}>
                     Sesi ke-{form.pertemuan_ke} sudah ada. Pilih nomor lain.
-                  </span>
-                )}
-                {usedPertemuan.size > 0 && (
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: '#888' }}>
-                    Sudah terpakai: {Array.from(usedPertemuan).sort((a, b) => a - b).join(', ')}
                   </span>
                 )}
               </Field>

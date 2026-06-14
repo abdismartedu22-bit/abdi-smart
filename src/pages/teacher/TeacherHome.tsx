@@ -13,7 +13,7 @@ type Session = {
   jam_selesai: string;
   materi: string | null;
   lokasi: string | null;
-  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string };
+  groups: { id: string; nama: string; kode: string; warna: string; warna_text: string; tipe: string };
 };
 
 function getWeekStartISO(): string {
@@ -36,6 +36,8 @@ export default function TeacherHome() {
   const [weekSessions, setWeekSessions] = useState<Session[]>([]);
   const [attendanceCounts, setAttendanceCounts] = useState<Record<string, number>>({});
   const [monthlyCount, setMonthlyCount] = useState(0);
+  const [tatapMukaStats, setTatapMukaStats] = useState<{ terealisasi: number; dibatalkan: number } | null>(null);
+  const [onlineStats, setOnlineStats] = useState<{ dijadwalkan: number; terealisasi: number } | null>(null);
 
   const dateLabel = new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   const todayHari = getTodayHari();
@@ -54,7 +56,7 @@ export default function TeacherHome() {
 
     const { data: weekData } = await supabase
       .from('schedules')
-      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text)')
+      .select('id, hari, jam_mulai, jam_selesai, materi, lokasi, groups!group_id(id,nama,kode,warna,warna_text,tipe)')
       .eq('teacher_id', user!.id)
       .eq('week_start', weekStart)
       .order('jam_mulai');
@@ -88,6 +90,44 @@ export default function TeacherHome() {
       .gte('session_date', monthStart)
       .lte('session_date', today);
     setMonthlyCount(mc ?? 0);
+
+    // All-time overview stats
+    const { data: allScheds } = await supabase
+      .from('schedules')
+      .select('id, groups!group_id(tipe)')
+      .eq('teacher_id', user!.id);
+
+    const tatapMukaIds = (allScheds ?? []).filter((s: any) => s.groups?.tipe !== 'online').map((s: any) => s.id as string);
+    const onlineIds = (allScheds ?? []).filter((s: any) => s.groups?.tipe === 'online').map((s: any) => s.id as string);
+    const allIds = [...tatapMukaIds, ...onlineIds];
+
+    if (allIds.length > 0) {
+      const { data: attData } = await supabase
+        .from('attendance')
+        .select('schedule_id, sesi_status')
+        .in('schedule_id', allIds)
+        .eq('person_role', 'teacher')
+        .not('sesi_status', 'is', null);
+
+      if (tatapMukaIds.length > 0) {
+        const tatapSet = new Set(tatapMukaIds);
+        const tmRows = (attData ?? []).filter((r: any) => tatapSet.has(r.schedule_id));
+        setTatapMukaStats({
+          terealisasi: tmRows.filter((r: any) => r.sesi_status === 'terlaksana').length,
+          dibatalkan: tmRows.filter((r: any) => r.sesi_status === 'dibatalkan').length,
+        });
+      }
+
+      if (onlineIds.length > 0) {
+        const olSet = new Set(onlineIds);
+        const olRows = (attData ?? []).filter((r: any) => olSet.has(r.schedule_id));
+        const cancelled = olRows.filter((r: any) => r.sesi_status === 'dibatalkan').length;
+        setOnlineStats({
+          terealisasi: olRows.filter((r: any) => r.sesi_status === 'terlaksana').length,
+          dijadwalkan: onlineIds.length - cancelled,
+        });
+      }
+    }
 
     setLoading(false);
   }
@@ -141,6 +181,47 @@ export default function TeacherHome() {
             </div>
           </div>
 
+          {/* Overview stats */}
+          {(tatapMukaStats || onlineStats) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {tatapMukaStats && (
+                <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px' }}>
+                  <p style={{ ...sectionLabel, marginBottom: '12px' }}>Kelas Tatap Muka</p>
+                  <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
+                    <div style={statPill}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 900, color: '#0D5C3A', lineHeight: 1 }}>{tatapMukaStats.terealisasi}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666', marginTop: '2px' }}>Terealisasi</span>
+                    </div>
+                    <div style={{ width: '1px', background: '#E2E1DC', margin: '4px 16px' }} />
+                    <div style={statPill}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 900, color: '#DC0A1E', lineHeight: 1 }}>{tatapMukaStats.dibatalkan}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666', marginTop: '2px' }}>Dibatalkan</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {onlineStats && (
+                <div style={{ background: '#F0F9FF', border: '1.5px solid #BAE6FD', borderLeft: '3px solid #0369A1', borderRadius: '10px', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                    <p style={{ ...sectionLabel, margin: 0 }}>Online Umum</p>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#0369A1', background: '#E0F2FE', padding: '2px 7px', borderRadius: '4px', letterSpacing: '0.05em' }}>ONLINE</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0', flexWrap: 'wrap' }}>
+                    <div style={statPill}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 900, color: '#0369A1', lineHeight: 1 }}>{onlineStats.terealisasi}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#0369A1', marginTop: '2px' }}>Terealisasi</span>
+                    </div>
+                    <div style={{ width: '1px', background: '#BAE6FD', margin: '4px 16px' }} />
+                    <div style={statPill}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 900, color: '#0284C7', lineHeight: 1 }}>{onlineStats.dijadwalkan}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#0369A1', marginTop: '2px' }}>Dijadwalkan</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Today's sessions */}
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -160,9 +241,11 @@ export default function TeacherHome() {
                       </div>
                       {s.materi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', marginTop: '2px' }}>{s.materi}</div>}
                       {s.lokasi && <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#666', marginTop: '1px' }}>@ {s.lokasi}</div>}
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666', marginTop: '4px' }}>
-                        {attendanceCounts[s.id] ?? 0} siswa sudah check-in
-                      </div>
+                      {s.groups.tipe !== 'online' && (
+                        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666', marginTop: '4px' }}>
+                          {attendanceCounts[s.id] ?? 0} siswa sudah check-in
+                        </div>
+                      )}
                     </div>
                     <button
                       onClick={() => navigate('/teacher/realisasi')}
@@ -220,4 +303,7 @@ const sectionLabel: React.CSSProperties = {
 const linkBtn: React.CSSProperties = {
   background: 'none', border: 'none', cursor: 'pointer',
   fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#0D5C3A', fontWeight: 600, padding: 0,
+};
+const statPill: React.CSSProperties = {
+  display: 'flex', flexDirection: 'column', gap: '2px',
 };

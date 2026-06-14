@@ -16,7 +16,6 @@ type UserRow = {
   tempat_lahir: string | null;
   tanggal_lahir: string | null;
   sekolah: string | null;
-  jurusan: string | null;
   tingkat_kelas: string | null;
   student_groups?: { group_id: string; groups: { id: string; nama: string; kode: string } }[];
 };
@@ -227,7 +226,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
     display_name: '', nama: '', username: '', email: '', password: '',
     role: 'student' as Role,
     group_id: '',
-    tempat_lahir: '', tanggal_lahir: '', sekolah: '', jurusan: '', tingkat_kelas: '',
+    tempat_lahir: '', tanggal_lahir: '', sekolah: '', tingkat_kelas: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -245,7 +244,6 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       if (!form.tempat_lahir) { setError('Tempat lahir wajib diisi untuk siswa'); return; }
       if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi untuk siswa'); return; }
       if (!form.sekolah) { setError('Sekolah wajib diisi untuk siswa'); return; }
-      if (!form.jurusan) { setError('Jurusan wajib diisi untuk siswa'); return; }
       if (!form.tingkat_kelas) { setError('Tingkat kelas wajib diisi untuk siswa'); return; }
     }
     setSubmitting(true);
@@ -276,7 +274,6 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       if (form.tempat_lahir) extras.tempat_lahir = form.tempat_lahir;
       if (form.tanggal_lahir) extras.tanggal_lahir = form.tanggal_lahir;
       if (form.sekolah) extras.sekolah = form.sekolah;
-      if (form.jurusan) extras.jurusan = form.jurusan;
       if (form.tingkat_kelas) extras.tingkat_kelas = form.tingkat_kelas;
       if (Object.keys(extras).length > 0) {
         await supabase.from('profiles').update(extras).eq('id', json.id);
@@ -336,9 +333,6 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
               <FieldRow label="Sekolah *">
                 <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" required />
               </FieldRow>
-              <FieldRow label="Jurusan *">
-                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" required />
-              </FieldRow>
               <FieldRow label="Tingkat Kelas *">
                 <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))} required>
                   <option value="">-- Pilih tingkat kelas --</option>
@@ -371,7 +365,6 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
     tempat_lahir: user.tempat_lahir ?? '',
     tanggal_lahir: user.tanggal_lahir ?? '',
     sekolah: user.sekolah ?? '',
-    jurusan: user.jurusan ?? '',
     tingkat_kelas: user.tingkat_kelas ?? '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -388,11 +381,11 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
     e.preventDefault();
     setError('');
     if (form.role === 'student') {
+      if (!form.group_id) { setError('Pilih grup untuk siswa'); return; }
       if (!form.nama) { setError('Nama lengkap wajib diisi'); return; }
       if (!form.tempat_lahir) { setError('Tempat lahir wajib diisi'); return; }
       if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi'); return; }
       if (!form.sekolah) { setError('Sekolah wajib diisi'); return; }
-      if (!form.jurusan) { setError('Jurusan wajib diisi'); return; }
       if (!form.tingkat_kelas) { setError('Tingkat kelas wajib diisi'); return; }
     }
     setSubmitting(true);
@@ -403,7 +396,6 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
       update.tempat_lahir = form.tempat_lahir || null;
       update.tanggal_lahir = form.tanggal_lahir || null;
       update.sekolah = form.sekolah || null;
-      update.jurusan = form.jurusan || null;
       update.tingkat_kelas = form.tingkat_kelas || null;
     }
 
@@ -512,11 +504,8 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
               <FieldRow label="Sekolah *">
                 <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" required />
               </FieldRow>
-              <FieldRow label="Jurusan *">
-                <input style={inputStyle} value={form.jurusan} onChange={e => setForm(f => ({ ...f, jurusan: e.target.value }))} placeholder="cth. IPA / IPS" required />
-              </FieldRow>
               <FieldRow label="Tingkat Kelas *">
-                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value }))} required>
+                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value, group_id: '' }))} required>
                   <option value="">-- Pilih tingkat kelas --</option>
                   {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
@@ -671,6 +660,7 @@ type GroupMember = { id: string; display_name: string; nama: string | null };
 function GroupsTab() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [members, setMembers] = useState<Record<string, GroupMember[]>>({});
+  const [onlineMembers, setOnlineMembers] = useState<GroupMember[]>([]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -691,10 +681,10 @@ function GroupsTab() {
     setGroups(data ?? []);
 
     // Load all members per group
-    const { data: sg } = await supabase
-      .from('student_groups')
-      .select('group_id, profiles!student_id(id, display_name, nama)')
-      .order('group_id');
+    const [{ data: sg }, { data: om }] = await Promise.all([
+      supabase.from('student_groups').select('group_id, profiles!student_id(id, display_name, nama)').order('group_id'),
+      supabase.from('profiles').select('id, display_name, nama').eq('role', 'student').in('tingkat_kelas', ['12IPA', '12IPS']).eq('is_active', true).order('display_name'),
+    ]);
 
     const map: Record<string, GroupMember[]> = {};
     (sg ?? []).forEach((r: any) => {
@@ -703,6 +693,7 @@ function GroupsTab() {
       if (r.profiles) map[gid].push(r.profiles as GroupMember);
     });
     setMembers(map);
+    setOnlineMembers((om ?? []) as GroupMember[]);
     setLoading(false);
   }
 
@@ -747,6 +738,7 @@ function GroupsTab() {
             <option value="">Semua tipe</option>
             <option value="reguler">Reguler</option>
             <option value="privat">Privat</option>
+            <option value="online">Online</option>
           </select>
         </div>
         <button onClick={() => setShowCreate(true)} style={btnPrimary}>+ Tambah Grup</button>
@@ -760,7 +752,7 @@ function GroupsTab() {
         <>
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
             {paginated.map((g, i) => {
-              const groupMembers = members[g.id] ?? [];
+              const groupMembers = g.tipe === 'online' ? onlineMembers : (members[g.id] ?? []);
               const isExpanded = expanded[g.id] ?? false;
               return (
                 <div key={g.id} style={{ borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none' }}>
