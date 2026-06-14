@@ -1,33 +1,48 @@
 const items = [
   {
     n: '01',
-    title: 'Mentor Alumni PTN',
-    desc: 'Diajar kakak-kakak yang lulus dari UI, UGM, ITB, dan PTN terkemuka lainnya.',
+    title: 'Pengajar terbaik & ramah',
+    desc: 'Pengajar-pengajar terbaik, ramah, dan sesuai bidang studi keahlian.',
   },
   {
     n: '02',
-    title: 'Kelas Kecil & Fokus',
-    desc: 'Max. 8 siswa per kelas grup. Mentor fokus ke setiap siswa, bukan ceramah satu arah.',
+    title: 'Pilih lokasi lesmu',
+    desc: 'Bisa les di rumah atau di lokasi Abdi Smart sesuai kebutuhan.',
   },
   {
     n: '03',
-    title: 'Tryout Rutin & Analisis',
-    desc: 'Simulasi UTBK berkala, laporan skor detail per sub-tes tiap minggu.',
+    title: 'Belajar dalam kelompok kecil',
+    desc: 'Belajar nyaman dengan kelompok kecil 1-8 orang agar lebih fokus dan efektif.',
   },
   {
     n: '04',
-    title: 'Jadwal Fleksibel',
-    desc: 'Pagi, siang, sore -- kami menyesuaikan dengan rutinitas sekolahmu.',
+    title: 'Modul Pembelajaran Relevan',
+    desc: 'Modul pembelajaran yang relevan dan selalu diperbarui sesuai perkembangan kurikulum.',
   },
   {
     n: '05',
-    title: '3 Lokasi Strategis',
-    desc: 'Badak Agung, Trijata, dan Mahendradata. Mudah dijangkau dari seluruh Denpasar.',
+    title: 'Prediksi GACOR',
+    desc: 'Prediksi akurat materi UH, PASPAT, UTBK-SNBT, dan UM untuk persiapan maksimal.',
   },
   {
     n: '06',
-    title: 'Progress Report',
-    desc: 'Orang tua dan siswa terima laporan perkembangan belajar setiap minggu.',
+    title: 'Konsultasi Online Gratis',
+    desc: 'Layanan konsultasi online gratis untuk mendukung belajar di luar jam pelajaran.',
+  },
+  {
+    n: '07',
+    title: 'Try Out & Kuis',
+    desc: 'Try out TKA & UTBK SNBT serta kuis rutin untuk mengukur perkembangan dan kesiapan siswa.',
+  },
+  {
+    n: '08',
+    title: 'Materi lengkap',
+    desc: 'Materi UTBK-SNBT terlengkap mencakup TPS dan Literasi untuk hasil terbaik.',
+  },
+  {
+    n: '09',
+    title: 'Mapel Sekolah & TKA Lengkap',
+    desc: 'Mata pelajaran sekolah dan TKA lengkap tersedia untuk semua jenjang.',
   },
 ];
 
