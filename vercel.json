@@ -1,3 +1,6 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }, { "source": "/toAS/:path*", "destination": "https://legacy.abdismart.web.id/toAS/:path" }]
+  "rewrites": [
+    { "source": "/toAS/:path*", "destination": "https://legacy.abdismart.web.id/toAS/:path*" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
 }
