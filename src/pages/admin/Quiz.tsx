@@ -4,6 +4,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import MathText, { renderMathToHtml } from '../../components/shared/MathText';
 import type { Quiz, QuizQuestion, QuizTipe } from '../../types';
 
+function toDirectImg(url: string): string {
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
+  return url;
+}
+
 const TIPE_LABELS: Record<QuizTipe, string> = {
   pilihan_ganda: 'Pilihan Ganda',
   isian_singkat: 'Isian Singkat',
@@ -660,7 +668,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
               {gambarUrl.trim() && (
                 <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC', background: '#F9F9F7' }}>
                   <img
-                    src={gambarUrl.trim()}
+                    src={toDirectImg(gambarUrl.trim())}
                     alt="Preview gambar"
                     style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block' }}
                     onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
