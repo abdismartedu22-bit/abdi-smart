@@ -84,7 +84,7 @@ export interface TryoutResult {
   created_at: string;
 }
 
-export type QuizTipe = 'pilihan_ganda' | 'isian_singkat' | 'benar_salah' | 'centang_semua' | 'gambar';
+export type QuizTipe = 'pilihan_ganda' | 'isian_singkat' | 'benar_salah' | 'centang_semua';
 
 export interface Quiz {
   id: string;
