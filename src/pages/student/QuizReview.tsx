@@ -40,7 +40,7 @@ type SessionInfo = {
 
 function renderStudentAnswer(q: QuizQuestion, jawaban: string | string[] | null): string {
   if (jawaban === null || jawaban === undefined) return '(tidak dijawab)';
-  if (q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') {
+  if (q.tipe === 'pilihan_ganda') {
     const label = String(jawaban);
     const idx = label.charCodeAt(0) - 65;
     if (q.opsi && q.opsi[idx] !== undefined) return `${label}. ${q.opsi[idx]}`;
@@ -57,7 +57,7 @@ function renderStudentAnswer(q: QuizQuestion, jawaban: string | string[] | null)
 
 function renderCorrectAnswer(q: QuizQuestion): string {
   const benar = q.jawaban_benar;
-  if (q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') {
+  if (q.tipe === 'pilihan_ganda') {
     const label = String(benar);
     const idx = label.charCodeAt(0) - 65;
     if (q.opsi && q.opsi[idx] !== undefined) return `${label}. ${q.opsi[idx]}`;
@@ -211,7 +211,7 @@ export default function StudentQuizReview() {
 
               {/* Question + answers */}
               <div style={{ padding: '16px 18px' }}>
-                {q.tipe === 'gambar' && q.gambar_url && (
+                {q.gambar_url && (
                   <div style={{ marginBottom: '14px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC' }}>
                     <img
                       src={toDirectImg(q.gambar_url)}
@@ -271,7 +271,6 @@ const TIPE_LABELS: Record<QuizTipe, string> = {
   isian_singkat: 'Isian Singkat',
   benar_salah: 'Benar / Salah',
   centang_semua: 'Centang Semua Benar',
-  gambar: 'Gambar',
 };
 
 const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
@@ -279,7 +278,6 @@ const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
   isian_singkat: { background: '#D1FAE5', color: '#065F46' },
   benar_salah:   { background: '#FEF9C3', color: '#92400E' },
   centang_semua: { background: '#EDE9FE', color: '#5B21B6' },
-  gambar:        { background: '#FFE4E6', color: '#BE123C' },
 };
 
 function tipeBadge(tipe: QuizTipe): React.CSSProperties {
