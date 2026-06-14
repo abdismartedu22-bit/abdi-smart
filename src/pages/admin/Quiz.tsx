@@ -436,7 +436,7 @@ function QuizFormModal({ quiz, nextNomor, onClose, onDone }: { quiz?: Quiz; next
                           <MathText text={q.pertanyaan} />
                         </div>
                         <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', marginTop: '2px' }}>
-                          {q.poin} poin{(q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') && q.opsi ? ` · ${q.opsi.length} opsi` : ''}
+                          {q.poin} poin{q.tipe === 'pilihan_ganda' && q.opsi ? ` · ${q.opsi.length} opsi` : ''}
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
@@ -679,18 +679,18 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
             </Field>
           )}
 
-          {/* Options (PG / centang_semua / gambar) */}
-          {(tipe === 'pilihan_ganda' || tipe === 'centang_semua' || tipe === 'gambar') && (
+          {/* Options (PG / centang_semua) */}
+          {(tipe === 'pilihan_ganda' || tipe === 'centang_semua') && (
             <Field label="Opsi Jawaban">
               <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '0 0 8px' }}>
-                {(tipe === 'pilihan_ganda' || tipe === 'gambar') ? 'Klik lingkaran hijau untuk menandai jawaban benar.' : 'Centang semua opsi yang benar.'}
+                {tipe === 'pilihan_ganda' ? 'Klik lingkaran hijau untuk menandai jawaban benar.' : 'Centang semua opsi yang benar.'}
               </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {options.map((opt, i) => {
                   const isCorrect = tipe === 'pilihan_ganda' ? correctPG === opt.label : correctCentang.has(opt.label);
                   return (
                     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px', borderRadius: '8px', background: isCorrect ? '#F0FDF4' : '#F9F9F7', border: `1.5px solid ${isCorrect ? '#86EFAC' : '#E2E1DC'}`, transition: 'all 0.12s' }}>
-                      {(tipe === 'pilihan_ganda' || tipe === 'gambar') ? (
+                      {tipe === 'pilihan_ganda' ? (
                         <button
                           type="button"
                           onClick={() => setCorrectPG(opt.label)}
