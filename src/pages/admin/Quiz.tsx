@@ -17,20 +17,18 @@ const TIPE_LABELS: Record<QuizTipe, string> = {
   isian_singkat: 'Isian Singkat',
   benar_salah:   'Benar / Salah',
   centang_semua: 'Centang Semua Benar',
-  gambar:        'Gambar',
 };
 const TIPE_BADGE: Record<QuizTipe, { bg: string; color: string }> = {
   pilihan_ganda: { bg: '#DBEAFE', color: '#1D4ED8' },
   isian_singkat: { bg: '#D1FAE5', color: '#065F46' },
   benar_salah:   { bg: '#FEF9C3', color: '#92400E' },
   centang_semua: { bg: '#EDE9FE', color: '#5B21B6' },
-  gambar:        { bg: '#FFE4E6', color: '#BE123C' },
 };
 
 function gradeAnswer(q: QuizQuestion, jawaban: string | string[] | null): number {
   if (jawaban === null || jawaban === undefined) return 0;
   const benar = q.jawaban_benar;
-  if (q.tipe === 'pilihan_ganda' || q.tipe === 'benar_salah' || q.tipe === 'gambar') {
+  if (q.tipe === 'pilihan_ganda' || q.tipe === 'benar_salah') {
     return String(jawaban).trim() === String(benar).trim() ? q.poin : 0;
   }
   if (q.tipe === 'isian_singkat') {
@@ -183,8 +181,8 @@ export default function AdminQuiz() {
                               </div>
                               <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#666' }}>
                                 {q.poin} poin
-                                {(q.tipe === 'pilihan_ganda' || q.tipe === 'gambar') && q.opsi && ` · ${q.opsi.length} opsi`}
-                                {q.tipe === 'gambar' && q.gambar_url && ' · Ada gambar'}
+                                {q.tipe === 'pilihan_ganda' && q.opsi && ` · ${q.opsi.length} opsi`}
+                                {q.gambar_url && ' · Ada gambar'}
                               </div>
                             </div>
                             <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
@@ -520,7 +518,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
 
   // Correct answer state (depends on tipe)
   const [correctPG, setCorrectPG] = useState<string>(() => {
-    if (question && (question.tipe === 'pilihan_ganda' || question.tipe === 'gambar')) return String(question.jawaban_benar);
+    if (question?.tipe === 'pilihan_ganda') return String(question.jawaban_benar);
     return 'A';
   });
   const [correctBS, setCorrectBS] = useState<string>(() => {
@@ -563,7 +561,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
     let jawaban_benar: string | string[];
     let opsi: string[] | null = null;
 
-    if (tipe === 'pilihan_ganda' || tipe === 'gambar') {
+    if (tipe === 'pilihan_ganda') {
       opsi = options.map(o => o.text);
       jawaban_benar = correctPG;
     } else if (tipe === 'benar_salah') {
@@ -576,7 +574,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
       jawaban_benar = Array.from(correctCentang);
     }
 
-    return { quiz_id: quizId, urutan: question?.urutan ?? nextUrutan, tipe, pertanyaan, opsi, jawaban_benar, poin, gambar_url: tipe === 'gambar' ? (gambarUrl.trim() || null) : null };
+    return { quiz_id: quizId, urutan: question?.urutan ?? nextUrutan, tipe, pertanyaan, opsi, jawaban_benar, poin, gambar_url: gambarUrl.trim() || null };
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -584,7 +582,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
     setError('');
     if (!pertanyaan.trim()) { setError('Pertanyaan wajib diisi'); return; }
 
-    if (tipe === 'pilihan_ganda' || tipe === 'centang_semua' || tipe === 'gambar') {
+    if (tipe === 'pilihan_ganda' || tipe === 'centang_semua') {
       if (options.some(o => !o.text.trim())) { setError('Semua opsi harus diisi'); return; }
     }
     if (tipe === 'centang_semua' && correctCentang.size === 0) { setError('Pilih minimal 1 jawaban benar'); return; }
@@ -656,9 +654,9 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
             )}
           </Field>
 
-          {/* Gambar URL */}
-          {tipe === 'gambar' && (
-            <Field label="URL Gambar">
+          {/* Gambar URL (optional for all tipe) */}
+          {true && (
+            <Field label="Gambar Soal (opsional)">
               <input
                 style={input}
                 value={gambarUrl}
