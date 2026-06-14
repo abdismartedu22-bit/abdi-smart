@@ -81,7 +81,8 @@ export default function StaffHome() {
         .select('id', { count: 'exact', head: true })
         .in('schedule_id', weekSessions.map((s: any) => s.id))
         .eq('person_role', 'teacher')
-        .not('sesi_status', 'is', null);
+        .not('sesi_status', 'is', null)
+        .neq('sesi_status', 'dibatalkan');
 
       setWeekStats({
         sessions: weekSessions.length,
