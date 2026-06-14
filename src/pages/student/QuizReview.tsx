@@ -5,6 +5,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import MathText from '../../components/shared/MathText';
 import type { QuizTipe } from '../../types';
 
+function toDirectImg(url: string): string {
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
+  return url;
+}
+
 type QuizQuestion = {
   id: string;
   quiz_id: string;
@@ -206,7 +214,7 @@ export default function StudentQuizReview() {
                 {q.tipe === 'gambar' && q.gambar_url && (
                   <div style={{ marginBottom: '14px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC' }}>
                     <img
-                      src={q.gambar_url}
+                      src={toDirectImg(q.gambar_url)}
                       alt="Gambar soal"
                       style={{ width: '100%', maxHeight: '280px', objectFit: 'contain', display: 'block', background: '#F9F9F7' }}
                     />
