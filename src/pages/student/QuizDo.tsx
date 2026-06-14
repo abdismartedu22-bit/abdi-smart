@@ -36,7 +36,7 @@ type ActiveSession = {
 function gradeAnswer(q: QuizQuestion, jawaban: string | string[] | null): number {
   if (jawaban === null || jawaban === undefined) return 0;
   const benar = q.jawaban_benar;
-  if (q.tipe === 'pilihan_ganda' || q.tipe === 'benar_salah' || q.tipe === 'gambar') {
+  if (q.tipe === 'pilihan_ganda' || q.tipe === 'benar_salah') {
     return String(jawaban).trim() === String(benar).trim() ? q.poin : 0;
   }
   if (q.tipe === 'isian_singkat') {
@@ -201,7 +201,7 @@ export default function StudentQuizDo() {
           const ans = answers[q.id];
           return (
             <div key={q.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '12px', padding: '20px 22px' }}>
-              {q.tipe === 'gambar' && q.gambar_url && (
+              {q.gambar_url && (
                 <div style={{ marginBottom: '14px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC' }}>
                   <img
                     src={toDirectImg(q.gambar_url)}
@@ -287,23 +287,6 @@ export default function StudentQuizDo() {
                 </div>
               )}
 
-              {q.tipe === 'gambar' && q.opsi && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingLeft: '4px' }}>
-                  {q.opsi.map((opt, oi) => {
-                    const label = String.fromCharCode(65 + oi);
-                    const selected = ans === label;
-                    return (
-                      <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '9px', border: `1.5px solid ${selected ? '#0D5C3A' : '#E2E1DC'}`, background: selected ? '#E8F5EC' : '#F9F9F7', cursor: 'pointer', transition: 'all 0.1s' }}>
-                        <input type="radio" name={`q_${q.id}`} checked={selected} onChange={() => setAnswer(q.id, label)} style={{ flexShrink: 0 }} />
-                        <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: selected ? '#0D5C3A' : '#aaa', minWidth: '20px' }}>{label}</span>
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: '#0D0D0D', flex: 1, lineHeight: 1.5 }}>
-                          <MathText text={opt} />
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           );
         })}
@@ -335,7 +318,6 @@ const TIPE_LABELS: Record<QuizTipe, string> = {
   isian_singkat: 'Isian Singkat',
   benar_salah: 'Benar / Salah',
   centang_semua: 'Centang Semua Benar',
-  gambar: 'Gambar',
 };
 
 const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
@@ -343,7 +325,6 @@ const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
   isian_singkat: { background: '#D1FAE5', color: '#065F46' },
   benar_salah:   { background: '#FEF9C3', color: '#92400E' },
   centang_semua: { background: '#EDE9FE', color: '#5B21B6' },
-  gambar:        { background: '#FFE4E6', color: '#BE123C' },
 };
 
 function tipeBadge(tipe: QuizTipe): React.CSSProperties {
