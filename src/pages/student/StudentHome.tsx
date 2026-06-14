@@ -129,6 +129,7 @@ export default function StudentHome() {
     const todayHari = getTodayHari();
     const todayHariIdx = HARI_ORDER.indexOf(todayHari);
     const is12SMA = ['12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '');
+    const isToKelas = ['6SD', '9SMP', '12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '');
 
     // Fetch student groups AND online groups in parallel
     const [sgRes, onlineGroupsRes] = await Promise.all([
@@ -263,14 +264,16 @@ export default function StudentHome() {
       setOnlineData({ groups: onlineGroups, terealisasi, dijadwalkan });
     }
 
-    // Latest TO
-    const { data: to } = await supabase
-      .from('tryout_results')
-      .select('id, type, nama_to, tanggal_to, scores, total_score')
-      .eq('student_id', user!.id)
-      .order('tanggal_to', { ascending: false })
-      .limit(1);
-    setLatestTO(((to ?? []) as TOResult[])[0] ?? null);
+    // Latest TO (only for relevant classes)
+    if (isToKelas) {
+      const { data: to } = await supabase
+        .from('tryout_results')
+        .select('id, type, nama_to, tanggal_to, scores, total_score')
+        .eq('student_id', user!.id)
+        .order('tanggal_to', { ascending: false })
+        .limit(1);
+      setLatestTO(((to ?? []) as TOResult[])[0] ?? null);
+    }
 
     setLoading(false);
   }
@@ -279,6 +282,7 @@ export default function StudentHome() {
   const pctHadir = totalSessions > 0 ? Math.round((attendance.hadir / totalSessions) * 100) : null;
   const monthName = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
+  const isToKelas = ['6SD', '9SMP', '12IPA', '12IPS'].includes(profile?.tingkat_kelas ?? '');
   const firstName = profile?.display_name?.split(' ')[0] ?? '...';
   const isNextToday = nextSession?.week_start === getWeekStartISO() && nextSession?.hari === getTodayHari();
 
@@ -455,7 +459,7 @@ export default function StudentHome() {
           </div>
 
           {/* TO Terakhir */}
-          <div style={card}>
+          {isToKelas && <div style={card}>
             <p style={label}>Hasil TO Terakhir</p>
             {latestTO ? (
               <div>
@@ -498,25 +502,27 @@ export default function StudentHome() {
             ) : (
               <p style={muted}>Belum ada hasil TO.</p>
             )}
-          </div>
+          </div>}
 
           {/* Buka TO Abdi Smart */}
-          <a
-            href="https://abdismart.web.id/toAS/"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 18px', background: '#0D5C3A', color: '#FFE500',
-              borderRadius: '12px', textDecoration: 'none', gap: '10px',
-            }}
-          >
-            <div>
-              <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem' }}>Kerjakan TO Online</div>
-              <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(255,229,0,0.7)', marginTop: '2px' }}>abdismart.web.id</div>
-            </div>
-            <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>&#8599;</span>
-          </a>
+          {isToKelas && (
+            <a
+              href="https://abdismart.web.id/toAS/"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '14px 18px', background: '#0D5C3A', color: '#FFE500',
+                borderRadius: '12px', textDecoration: 'none', gap: '10px',
+              }}
+            >
+              <div>
+                <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem' }}>Kerjakan TO Online</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(255,229,0,0.7)', marginTop: '2px' }}>abdismart.web.id</div>
+              </div>
+              <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>&#8599;</span>
+            </a>
+          )}
 
         </div>
       )}
