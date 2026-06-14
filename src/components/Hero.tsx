@@ -85,7 +85,7 @@ export default function Hero() {
               className="pill"
               style={{ background: 'var(--color-navy)', color: '#fff' }}
             >
-              SNBP &amp; SNBT
+              TKA, SNBP &amp; SNBT
             </span>
           </div>
 
@@ -101,7 +101,9 @@ export default function Hero() {
               marginBottom: '28px',
             }}
           >
-            Tembus PTN
+            Tembus SMP,
+            <br />
+            SMA, PTN
             <br />
             impianmu
             <br />
@@ -204,9 +206,9 @@ export default function Hero() {
             }}
           >
             {[
-              { n: '500+', l: 'Alumni PTN' },
+              { n: '1000+', l: 'Alumni PTN' },
               { n: '3', l: 'Cabang Bali' },
-              { n: '98%', l: 'Kelulusan' },
+              { n: '91%', l: 'Kelulusan' },
             ].map((s) => (
               <div key={s.n}>
                 <div
