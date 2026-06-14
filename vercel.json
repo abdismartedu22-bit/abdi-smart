@@ -1,6 +1,8 @@
 {
+  "trailingSlash": false,
   "rewrites": [
-    { "source": "/toAS/?(.*)", "destination": "https://legacy.abdismart.web.id/toAS/$1" },
+    { "source": "/toAS", "destination": "https://legacy.abdismart.web.id/toAS" },
+    { "source": "/toAS/:path*", "destination": "https://legacy.abdismart.web.id/toAS/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
