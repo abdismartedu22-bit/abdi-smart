@@ -20,6 +20,13 @@ const branches = [
     city: 'Denpasar',
     mapsUrl: 'https://maps.app.goo.gl/XksdQXwHPWtp8uBL7',
   },
+{
+    code: '04',
+    name: 'Rumah Siswa',
+    note: 'Wilayah Denpasar, Batu Bulan, Dalung, dsk',
+    city: 'Denpasar',
+    mapsUrl: '',
+  },
 ];
 
 export default function Locations() {
