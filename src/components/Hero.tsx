@@ -128,7 +128,7 @@ export default function Hero() {
               fontWeight: 400,
             }}
           >
-            Les privat dan grup untuk persiapan TKA, SNBP, SNBT, TPS, dan Mapel. Mentor alumni PTN, 3 lokasi di Denpasar.
+            Les privat dan grup untuk persiapan TKA, SNBP, SNBT, TPS, dan Mapel. Mentor alumni PTN, 3 lokasi di Denpasar & bisa les ke rumah siswa.
           </p>
 
           {/* CTAs */}
