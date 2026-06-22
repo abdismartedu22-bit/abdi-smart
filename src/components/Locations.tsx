@@ -2,7 +2,7 @@ const branches = [
   {
     code: '01',
     name: 'Badak Agung',
-    note: 'x Harka Coffee',
+    note: 'Renon, Denpasar Timur',
     city: 'Denpasar',
     mapsUrl: 'https://maps.app.goo.gl/xX5pa8A42c3XexKVA',
   },
