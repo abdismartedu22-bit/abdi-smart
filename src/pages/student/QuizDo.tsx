@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { toISODate } from '../../lib/dates';
 import { useNavigate, useParams } from 'react-router-dom';
 import MathText from '../../components/shared/MathText';
 import type { QuizTipe } from '../../types';
@@ -64,7 +63,6 @@ export default function StudentQuizDo() {
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
   const [totalPoin, setTotalPoin] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const today = toISODate(new Date());
 
   useEffect(() => {
     if (!user) return;
@@ -86,7 +84,6 @@ export default function StudentQuizDo() {
       .select('id, quiz_id, group_id, quiz:quizzes!quiz_id(nomor,judul,deskripsi), group:groups!group_id(nama,kode)')
       .eq('id', sessionId)
       .in('group_id', groupIds)
-      .eq('session_date', today)
       .is('closed_at', null)
       .limit(1);
 
