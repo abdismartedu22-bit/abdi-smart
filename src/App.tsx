@@ -94,7 +94,7 @@ export default function App() {
               <Route path="/student/absen" element={<StudentAbsen />} />
               <Route path="/student/hasil-to" element={<StudentHasilTO />} />
               <Route path="/student/quiz" element={<StudentQuiz />} />
-              <Route path="/student/quiz/do" element={<StudentQuizDo />} />
+              <Route path="/student/quiz/do/:sessionId" element={<StudentQuizDo />} />
               <Route path="/student/quiz/review/:sessionId" element={<StudentQuizReview />} />
             </Route>
           </Route>
