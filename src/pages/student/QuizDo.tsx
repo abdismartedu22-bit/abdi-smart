@@ -8,9 +8,9 @@ import type { QuizTipe } from '../../types';
 
 function toDirectImg(url: string): string {
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) return https://drive.google.com/thumbnail?id=${match[1]}&sz=w800;
+  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
   const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (idMatch) return https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800;
+  if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
   return url;
 }
 
@@ -100,7 +100,7 @@ export default function StudentQuizDo() {
       .eq('quiz_session_id', sess.id).eq('student_id', user!.id).limit(1);
 
     if (existing && existing.length > 0) {
-      navigate(/student/quiz/review/${sess.id}, { replace: true });
+      navigate(`/student/quiz/review/${sess.id}`, { replace: true });
       return;
     }
 
@@ -140,7 +140,7 @@ export default function StudentQuizDo() {
     }));
 
     await supabase.from('quiz_answers').insert(rows);
-    navigate(/student/quiz/review/${session.id}, { replace: true });
+    navigate(`/student/quiz/review/${session.id}`, { replace: true });
   }
 
   if (loading) return (
@@ -235,8 +235,8 @@ export default function StudentQuizDo() {
                     const label = String.fromCharCode(65 + oi);
                     const selected = ans === label;
                     return (
-                      <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '9px', border: 1.5px solid ${selected ? '#0D5C3A' : '#E2E1DC'}, background: selected ? '#E8F5EC' : '#F9F9F7', cursor: 'pointer', transition: 'all 0.1s' }}>
-                        <input type="radio" name={q_${q.id}} checked={selected} onChange={() => setAnswer(q.id, label)} style={{ flexShrink: 0 }} />
+                      <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '9px', border: `1.5px solid ${selected ? '#0D5C3A' : '#E2E1DC'}`, background: selected ? '#E8F5EC' : '#F9F9F7', cursor: 'pointer', transition: 'all 0.1s' }}>
+                        <input type="radio" name={`q_${q.id}`} checked={selected} onChange={() => setAnswer(q.id, label)} style={{ flexShrink: 0 }} />
                         <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: selected ? '#0D5C3A' : '#aaa', minWidth: '20px' }}>{label}</span>
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: '#0D0D0D', flex: 1, lineHeight: 1.5 }}>
                           <MathText text={opt} />
@@ -252,8 +252,8 @@ export default function StudentQuizDo() {
                   {['Benar', 'Salah'].map(v => {
                     const selected = ans === v;
                     return (
-                      <label key={v} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flex: 1, padding: '12px', borderRadius: '9px', border: 1.5px solid ${selected ? (v === 'Benar' ? '#16A34A' : '#DC2626') : '#E2E1DC'}, background: selected ? (v === 'Benar' ? '#D1FAE5' : '#FEE2E2') : '#F9F9F7', cursor: 'pointer', transition: 'all 0.1s' }}>
-                        <input type="radio" name={q_${q.id}} checked={selected} onChange={() => setAnswer(q.id, v)} />
+                      <label key={v} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', flex: 1, padding: '12px', borderRadius: '9px', border: `1.5px solid ${selected ? (v === 'Benar' ? '#16A34A' : '#DC2626') : '#E2E1DC'}`, background: selected ? (v === 'Benar' ? '#D1FAE5' : '#FEE2E2') : '#F9F9F7', cursor: 'pointer', transition: 'all 0.1s' }}>
+                        <input type="radio" name={`q_${q.id}`} checked={selected} onChange={() => setAnswer(q.id, v)} />
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', fontWeight: 700, color: selected ? (v === 'Benar' ? '#15803D' : '#DC2626') : '#555' }}>{v}</span>
                       </label>
                     );
@@ -279,7 +279,7 @@ export default function StudentQuizDo() {
                     const label = String.fromCharCode(65 + oi);
                     const checked = ((ans as string[]) ?? []).includes(label);
                     return (
-                      <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '9px', border: 1.5px solid ${checked ? '#7C3AED' : '#E2E1DC'}, background: checked ? '#EDE9FE' : '#F9F9F7', cursor: 'pointer', transition: 'all 0.1s' }}>
+                      <label key={oi} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '9px', border: `1.5px solid ${checked ? '#7C3AED' : '#E2E1DC'}`, background: checked ? '#EDE9FE' : '#F9F9F7', cursor: 'pointer', transition: 'all 0.1s' }}>
                         <input type="checkbox" checked={checked} onChange={() => toggleCheckbox(q.id, label)} style={{ flexShrink: 0 }} />
                         <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: checked ? '#6D28D9' : '#aaa', minWidth: '20px' }}>{label}</span>
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: '#0D0D0D', flex: 1, lineHeight: 1.5 }}>
