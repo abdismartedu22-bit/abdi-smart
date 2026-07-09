@@ -8,6 +8,8 @@ type ActiveSession = {
   id: string;
   quiz_id: string;
   quiz: { nomor: number; judul: string; deskripsi: string | null };
+  alreadyDone: boolean;
+  prevScore: { skor: number; total: number } | null;
 };
 
 type RiwayatItem = {
@@ -23,9 +25,7 @@ export default function StudentQuiz() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
-  const [alreadyDone, setAlreadyDone] = useState(false);
-  const [prevScore, setPrevScore] = useState<{ skor: number; total: number } | null>(null);
+  const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [riwayat, setRiwayat] = useState<RiwayatItem[]>([]);
   const today = toISODate(new Date());
 
@@ -68,7 +68,7 @@ export default function StudentQuiz() {
             .in('schedule_id', todayScheduleIds)
             .eq('session_date', today)
             .is('closed_at', null)
-            .limit(1)
+            .order('activated_at', { ascending: true })
         : Promise.resolve({ data: [] as any[] }),
       supabase.from('quiz_answers')
         .select('quiz_session_id, skor, quiz_sessions!quiz_session_id(session_date, quiz_id, activated_at, quiz:quizzes!quiz_id(nomor,judul))')
@@ -77,27 +77,34 @@ export default function StudentQuiz() {
 
     const sessions = (sessRes.data ?? []) as any[];
     if (sessions.length > 0) {
-      const sess = sessions[0];
-      setActiveSession(sess as ActiveSession);
+      const sessionIds = sessions.map(s => s.id);
+      const quizIds = [...new Set(sessions.map(s => s.quiz_id))];
 
-      const { data: existing } = await supabase
-        .from('quiz_answers').select('skor')
-        .eq('quiz_session_id', sess.id).eq('student_id', user!.id);
+      const [{ data: existing }, { data: qs }] = await Promise.all([
+        supabase.from('quiz_answers').select('quiz_session_id, skor')
+          .in('quiz_session_id', sessionIds).eq('student_id', user!.id),
+        supabase.from('quiz_questions').select('quiz_id, poin').in('quiz_id', quizIds),
+      ]);
 
-      if (existing && existing.length > 0) {
-        const { data: qs } = await supabase.from('quiz_questions').select('poin').eq('quiz_id', sess.quiz_id);
-        const total = (qs ?? []).reduce((a: number, q: any) => a + q.poin, 0);
-        const scored = (existing as any[]).reduce((a: number, r: any) => a + (r.skor ?? 0), 0);
-        setPrevScore({ skor: scored, total });
-        setAlreadyDone(true);
-      } else {
-        setAlreadyDone(false);
-        setPrevScore(null);
-      }
+      const totalByQuiz: Record<string, number> = {};
+      (qs ?? []).forEach((q: any) => { totalByQuiz[q.quiz_id] = (totalByQuiz[q.quiz_id] ?? 0) + q.poin; });
+
+      const scoredBySession: Record<string, number> = {};
+      const doneSessions = new Set<string>();
+      (existing ?? []).forEach((r: any) => {
+        doneSessions.add(r.quiz_session_id);
+        scoredBySession[r.quiz_session_id] = (scoredBySession[r.quiz_session_id] ?? 0) + (r.skor ?? 0);
+      });
+
+      setActiveSessions(sessions.map(sess => ({
+        ...sess,
+        alreadyDone: doneSessions.has(sess.id),
+        prevScore: doneSessions.has(sess.id)
+          ? { skor: scoredBySession[sess.id] ?? 0, total: totalByQuiz[sess.quiz_id] ?? 0 }
+          : null,
+      })));
     } else {
-      setActiveSession(null);
-      setAlreadyDone(false);
-      setPrevScore(null);
+      setActiveSessions([]);
     }
 
     const sessionMap: Record<string, RiwayatItem> = {};
@@ -131,7 +138,7 @@ export default function StudentQuiz() {
       {/* Active quiz */}
       <div style={{ marginBottom: '32px' }}>
         <p style={sectionLabel}>Quiz Aktif Sekarang</p>
-        {!activeSession ? (
+        {activeSessions.length === 0 ? (
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '32px 24px', textAlign: 'center' }}>
             <p style={muted}>Tidak ada quiz aktif saat ini.</p>
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#aaa', margin: '4px 0 0' }}>
@@ -139,40 +146,44 @@ export default function StudentQuiz() {
             </p>
           </div>
         ) : (
-          <div style={{ background: '#fff', border: '1.5px solid #86EFAC', borderRadius: '12px', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
-              <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#16A34A', boxShadow: '0 0 0 4px rgba(22,163,74,0.2)', flexShrink: 0 }} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: '#fff', background: '#0D5C3A', padding: '2px 9px', borderRadius: '5px' }}>
-                    Quiz {String(activeSession.quiz.nomor).padStart(2, '0')}
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#16A34A', fontWeight: 700, letterSpacing: '0.06em' }}>LIVE</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {activeSessions.map(activeSession => (
+              <div key={activeSession.id} style={{ background: '#fff', border: '1.5px solid #86EFAC', borderRadius: '12px', padding: '20px 22px', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, minWidth: 0 }}>
+                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#16A34A', boxShadow: '0 0 0 4px rgba(22,163,74,0.2)', flexShrink: 0 }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '5px' }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: '#fff', background: '#0D5C3A', padding: '2px 9px', borderRadius: '5px' }}>
+                        Quiz {String(activeSession.quiz.nomor).padStart(2, '0')}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', color: '#16A34A', fontWeight: 700, letterSpacing: '0.06em' }}>LIVE</span>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem', color: '#0D0D0D' }}>{activeSession.quiz.judul}</div>
+                    {activeSession.quiz.deskripsi && (
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginTop: '2px' }}>{activeSession.quiz.deskripsi}</div>
+                    )}
+                  </div>
                 </div>
-                <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem', color: '#0D0D0D' }}>{activeSession.quiz.judul}</div>
-                {activeSession.quiz.deskripsi && (
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginTop: '2px' }}>{activeSession.quiz.deskripsi}</div>
+                {activeSession.alreadyDone && activeSession.prevScore ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: scoreColor(activeSession.prevScore.total > 0 ? Math.round((activeSession.prevScore.skor / activeSession.prevScore.total) * 100) : 0), lineHeight: 1 }}>
+                        {activeSession.prevScore.skor % 1 === 0 ? activeSession.prevScore.skor : activeSession.prevScore.skor.toFixed(1)}
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#aaa', fontWeight: 400 }}>/{activeSession.prevScore.total}</span>
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#888' }}>sudah dikerjakan</div>
+                    </div>
+                    <button onClick={() => navigate(/student/quiz/review/${activeSession.id})} style={btnOutline}>
+                      Lihat Review
+                    </button>
+                  </div>
+                ) : (
+                  <button onClick={() => navigate(/student/quiz/do/${activeSession.id})} style={btnStart}>
+                    Mulai Quiz
+                  </button>
                 )}
               </div>
-            </div>
-            {alreadyDone && prevScore ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', color: scoreColor(prevScore.total > 0 ? Math.round((prevScore.skor / prevScore.total) * 100) : 0), lineHeight: 1 }}>
-                    {prevScore.skor % 1 === 0 ? prevScore.skor : prevScore.skor.toFixed(1)}
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#aaa', fontWeight: 400 }}>/{prevScore.total}</span>
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#888' }}>sudah dikerjakan</div>
-                </div>
-                <button onClick={() => navigate(`/student/quiz/review/${activeSession.id}`)} style={btnOutline}>
-                  Lihat Review
-                </button>
-              </div>
-            ) : (
-              <button onClick={() => navigate('/student/quiz/do')} style={btnStart}>
-                Mulai Quiz
-              </button>
-            )}
+            ))}
           </div>
         )}
       </div>
@@ -200,7 +211,7 @@ export default function StudentQuiz() {
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#0D5C3A', flexShrink: 0 }}>
                     {row.total_skor % 1 === 0 ? row.total_skor : row.total_skor.toFixed(1)}
                   </div>
-                  <button onClick={() => navigate(`/student/quiz/review/${row.session_id}`)} style={btnReview}>
+                  <button onClick={() => navigate(/student/quiz/review/${row.session_id})} style={btnReview}>
                     Review
                   </button>
                 </div>
