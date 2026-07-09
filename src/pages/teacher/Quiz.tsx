@@ -5,7 +5,13 @@ import { toISODate, getWeekStart, fmtTime } from '../../lib/dates';
 import GrupBadge from '../../components/shared/GrupBadge';
 import type { Quiz } from '../../types';
 
-type Tab = 'aktifkan' | 'riwayat';
+type Tab = 'aktifkan' | 'aktif' | 'riwayat';
+
+const HARI_LIST = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+function getHariForDate(d: Date): string {
+  return HARI_LIST[d.getDay()];
+}
 
 type ClosedSession = {
   id: string;
@@ -42,15 +48,23 @@ type ActiveQuizSession = {
   quiz: { nomor: number; judul: string };
 };
 
-function getTodayHari(): string {
-  return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()];
-}
+type OpenSession = {
+  id: string;
+  quiz_id: string;
+  group_id: string;
+  session_date: string;
+  activated_at: string;
+  quiz: { nomor: number; judul: string };
+  group: { nama: string; kode: string; warna: string; warna_text: string };
+  answered_count: number;
+};
 
 export default function TeacherQuiz() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('aktifkan');
   const [loading, setLoading] = useState(true);
-  const [todaySessions, setTodaySessions] = useState<TodaySession[]>([]);
+  const [selectedDate, setSelectedDate] = useState(toISODate(new Date()));
+  const [daySessions, setDaySessions] = useState<TodaySession[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [activeBySchedule, setActiveBySchedule] = useState<Record<string, ActiveQuizSession | null>>({});
   const [answerCounts, setAnswerCounts] = useState<Record<string, number>>({});
@@ -58,22 +72,26 @@ export default function TeacherQuiz() {
   const [activating, setActivating] = useState<string | null>(null);
   const [closing, setClosing] = useState<string | null>(null);
 
+  // Quiz Aktif state (every still-open session, any day)
+  const [openSessions, setOpenSessions] = useState<OpenSession[]>([]);
+  const [openLoading, setOpenLoading] = useState(false);
+  const [openLoaded, setOpenLoaded] = useState(false);
+
   // Riwayat state
   const [riwayat, setRiwayat] = useState<ClosedSession[]>([]);
   const [riwayatLoading, setRiwayatLoading] = useState(false);
   const [riwayatLoaded, setRiwayatLoaded] = useState(false);
 
-  const today = toISODate(new Date());
-  const todayHari = getTodayHari();
-
   useEffect(() => {
     if (!user) return;
     load();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user, selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function load() {
     setLoading(true);
-    const weekStart = toISODate(getWeekStart());
+    const pickedDate = new Date(selectedDate + 'T00:00:00');
+    const weekStart = toISODate(getWeekStart(pickedDate));
+    const hari = getHariForDate(pickedDate);
 
     const [{ data: schedData }, { data: quizData }] = await Promise.all([
       supabase
@@ -81,14 +99,14 @@ export default function TeacherQuiz() {
         .select('id, hari, jam_mulai, jam_selesai, materi, pertemuan_ke, group_id, groups!group_id(id,nama,kode,warna,warna_text)')
         .eq('teacher_id', user!.id)
         .eq('week_start', weekStart)
-        .eq('hari', todayHari)
+        .eq('hari', hari)
         .order('jam_mulai'),
       supabase.from('quizzes').select('*').order('created_at', { ascending: false }),
     ]);
 
     const sessions = (schedData ?? []) as unknown as TodaySession[];
     const qList = (quizData ?? []) as Quiz[];
-    setTodaySessions(sessions);
+    setDaySessions(sessions);
     setQuizzes(qList);
 
     const scheduleIds = sessions.map(s => s.id);
@@ -100,6 +118,8 @@ export default function TeacherQuiz() {
 
     if (scheduleIds.length > 0) {
       await loadActiveSessions(scheduleIds);
+    } else {
+      setActiveBySchedule({});
     }
 
     setLoading(false);
@@ -110,7 +130,6 @@ export default function TeacherQuiz() {
       .from('quiz_sessions')
       .select('id, quiz_id, group_id, schedule_id, activated_at, closed_at, quiz:quizzes!quiz_id(nomor,judul)')
       .in('schedule_id', scheduleIds)
-      .eq('session_date', today)
       .is('closed_at', null);
 
     const map: Record<string, ActiveQuizSession | null> = {};
@@ -138,19 +157,19 @@ export default function TeacherQuiz() {
 
   async function activateQuiz(scheduleId: string) {
     const quizId = selectedQuiz[scheduleId];
-    const session = todaySessions.find(s => s.id === scheduleId);
+    const session = daySessions.find(s => s.id === scheduleId);
     if (!quizId || !user || !session) return;
     setActivating(scheduleId);
     const { error } = await supabase.from('quiz_sessions').insert({
       quiz_id: quizId,
       schedule_id: scheduleId,
       group_id: session.group_id,
-      session_date: today,
+      session_date: selectedDate,
       activated_by: user.id,
       activated_at: new Date().toISOString(),
     });
     if (!error) {
-      await loadActiveSessions(todaySessions.map(s => s.id));
+      await loadActiveSessions(daySessions.map(s => s.id));
     }
     setActivating(null);
   }
@@ -158,11 +177,46 @@ export default function TeacherQuiz() {
   async function closeQuiz(quizSessionId: string) {
     setClosing(quizSessionId);
     await supabase.from('quiz_sessions').update({ closed_at: new Date().toISOString() }).eq('id', quizSessionId);
-    await loadActiveSessions(todaySessions.map(s => s.id));
+    await loadActiveSessions(daySessions.map(s => s.id));
+    setOpenLoaded(false);
     setClosing(null);
-    // Auto-switch to riwayat and reload
-    setRiwayatLoaded(false);
-    setTab('riwayat');
+  }
+
+  async function loadOpenSessions() {
+    if (!user) return;
+    setOpenLoading(true);
+    const { data: sessions } = await supabase
+      .from('quiz_sessions')
+      .select('id, quiz_id, group_id, session_date, activated_at, quiz:quizzes!quiz_id(nomor,judul), group:groups!group_id(nama,kode,warna,warna_text)')
+      .eq('activated_by', user.id)
+      .is('closed_at', null)
+      .order('activated_at', { ascending: true });
+
+    const sessionList = (sessions ?? []) as any[];
+    if (sessionList.length === 0) { setOpenSessions([]); setOpenLoading(false); setOpenLoaded(true); return; }
+
+    const { data: ans } = await supabase
+      .from('quiz_answers')
+      .select('quiz_session_id, student_id')
+      .in('quiz_session_id', sessionList.map(s => s.id));
+
+    const uniq: Record<string, Set<string>> = {};
+    (ans ?? []).forEach((a: any) => {
+      if (!uniq[a.quiz_session_id]) uniq[a.quiz_session_id] = new Set();
+      uniq[a.quiz_session_id].add(a.student_id);
+    });
+
+    setOpenSessions(sessionList.map(s => ({ ...s, answered_count: uniq[s.id]?.size ?? 0 })));
+    setOpenLoading(false);
+    setOpenLoaded(true);
+  }
+
+  async function closeOpenSession(quizSessionId: string) {
+    setClosing(quizSessionId);
+    await supabase.from('quiz_sessions').update({ closed_at: new Date().toISOString() }).eq('id', quizSessionId);
+    setOpenLoaded(false);
+    await loadOpenSessions();
+    setClosing(null);
   }
 
   async function loadRiwayat() {
@@ -229,6 +283,9 @@ export default function TeacherQuiz() {
     if (tab === 'riwayat' && !riwayatLoaded && !riwayatLoading) {
       loadRiwayat();
     }
+    if (tab === 'aktif' && !openLoaded && !openLoading) {
+      loadOpenSessions();
+    }
   }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
 
@@ -238,7 +295,7 @@ export default function TeacherQuiz() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '24px', borderBottom: '2px solid #E2E1DC' }}>
-        {([['aktifkan', 'Aktifkan Quiz'], ['riwayat', 'Riwayat Quiz']] as [Tab, string][]).map(([t, label]) => (
+        {([['aktifkan', 'Aktifkan Quiz'], ['aktif', 'Quiz Aktif'], ['riwayat', 'Riwayat Quiz']] as [Tab, string][]).map(([t, label]) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -249,7 +306,46 @@ export default function TeacherQuiz() {
         ))}
       </div>
 
-      {tab === 'riwayat' ? (
+      {tab === 'aktif' ? (
+        <div>
+          {openLoading ? (
+            <p style={muted}>Memuat...</p>
+          ) : openSessions.length === 0 ? (
+            <div style={card}><p style={muted}>Tidak ada quiz yang masih aktif.</p></div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {openSessions.map(s => {
+                const dateLabel = new Date(s.session_date + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+                return (
+                  <div key={s.id} style={{ background: '#fff', border: '1.5px solid #86EFAC', borderRadius: '10px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                    <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.75rem', color: '#fff', background: '#0D5C3A', padding: '2px 9px', borderRadius: '5px', flexShrink: 0 }}>
+                      Quiz {String(s.quiz.nomor).padStart(2, '0')}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.88rem', color: '#0D0D0D' }}>{s.quiz.judul}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+                        {s.group && <GrupBadge nama={s.group.nama} warna={s.group.warna} warna_text={s.group.warna_text} />}
+                        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.73rem', color: '#888' }}>Diaktifkan {dateLabel}</span>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#0D5C3A', lineHeight: 1 }}>{s.answered_count}</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#888' }}>siswa selesai</div>
+                    </div>
+                    <button
+                      onClick={() => closeOpenSession(s.id)}
+                      disabled={closing === s.id}
+                      style={btnClose}
+                    >
+                      {closing === s.id ? 'Menutup...' : 'Tutup Quiz'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : tab === 'riwayat' ? (
         <div>
           {riwayatLoading ? (
             <p style={muted}>Memuat riwayat...</p>
@@ -294,15 +390,23 @@ export default function TeacherQuiz() {
         </div>
       ) : (
         <>
-          <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: '0 0 20px' }}>
-            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' }}>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              style={{ padding: '8px 11px', border: '1.5px solid #E2E1DC', borderRadius: '7px', fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', background: '#fff', outline: 'none' }}
+            />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>
+              {new Date(selectedDate + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            </span>
+          </div>
 
           {loading ? (
         <p style={muted}>Memuat...</p>
-      ) : todaySessions.length === 0 ? (
+      ) : daySessions.length === 0 ? (
         <div style={card}>
-          <p style={muted}>Tidak ada sesi hari ini.</p>
+          <p style={muted}>Tidak ada sesi pada tanggal ini.</p>
         </div>
       ) : quizzes.length === 0 ? (
         <div style={card}>
@@ -310,7 +414,7 @@ export default function TeacherQuiz() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {todaySessions.map(session => {
+          {daySessions.map(session => {
             const group = session.groups;
             const active = activeBySchedule[session.id] ?? null;
             const answered = active ? (answerCounts[active.id] ?? 0) : 0;
