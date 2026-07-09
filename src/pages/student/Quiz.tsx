@@ -173,12 +173,12 @@ export default function StudentQuiz() {
                       </div>
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', color: '#888' }}>sudah dikerjakan</div>
                     </div>
-                    <button onClick={() => navigate(/student/quiz/review/${activeSession.id})} style={btnOutline}>
+                    <button onClick={() => navigate(`/student/quiz/review/${activeSession.id}`)} style={btnOutline}>
                       Lihat Review
                     </button>
                   </div>
                 ) : (
-                  <button onClick={() => navigate(/student/quiz/do/${activeSession.id})} style={btnStart}>
+                  <button onClick={() => navigate(`/student/quiz/do/${activeSession.id}`)} style={btnStart}>
                     Mulai Quiz
                   </button>
                 )}
@@ -211,7 +211,7 @@ export default function StudentQuiz() {
                   <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', color: '#0D5C3A', flexShrink: 0 }}>
                     {row.total_skor % 1 === 0 ? row.total_skor : row.total_skor.toFixed(1)}
                   </div>
-                  <button onClick={() => navigate(/student/quiz/review/${row.session_id})} style={btnReview}>
+                  <button onClick={() => navigate(`/student/quiz/review/${row.session_id}`)} style={btnReview}>
                     Review
                   </button>
                 </div>
