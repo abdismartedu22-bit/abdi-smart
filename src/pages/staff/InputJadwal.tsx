@@ -49,13 +49,13 @@ function getTodayHari(): string {
   return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][new Date().getDay()];
 }
 
-function getYesterdayHari(): string {
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][yesterday.getDay()];
+function getTomorrowHari(): string {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'][tomorrow.getDay()];
 }
 
-type DayFilter = 'today' | 'yesterday' | 'all';
+type DayFilter = 'today' | 'tomorrow' | 'all';
 
 export default function InputJadwal() {
   const { profile } = useAuth();
@@ -83,7 +83,7 @@ export default function InputJadwal() {
 
   const weekDays = getWeekDays(weekStart);
   const todayHari = getTodayHari();
-  const yesterdayHari = getYesterdayHari();
+  const tomorrowHari = getTomorrowHari();
 
   useEffect(() => { load(); }, [weekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -234,8 +234,8 @@ export default function InputJadwal() {
 
   const displayed = dayFilter === 'today'
     ? schedules.filter(s => s.hari === todayHari)
-    : dayFilter === 'yesterday'
-    ? schedules.filter(s => s.hari === yesterdayHari)
+    : dayFilter === 'tomorrow'
+    ? schedules.filter(s => s.hari === tomorrowHari)
     : schedules;
 
   // For "all" mode: group by day in HARI order
@@ -288,7 +288,7 @@ export default function InputJadwal() {
 
       {/* Day filter */}
       <div style={{ display: 'flex', gap: '6px', marginBottom: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
-        {([['today', 'Hari Ini'], ['yesterday', 'Kemarin'], ['all', 'Semua Hari']] as [DayFilter, string][]).map(([val, label]) => (
+        {([['today', 'Hari Ini'], ['tomorrow', 'Besok'], ['all', 'Semua Hari']] as [DayFilter, string][]).map(([val, label]) => (
           <button
             key={val}
             onClick={() => setDayFilter(val)}
@@ -315,7 +315,7 @@ export default function InputJadwal() {
         /* H-1 + H flat list sorted by created_at desc */
         <div>
           {displayed.length === 0 ? (
-            <p style={mutedText}>Tidak ada sesi untuk kemarin dan hari ini.</p>
+            <p style={mutedText}>Tidak ada sesi untuk hari ini dan besok.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {displayed.map(s => (
