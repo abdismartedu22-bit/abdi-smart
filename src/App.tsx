@@ -73,6 +73,7 @@ export default function App() {
               <Route path="/staff/realisasi" element={<StaffRealisasi />} />
               <Route path="/staff/download" element={<StaffDownload />} />
               <Route path="/staff/gedung" element={<AdminGedung />} />
+              <Route path="/staff/quiz" element={<AdminQuiz />} />
             </Route>
           </Route>
 

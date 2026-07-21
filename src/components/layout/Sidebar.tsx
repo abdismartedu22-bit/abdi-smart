@@ -25,6 +25,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Beranda', href: '/staff' },
     { label: 'Jadwal', href: '/staff/jadwal' },
     { label: 'Realisasi', href: '/staff/realisasi' },
+    { label: 'Quiz', href: '/staff/quiz' },
     { label: 'Gedung', href: '/staff/gedung' },
     { label: 'Download', href: '/staff/download' },
   ],
