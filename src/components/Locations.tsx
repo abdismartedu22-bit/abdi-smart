@@ -8,10 +8,10 @@ const branches = [
   },
   {
     code: '02',
-    name: 'Trijata',
+    name: 'Trijata No 47',
     note: 'Denpasar Utara',
     city: 'Denpasar',
-    mapsUrl: 'https://maps.app.goo.gl/y53JviYgZH8fzU2u5',
+    mapsUrl: 'https://share.google/HN2b73CYCGrcyZ5JO',
   },
   {
     code: '03',
