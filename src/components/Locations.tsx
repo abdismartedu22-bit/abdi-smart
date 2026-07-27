@@ -11,7 +11,7 @@ const branches = [
     name: 'Trijata No 47',
     note: 'Denpasar Utara',
     city: 'Denpasar',
-    mapsUrl: 'https://share.google/HN2b73CYCGrcyZ5JO',
+    mapsUrl: 'https://maps.app.goo.gl/7sx3oa2ey47Fis2UA?g_st=ic',
   },
   {
     code: '03',
