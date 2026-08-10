@@ -1,15 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
+import { toDirectImg } from '../../lib/googleDriveImg';
 
 type Announcement = { id: string; judul: string; isi: string; gambar_url: string | null; target_kelas: string[] | null };
-
-function toDirectImg(url: string): string {
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
-  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
-  return url;
-}
 
 export default function AnnouncementSlider({ tingkatKelas }: { tingkatKelas?: string | null }) {
   const [items, setItems] = useState<Announcement[]>([]);

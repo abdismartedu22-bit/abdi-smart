@@ -16,6 +16,17 @@ import AdminGedung from './pages/admin/Gedung';
 import AdminQuiz from './pages/admin/Quiz';
 import AdminKonten from './pages/admin/Konten';
 
+import ToPaketList from './pages/to/ToPaketList';
+import ToPaketDetail from './pages/to/ToPaketDetail';
+import ToHasilRekap from './pages/to/ToHasilRekap';
+import ToStatistik from './pages/to/ToStatistik';
+import ToResetPeserta from './pages/to/ToResetPeserta';
+import ToPaketListTaker from './pages/to/ToPaketListTaker';
+import ToExamListTaker from './pages/to/ToExamListTaker';
+import ToTokenGate from './pages/to/ToTokenGate';
+import ToExamRunner from './pages/to/ToExamRunner';
+import ToReview from './pages/to/ToReview';
+
 import StaffHome from './pages/staff/StaffHome';
 import InputJadwal from './pages/staff/InputJadwal';
 import StaffDownload from './pages/staff/Download';
@@ -59,6 +70,10 @@ export default function App() {
               <Route path="/admin/jadwal" element={<InputJadwal />} />
               <Route path="/admin/download" element={<AdminDownload />} />
               <Route path="/admin/gedung" element={<AdminGedung />} />
+              <Route path="/admin/to/paket" element={<ToPaketList />} />
+              <Route path="/admin/to/paket/:packageId" element={<ToPaketDetail />} />
+              <Route path="/admin/to/hasil" element={<ToHasilRekap />} />
+              <Route path="/admin/to/hasil/:examId" element={<ToStatistik />} />
               <Route path="/admin/quiz" element={<AdminQuiz />} />
               <Route path="/admin/konten" element={<AdminKonten />} />
               <Route path="/admin/hasil-to" element={<AdminHasilTO />} />
@@ -73,6 +88,11 @@ export default function App() {
               <Route path="/staff/realisasi" element={<StaffRealisasi />} />
               <Route path="/staff/download" element={<StaffDownload />} />
               <Route path="/staff/gedung" element={<AdminGedung />} />
+              <Route path="/staff/to/paket" element={<ToPaketList />} />
+              <Route path="/staff/to/paket/:packageId" element={<ToPaketDetail />} />
+              <Route path="/staff/to/hasil" element={<ToHasilRekap />} />
+              <Route path="/staff/to/hasil/:examId" element={<ToStatistik />} />
+              <Route path="/staff/to/reset" element={<ToResetPeserta />} />
               <Route path="/staff/quiz" element={<AdminQuiz />} />
             </Route>
           </Route>
@@ -83,6 +103,11 @@ export default function App() {
               <Route path="/teacher" element={<TeacherHome />} />
               <Route path="/teacher/jadwal" element={<TeacherJadwal />} />
               <Route path="/teacher/realisasi" element={<TeacherRealisasi />} />
+              <Route path="/teacher/to" element={<ToPaketListTaker />} />
+              <Route path="/teacher/to/paket/:packageId" element={<ToExamListTaker />} />
+              <Route path="/teacher/to/token/:examId" element={<ToTokenGate />} />
+              <Route path="/teacher/to/ujian/:attemptId" element={<ToExamRunner />} />
+              <Route path="/teacher/to/review/:attemptId" element={<ToReview />} />
               <Route path="/teacher/quiz" element={<TeacherQuiz />} />
             </Route>
           </Route>
@@ -94,6 +119,11 @@ export default function App() {
               <Route path="/student/jadwal" element={<StudentJadwal />} />
               <Route path="/student/absen" element={<StudentAbsen />} />
               <Route path="/student/hasil-to" element={<StudentHasilTO />} />
+              <Route path="/student/to" element={<ToPaketListTaker />} />
+              <Route path="/student/to/paket/:packageId" element={<ToExamListTaker />} />
+              <Route path="/student/to/token/:examId" element={<ToTokenGate />} />
+              <Route path="/student/to/ujian/:attemptId" element={<ToExamRunner />} />
+              <Route path="/student/to/review/:attemptId" element={<ToReview />} />
               <Route path="/student/quiz" element={<StudentQuiz />} />
               <Route path="/student/quiz/do/:sessionId" element={<StudentQuizDo />} />
               <Route path="/student/quiz/review/:sessionId" element={<StudentQuizReview />} />

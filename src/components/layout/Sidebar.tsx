@@ -15,6 +15,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'User', href: '/admin/users' },
     { label: 'Jadwal', href: '/admin/jadwal' },
     { label: 'Realisasi', href: '/admin/realisasi' },
+    { label: 'Try Out', href: '/admin/to/paket' },
     { label: 'Quiz', href: '/admin/quiz' },
     { label: 'Hasil TO', href: '/admin/hasil-to' },
     { label: 'Gedung', href: '/admin/gedung' },
@@ -25,6 +26,7 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Beranda', href: '/staff' },
     { label: 'Jadwal', href: '/staff/jadwal' },
     { label: 'Realisasi', href: '/staff/realisasi' },
+    { label: 'Try Out', href: '/staff/to/paket' },
     { label: 'Quiz', href: '/staff/quiz' },
     { label: 'Gedung', href: '/staff/gedung' },
     { label: 'Download', href: '/staff/download' },
@@ -33,12 +35,14 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Beranda', href: '/teacher' },
     { label: 'Jadwal', href: '/teacher/jadwal' },
     { label: 'Realisasi', href: '/teacher/realisasi' },
+    { label: 'Try Out', href: '/teacher/to' },
     { label: 'Quiz', href: '/teacher/quiz' },
   ],
   student: [
     { label: 'Dashboard', href: '/student' },
     { label: 'Jadwal', href: '/student/jadwal' },
     { label: 'Absen', href: '/student/absen' },
+    { label: 'Try Out', href: '/student/to' },
     { label: 'Quiz', href: '/student/quiz' },
   ],
 };
@@ -59,7 +63,7 @@ interface Props {
 }
 
 const TO_ITEMS: NavItem[] = [
-  { label: 'Tryout', href: '/student/hasil-to' },
+  { label: 'Hasil TO', href: '/student/hasil-to' },
 ];
 
 const TO_GRADES = ['6SD', '9SMP', '12IPA', '12IPS'];

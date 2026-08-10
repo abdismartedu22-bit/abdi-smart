@@ -3,15 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import MathText from '../../components/shared/MathText';
+import { toDirectImg } from '../../lib/googleDriveImg';
 import type { QuizTipe } from '../../types';
-
-function toDirectImg(url: string): string {
-  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
-  const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
-  if (idMatch) return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
-  return url;
-}
 
 type QuizQuestion = {
   id: string;

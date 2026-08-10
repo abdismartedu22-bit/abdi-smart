@@ -123,33 +123,60 @@ export default function DownloadPage() {
       }
     }
 
-    let q = supabase
+    // Sessions to include are defined by the teacher's own row being
+    // marked realized -- matching what Realisasi (admin/staff/teacher)
+    // considers "TEREALISASI" and how downloadKelas() below already
+    // does it. Student attendance rows are only used afterwards for
+    // the JUMSIS/JUMLAH HADIR counts -- their existence must NOT gate
+    // whether a realized session appears in the export (a session can
+    // be locked as terlaksana with zero student rows, e.g. an online
+    // group where nobody self-checked-in).
+    let teacherQ = supabase
       .from('attendance')
       .select(`
-        schedule_id, session_date, status,
+        schedule_id, session_date,
         schedule:schedules!schedule_id(hari, jam_mulai, jam_selesai, materi, lokasi, ruangan, pertemuan_ke, week_start, groups!group_id(nama,kode), teacher:profiles!teacher_id(display_name))
       `)
-      .eq('person_role', 'student')
+      .eq('person_role', 'teacher')
+      .eq('sesi_status', 'terlaksana')
       .gte('session_date', absenFrom)
       .lte('session_date', absenTo)
       .order('session_date')
       .order('schedule_id');
 
-    if (scheduleIds !== null) q = q.in('schedule_id', scheduleIds);
+    if (scheduleIds !== null) teacherQ = teacherQ.in('schedule_id', scheduleIds);
 
-    const { data } = await q;
-    const rows = (data ?? []) as any[];
+    let studentQ = supabase
+      .from('attendance')
+      .select('schedule_id, session_date, status')
+      .eq('person_role', 'student')
+      .gte('session_date', absenFrom)
+      .lte('session_date', absenTo);
 
-    // Group by session (schedule_id + session_date), count total and hadir
+    if (scheduleIds !== null) studentQ = studentQ.in('schedule_id', scheduleIds);
+
+    const [{ data: teacherRows }, { data: studentRows }] = await Promise.all([teacherQ, studentQ]);
+    const rows = (teacherRows ?? []) as any[];
+
+    // Count total/hadir per session from student rows (defaults to 0/0
+    // when a realized session has no student rows yet).
+    const countMap = new Map<string, { total: number; hadir: number }>();
+    for (const row of (studentRows ?? []) as any[]) {
+      const key = `${row.schedule_id}__${row.session_date}`;
+      const entry = countMap.get(key) ?? { total: 0, hadir: 0 };
+      entry.total++;
+      if (row.status === 'hadir') entry.hadir++;
+      countMap.set(key, entry);
+    }
+
+    // One row per realized session (teacher row is already unique per
+    // schedule_id + session_date thanks to the attendance table's
+    // UNIQUE(schedule_id, session_date, person_id) constraint).
     const sessionMap = new Map<string, { row: any; sched: any; total: number; hadir: number }>();
     for (const row of rows) {
       const key = `${row.schedule_id}__${row.session_date}`;
-      if (!sessionMap.has(key)) {
-        sessionMap.set(key, { row, sched: row.schedule ?? {}, total: 0, hadir: 0 });
-      }
-      const entry = sessionMap.get(key)!;
-      entry.total++;
-      if (row.status === 'hadir') entry.hadir++;
+      const counts = countMap.get(key) ?? { total: 0, hadir: 0 };
+      sessionMap.set(key, { row, sched: row.schedule ?? {}, total: counts.total, hadir: counts.hadir });
     }
 
     const header = ['No', 'Hari', 'Tanggal', 'Kode Kelas', 'Nama Kelas', 'Jam Mulai', 'Jam Selesai', 'Nama Pengajar', 'Mata Pelajaran', 'Pertemuan ke', 'Lokasi', 'Ruangan', 'JUMSIS', 'JUMLAH HADIR'];

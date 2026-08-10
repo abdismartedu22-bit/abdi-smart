@@ -136,3 +136,108 @@ export interface Gedung {
   status: 'aktif' | 'nonaktif';
   created_at: string;
 }
+
+// ---- Try Out (TO) ----
+// Fully separate from Quiz and from TryoutResult (manual score entry).
+// Scoring is NOT computed here -- only unweighted Benar/Salah/Kosong
+// counts, via exact-match comparison. See src/lib/toAnswerCheck.ts.
+
+export type ToQuestionTipe = 'pilihan_ganda' | 'centang_semua' | 'isian_singkat' | 'grid_pernyataan';
+
+export interface ToPackage {
+  id: string;
+  nama: string;
+  deskripsi: string | null;
+  tanggal_mulai: string;
+  tanggal_selesai: string;
+  target_kelas: string[] | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface ToExam {
+  id: string;
+  package_id: string;
+  mata_pelajaran: string;
+  teacher_id: string | null;
+  nama_ujian: string;
+  jumlah_soal_target: number;
+  durasi_menit: number;
+  acak_soal: boolean;
+  tanggal_mulai: string;
+  tanggal_selesai: string;
+  urutan: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// Only ever fetched by admin/staff (RLS-blocked for student/teacher) --
+// kept off ToExam so the token never round-trips to a student/teacher session.
+export interface ToExamToken {
+  exam_id: string;
+  token: string;
+  regenerated_at: string | null;
+  regenerated_by: string | null;
+  created_at: string;
+}
+
+export interface ToGridStatement {
+  id: string;
+  text_html: string;
+}
+
+export interface ToGridConfig {
+  column_labels: [string, string];
+  statements: ToGridStatement[];
+}
+
+export type ToJawabanBenar = string | string[] | Record<string, number>;
+
+export interface ToQuestion {
+  id: string;
+  exam_id: string;
+  urutan: number;
+  tipe: ToQuestionTipe;
+  konten_html: string;
+  gambar_url: string | null;
+  opsi: string[] | null;
+  jawaban_benar: ToJawabanBenar;
+  grid_config: ToGridConfig | null;
+  pembahasan_html: string | null;
+  created_at: string;
+}
+
+export type ToAttemptStatus = 'in_progress' | 'submitted';
+
+export interface ToAttempt {
+  id: string;
+  exam_id: string;
+  student_id: string;
+  token_verified_at: string | null;
+  started_at: string | null;
+  deadline_at: string | null;
+  question_order: string[] | null;
+  submitted_at: string | null;
+  auto_submitted: boolean;
+  jumlah_benar: number | null;
+  jumlah_salah: number | null;
+  jumlah_kosong: number | null;
+  status: ToAttemptStatus;
+  voided_at: string | null;
+  voided_by: string | null;
+  void_reason: string | null;
+  created_at: string;
+}
+
+export type ToJawaban = string | string[] | Record<string, number>;
+
+export interface ToAnswer {
+  id: string;
+  attempt_id: string;
+  question_id: string;
+  jawaban: ToJawaban | null;
+  ragu: boolean;
+  benar: boolean | null;
+  answered_at: string;
+}

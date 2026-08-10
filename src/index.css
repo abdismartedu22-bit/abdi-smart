@@ -110,3 +110,37 @@
   transform: translateY(-4px);
   box-shadow: 0 14px 40px rgba(0,0,0,0.1);
 }
+
+/* Try Out rich text editor (Tiptap) */
+.to-rich-text {
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  color: #0D0D0D;
+  outline: none;
+}
+.to-rich-text .ProseMirror {
+  outline: none;
+}
+.to-rich-text p { margin: 0 0 8px; }
+.to-rich-text p:last-child { margin-bottom: 0; }
+.to-rich-text table {
+  border-collapse: collapse;
+  margin: 8px 0;
+  width: 100%;
+}
+.to-rich-text td, .to-rich-text th {
+  border: 1px solid #E2E1DC;
+  padding: 6px 10px;
+  text-align: left;
+}
+.to-rich-text th {
+  background: #F9F9F7;
+  font-weight: 700;
+}
+.to-rich-text .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: #999;
+  pointer-events: none;
+  height: 0;
+}
