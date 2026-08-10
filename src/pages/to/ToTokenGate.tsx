@@ -15,6 +15,7 @@ export default function ToTokenGate() {
   const [teacher, setTeacher] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState('');
+  const [tokenFocused, setTokenFocused] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now());
@@ -54,7 +55,13 @@ export default function ToTokenGate() {
   const end = new Date(exam.tanggal_selesai).getTime();
   const belumWaktu = now < start;
   const waktuHabis = now >= end;
-  const terlambat = new Date(end - exam.durasi_menit * 60_000);
+  // The hard cutoff for starting is the exam's own end time -- matches
+  // exactly what start_to_attempt enforces (now() >= tanggal_selesai
+  // is rejected). Not tanggal_selesai minus durasi_menit -- a wide
+  // window with a short exam duration is normal (start anytime within
+  // the window, get however much of the duration still fits before it
+  // closes), not a reason to warn earlier than the real deadline.
+  const terlambat = new Date(end);
 
   function countdown(target: number): string {
     const diff = Math.max(0, target - now);
@@ -79,7 +86,7 @@ export default function ToTokenGate() {
           <InfoRow label="Kelas/Jurusan" value={`${profile?.tingkat_kelas ?? '-'} / ${profile?.jurusan ?? '-'}`} />
           <InfoRow label="Jumlah Soal" value={String(exam.jumlah_soal_target)} />
           <InfoRow label="Waktu" value={`${exam.durasi_menit} Menit`} />
-          <InfoRow label="Terlambat" value={fmtDateTime(terlambat.toISOString())} />
+          <InfoRow label="Tenggat Waktu" value={fmtDateTime(terlambat.toISOString())} />
         </div>
 
         {belumWaktu ? (
@@ -98,6 +105,9 @@ export default function ToTokenGate() {
               style={{ ...input, textAlign: 'center', fontFamily: 'var(--font-display)', fontSize: '1.2rem', letterSpacing: '0.15em', textTransform: 'uppercase' }}
               value={token}
               onChange={e => setToken(e.target.value.toUpperCase())}
+              onFocus={() => setTokenFocused(true)}
+              onBlur={() => setTokenFocused(false)}
+              placeholder={tokenFocused ? '' : 'XXXXX'}
               autoComplete="off"
               maxLength={5}
               required

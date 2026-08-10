@@ -140,30 +140,22 @@ function PaketFormModal({ pkg, onClose, onDone }: { pkg?: ToPackage; onClose: ()
       ? await supabase.from('to_packages').update(payload).eq('id', pkg.id)
       : await supabase.from('to_packages').insert({ ...payload, created_by: profile?.id });
 
-    // If the package's window was narrowed, clamp any exam that now
-    // sticks out past the new range back inside it -- otherwise an
-    // exam edited/created under the old, wider window silently keeps
-    // dates outside its own package (the exact bug reported).
+    // Every exam in the package follows the package's window -- if
+    // either date actually changed on this save, push it onto every
+    // child exam unconditionally (not just clamping ones that would
+    // otherwise fall out of range). Students already mid-attempt are
+    // unaffected either way: their deadline_at is snapshotted once in
+    // start_to_attempt and never re-derived from to_exams afterward.
     if (!err && pkg) {
+      const oldStart = new Date(pkg.tanggal_mulai).getTime();
+      const oldEnd = new Date(pkg.tanggal_selesai).getTime();
       const newStart = new Date(payload.tanggal_mulai).getTime();
       const newEnd = new Date(payload.tanggal_selesai).getTime();
-      const { data: exams } = await supabase.from('to_exams').select('id, tanggal_mulai, tanggal_selesai').eq('package_id', pkg.id);
-      for (const ex of exams ?? []) {
-        const exStart = new Date(ex.tanggal_mulai).getTime();
-        const exEnd = new Date(ex.tanggal_selesai).getTime();
-        // Entirely outside the new range on one side (e.g. package
-        // narrowed past the exam's whole old window) -- naive clamping
-        // would collapse start===end, so fall back to the full new
-        // package window instead of a zero-length exam.
-        const noOverlap = exEnd <= newStart || exStart >= newEnd;
-        const clampedStart = noOverlap ? newStart : Math.min(Math.max(exStart, newStart), newEnd);
-        const clampedEnd = noOverlap ? newEnd : Math.max(Math.min(exEnd, newEnd), newStart);
-        if (clampedStart !== exStart || clampedEnd !== exEnd) {
-          await supabase.from('to_exams').update({
-            tanggal_mulai: new Date(clampedStart).toISOString(),
-            tanggal_selesai: new Date(clampedEnd).toISOString(),
-          }).eq('id', ex.id);
-        }
+      if (newStart !== oldStart || newEnd !== oldEnd) {
+        await supabase.from('to_exams').update({
+          tanggal_mulai: payload.tanggal_mulai,
+          tanggal_selesai: payload.tanggal_selesai,
+        }).eq('package_id', pkg.id);
       }
     }
 
