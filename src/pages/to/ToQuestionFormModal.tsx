@@ -22,6 +22,7 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
   const [tipe, setTipe] = useState<ToQuestionTipe>(question?.tipe ?? 'pilihan_ganda');
   const [kontenHtml, setKontenHtml] = useState(question?.konten_html ?? '');
   const [pembahasanHtml, setPembahasanHtml] = useState(question?.pembahasan_html ?? '');
+  const [pembahasanGambarUrl, setPembahasanGambarUrl] = useState(question?.pembahasan_gambar_url ?? '');
   const [gambarUrl, setGambarUrl] = useState(question?.gambar_url ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -114,6 +115,7 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
       jawaban_benar,
       grid_config,
       pembahasan_html: pembahasanHtml.trim() || null,
+      pembahasan_gambar_url: pembahasanGambarUrl.trim() || null,
     };
   }
 
@@ -302,6 +304,25 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
 
           <Field label="Pembahasan (opsional, ditampilkan ke siswa saat review)">
             <RichTextEditor value={pembahasanHtml} onChange={setPembahasanHtml} placeholder="Jelaskan cara penyelesaian..." minHeight={80} />
+          </Field>
+
+          <Field label="Gambar Pembahasan (opsional)">
+            <input
+              style={input}
+              value={pembahasanGambarUrl}
+              onChange={e => setPembahasanGambarUrl(e.target.value)}
+              placeholder="https://... atau link Google Drive"
+            />
+            {pembahasanGambarUrl.trim() && (
+              <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC', background: '#F9F9F7' }}>
+                <img
+                  src={toDirectImg(pembahasanGambarUrl.trim())}
+                  alt="Preview gambar pembahasan"
+                  style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block' }}
+                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            )}
           </Field>
 
           {kontenHtml.trim() && (

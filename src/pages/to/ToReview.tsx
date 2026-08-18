@@ -16,6 +16,7 @@ type ReviewQuestion = {
   grid_config: ToGridConfig | null;
   jawaban_benar: ToJawaban;
   pembahasan_html: string | null;
+  pembahasan_gambar_url: string | null;
   jawaban_siswa: ToJawaban | null;
   ragu: boolean;
   benar: boolean | null;
@@ -86,6 +87,14 @@ export default function ToReview() {
               <div style={{ marginTop: '12px', padding: '12px', background: '#F9F9F7', borderRadius: '8px' }}>
                 <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.75rem', color: '#666', marginBottom: '6px' }}>Pembahasan</div>
                 <ToRichContent html={q.pembahasan_html} style={{ fontSize: '0.85rem', color: '#0D0D0D' }} />
+                {q.pembahasan_gambar_url && (
+                  <img
+                    src={toDirectImg(q.pembahasan_gambar_url)}
+                    alt="Gambar pembahasan"
+                    style={{ maxWidth: '100%', maxHeight: '260px', objectFit: 'contain', display: 'block', marginTop: '10px', borderRadius: '8px' }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
               </div>
             )}
           </div>

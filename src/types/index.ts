@@ -205,6 +205,7 @@ export interface ToQuestion {
   jawaban_benar: ToJawabanBenar;
   grid_config: ToGridConfig | null;
   pembahasan_html: string | null;
+  pembahasan_gambar_url: string | null;
   created_at: string;
 }
 
