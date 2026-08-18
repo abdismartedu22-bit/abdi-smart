@@ -301,13 +301,15 @@ export default function DownloadPage() {
       const s = r.scores ?? {};
       const row: any[] = [idx + 1, r.student?.username ?? '-', r.student?.display_name ?? '-'];
       for (const f of TKA_FIELDS) {
+        const b = s[f.key + '_b'];
+        const sVal = s[f.key + '_s'];
+        const k = s[f.key + '_k'];
         const skor = s[f.key];
-        const taken = skor !== undefined && skor !== null && skor !== '' && skor !== '-';
         row.push(
-          taken ? (s[f.key + '_b'] ?? '-') : '-',
-          taken ? (s[f.key + '_s'] ?? '-') : '-',
-          taken ? (s[f.key + '_k'] ?? '-') : '-',
-          taken ? Number(skor) : '-',
+          b !== undefined && b !== null ? b : '-',
+          sVal !== undefined && sVal !== null ? sVal : '-',
+          k !== undefined && k !== null ? k : '-',
+          skor !== undefined && skor !== null && skor !== '' && skor !== '-' ? Number(skor) : '-',
         );
       }
       return row;

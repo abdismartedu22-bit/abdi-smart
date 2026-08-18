@@ -246,12 +246,12 @@ export default function StudentHasilTO() {
   );
 
   const availableTOs = useMemo(() =>
-    Array.from(new Set(sorted.map(r => r.kode_to ?? r.nama_to))).sort(),
+    Array.from(new Set(sorted.map(r => r.nama_to ?? r.kode_to))).sort(),
     [sorted]
   );
 
   const filteredSorted = useMemo(() =>
-    selectedKodeTo ? sorted.filter(r => (r.kode_to ?? r.nama_to) === selectedKodeTo) : sorted,
+    selectedKodeTo ? sorted.filter(r => (r.nama_to ?? r.kode_to) === selectedKodeTo) : sorted,
     [sorted, selectedKodeTo]
   );
 
@@ -360,7 +360,7 @@ export default function StudentHasilTO() {
                     { label: 'Nama', value: profile?.display_name ?? '-' },
                     { label: 'Jumlah TO', value: `${filteredSorted.length} kali` },
                     { label: 'Sekolah', value: profile?.sekolah ?? '-' },
-                    { label: 'TO Terbaik', value: filteredSorted[bestIdx] ? `#${bestIdx + 1}${filteredSorted[bestIdx].kode_to ? ` (${filteredSorted[bestIdx].kode_to})` : ''} - ${filteredSorted[bestIdx].total_score?.toFixed(2)}` : '-' },
+                    { label: 'TO Terbaik', value: filteredSorted[bestIdx] ? `#${bestIdx + 1}${filteredSorted[bestIdx].nama_to ? ` (${filteredSorted[bestIdx].nama_to})` : ''} - ${filteredSorted[bestIdx].total_score?.toFixed(2)}` : '-' },
                   ].map((item, i) => (
                     <div key={i} style={{ padding: '10px 16px', background: i % 2 === 0 ? '#F9FAFB' : '#fff', borderTop: i >= 2 ? '1px solid #E2E1DC' : 'none', borderRight: i % 2 === 0 ? '1px solid #E2E1DC' : 'none' }}>
                       <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: '#0D5C3A', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '2px' }}>{item.label}</div>
@@ -444,7 +444,7 @@ export default function StudentHasilTO() {
                       <tbody>
                         {filteredSorted.map((r, i) => (
                           <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
-                            <td style={tdStyle}>{i + 1}{r.kode_to ? <span style={{ color: '#888', fontSize: '0.7rem' }}> ({r.kode_to})</span> : ''}</td>
+                            <td style={tdStyle}>{i + 1}{r.nama_to ? <span style={{ color: '#888', fontSize: '0.7rem' }}> ({r.nama_to})</span> : ''}</td>
                             {activeFields.map(f => {
                               const v = numVal(r.scores?.[f.key]);
                               return (

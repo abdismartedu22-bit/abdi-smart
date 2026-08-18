@@ -148,6 +148,7 @@ export interface ToPackage {
   id: string;
   nama: string;
   deskripsi: string | null;
+  type: 'SNBT' | 'TKA';
   tanggal_mulai: string;
   tanggal_selesai: string;
   target_kelas: string[] | null;

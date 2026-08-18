@@ -64,7 +64,12 @@ export default function ToPaketList() {
           {packages.map(pkg => (
             <div key={pkg.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
               <div style={{ flex: 1, minWidth: '200px' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: '#0D0D0D' }}>{pkg.nama}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: '#0D0D0D' }}>{pkg.nama}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px', background: pkg.type === 'TKA' ? '#EDE9FE' : '#DBEAFE', color: pkg.type === 'TKA' ? '#5B21B6' : '#1D4ED8' }}>
+                    {pkg.type}
+                  </span>
+                </div>
                 <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginTop: '3px' }}>
                   {fmtDateTime(pkg.tanggal_mulai)} &mdash; {fmtDateTime(pkg.tanggal_selesai)}
                   {' · '}{examCounts[pkg.id] ?? 0} ujian
@@ -112,6 +117,7 @@ function PaketFormModal({ pkg, onClose, onDone }: { pkg?: ToPackage; onClose: ()
   const [form, setForm] = useState({
     nama: pkg?.nama ?? '',
     deskripsi: pkg?.deskripsi ?? '',
+    type: pkg?.type ?? 'SNBT' as 'SNBT' | 'TKA',
     tanggal_mulai: toLocalInputValue(pkg?.tanggal_mulai ?? null),
     tanggal_selesai: toLocalInputValue(pkg?.tanggal_selesai ?? null),
     target_kelas: new Set(pkg?.target_kelas ?? []),
@@ -132,6 +138,7 @@ function PaketFormModal({ pkg, onClose, onDone }: { pkg?: ToPackage; onClose: ()
     const payload = {
       nama: form.nama.trim(),
       deskripsi: form.deskripsi.trim() || null,
+      type: form.type,
       tanggal_mulai: fromLocalInputValue(form.tanggal_mulai),
       tanggal_selesai: fromLocalInputValue(form.tanggal_selesai),
       target_kelas: form.target_kelas.size > 0 ? Array.from(form.target_kelas) : null,
@@ -174,6 +181,29 @@ function PaketFormModal({ pkg, onClose, onDone }: { pkg?: ToPackage; onClose: ()
           </Field>
           <Field label="Deskripsi (opsional)">
             <input style={input} value={form.deskripsi} onChange={e => setForm(f => ({ ...f, deskripsi: e.target.value }))} />
+          </Field>
+          <Field label="Jenis TO">
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {(['SNBT', 'TKA'] as const).map(t => {
+                const active = form.type === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, type: t }))}
+                    style={{
+                      flex: 1, padding: '9px', borderRadius: '8px', cursor: 'pointer',
+                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.85rem',
+                      border: active ? '2px solid #0D5C3A' : '2px solid #E2E1DC',
+                      background: active ? '#D6EEE2' : '#F9F9F7',
+                      color: active ? '#0D5C3A' : '#888',
+                    }}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
           </Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Field label="Tanggal Mulai">

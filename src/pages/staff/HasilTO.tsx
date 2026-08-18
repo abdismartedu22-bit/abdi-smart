@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment } from 'react';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -19,6 +19,7 @@ type TOResult = {
 type TryoutGroup = {
   type: string;
   kode_to: string;
+  nama_to: string;
   tanggal_to: string;
   rows: TOResult[];
 };
@@ -358,7 +359,7 @@ export default function StaffHasilTO() {
       if (filterType && r.type !== filterType) continue;
       const key = `${r.type}__${r.kode_to ?? r.nama_to}`;
       if (!map.has(key)) {
-        map.set(key, { type: r.type, kode_to: r.kode_to ?? r.nama_to, tanggal_to: r.tanggal_to, rows: [] });
+        map.set(key, { type: r.type, kode_to: r.kode_to ?? r.nama_to, nama_to: r.nama_to, tanggal_to: r.tanggal_to, rows: [] });
       }
       map.get(key)!.rows.push(r);
     }
@@ -405,14 +406,24 @@ export default function StaffHasilTO() {
             const dateLabel = g.tanggal_to
               ? new Date(g.tanggal_to + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
               : '-';
-            const avg = g.rows.reduce((sum, r) => sum + (r.total_score ?? 0), 0) / g.rows.length;
+            const hasScore = g.rows.some(r => typeof r.total_score === 'number');
+            const avg = hasScore ? g.rows.reduce((sum, r) => sum + (r.total_score ?? 0), 0) / g.rows.length : null;
+            const bskTotals = g.rows.reduce((acc, r) => {
+              for (const [k, v] of Object.entries(r.scores ?? {})) {
+                const n = Number(v) || 0;
+                if (k.endsWith('_b')) acc.b += n;
+                else if (k.endsWith('_s')) acc.s += n;
+                else if (k.endsWith('_k')) acc.k += n;
+              }
+              return acc;
+            }, { b: 0, s: 0, k: 0 });
             const isOpen = expanded[key] ?? false;
 
             return (
               <div key={key} style={card}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.95rem', color: '#0D0D0D', flex: 1 }}>
-                    {g.kode_to}
+                    {g.nama_to}
                   </span>
                   <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: 700, background: typeInfo.bg, color: typeInfo.color, flexShrink: 0 }}>
                     {g.type}
@@ -422,7 +433,7 @@ export default function StaffHasilTO() {
                     {g.rows.length} siswa
                   </span>
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', color: '#888', flexShrink: 0 }}>
-                    avg {avg.toFixed(2)}
+                    {avg !== null ? `avg ${avg.toFixed(2)}` : `B${bskTotals.b} S${bskTotals.s} K${bskTotals.k}`}
                   </span>
                   <button
                     onClick={() => setExpanded(ex => ({ ...ex, [key]: !isOpen }))}
@@ -458,7 +469,7 @@ export default function StaffHasilTO() {
           <div style={{ background: '#fff', borderRadius: '12px', padding: '28px 32px', maxWidth: '380px', width: '100%', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px' }}>Hapus Data TO?</h2>
             <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#666', margin: '0 0 20px' }}>
-              Semua hasil <strong>{deleteTarget.type}</strong> Tryout ID <strong>{deleteTarget.kode_to}</strong> ({deleteTarget.rows.length} siswa) akan dihapus permanen.
+              Semua hasil <strong>{deleteTarget.type}</strong> <strong>{deleteTarget.nama_to}</strong> ({deleteTarget.rows.length} siswa) akan dihapus permanen.
             </p>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => setDeleteTarget(null)} style={btnSecondary}>Batal</button>
@@ -478,46 +489,76 @@ function StudentScoreTable({ rows, type }: { rows: TOResult[]; type: string }) {
   const keys = type === 'SNBT' ? SNBT_KEYS : TKA_KEYS;
   const labels = type === 'SNBT' ? SNBT_LABELS : TKA_LABELS;
 
-  // Only show subjects that at least one student has a score for
+  // Only show subjects that at least one student has B/S/K (or a
+  // legacy bare skor) for -- checking skor alone misses every Try
+  // Out-sourced row, which only ever writes _b/_s/_k.
   const activeKeys = keys.filter(k => rows.some(r => {
-    const v = r.scores?.[k];
-    return v !== null && v !== undefined && v !== '-' && !isNaN(Number(v));
+    const s = r.scores ?? {};
+    return [s[k], s[`${k}_b`], s[`${k}_s`], s[`${k}_k`]].some(v => v !== null && v !== undefined && v !== '-' && !isNaN(Number(v)));
   }));
 
-  const sorted = [...rows].sort((a, b) => (b.total_score ?? 0) - (a.total_score ?? 0));
+  function totalsFor(r: TOResult) {
+    let b = 0, s = 0, k = 0;
+    const sc = r.scores ?? {};
+    for (const key of activeKeys) {
+      b += Number(sc[`${key}_b`]) || 0;
+      s += Number(sc[`${key}_s`]) || 0;
+      k += Number(sc[`${key}_k`]) || 0;
+    }
+    return { b, s, k };
+  }
+
+  const sorted = [...rows].sort((a, b) => totalsFor(b).b - totalsFor(a).b);
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: `${(activeKeys.length + 2) * 72}px` }}>
+      <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: `${(activeKeys.length * 3 + 4) * 46}px` }}>
         <thead>
           <tr>
-            <th style={thStyle('#555')}>Siswa</th>
+            <th rowSpan={2} style={thStyle('#555')}>Siswa</th>
             {activeKeys.map(k => (
-              <th key={k} style={thStyle('#0D5C3A')}>{labels[k]}</th>
+              <th key={k} colSpan={3} style={thStyle('#0D5C3A')}>{labels[k]}</th>
             ))}
-            <th style={thStyle('#1D4ED8')}>Rata-rata</th>
+            <th colSpan={3} style={thStyle('#1D4ED8')}>Total</th>
+          </tr>
+          <tr>
+            {activeKeys.map(k => (
+              <Fragment key={k}>
+                <th style={{ ...thStyle('#0D5C3A'), fontSize: '0.65rem' }}>B</th>
+                <th style={{ ...thStyle('#0D5C3A'), fontSize: '0.65rem' }}>S</th>
+                <th style={{ ...thStyle('#0D5C3A'), fontSize: '0.65rem' }}>K</th>
+              </Fragment>
+            ))}
+            <th style={{ ...thStyle('#1D4ED8'), fontSize: '0.65rem' }}>B</th>
+            <th style={{ ...thStyle('#1D4ED8'), fontSize: '0.65rem' }}>S</th>
+            <th style={{ ...thStyle('#1D4ED8'), fontSize: '0.65rem' }}>K</th>
           </tr>
         </thead>
         <tbody>
-          {sorted.map((r, i) => (
-            <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
-              <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                {r.student?.display_name ?? r.student_id.slice(0, 8)}
-              </td>
-              {activeKeys.map(k => {
-                const v = r.scores?.[k];
-                const n = v !== null && v !== undefined && v !== '-' ? Number(v) : null;
-                return (
-                  <td key={k} style={tdStyle}>
-                    {n !== null && !isNaN(n) ? n.toFixed(2) : <span style={{ color: '#ddd' }}>-</span>}
-                  </td>
-                );
-              })}
-              <td style={{ ...tdStyle, fontWeight: 700, color: '#1D4ED8' }}>
-                {typeof r.total_score === 'number' ? r.total_score.toFixed(2) : '-'}
-              </td>
-            </tr>
-          ))}
+          {sorted.map((r, i) => {
+            const t = totalsFor(r);
+            const sc = r.scores ?? {};
+            return (
+              <tr key={r.id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
+                <td style={{ ...tdStyle, textAlign: 'left', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                  {r.student?.display_name ?? r.student_id.slice(0, 8)}
+                </td>
+                {activeKeys.map(k => {
+                  const b = sc[`${k}_b`], s = sc[`${k}_s`], kk = sc[`${k}_k`];
+                  return (
+                    <Fragment key={k}>
+                      <td style={tdStyle}>{b !== undefined && b !== null && b !== '-' ? b : '-'}</td>
+                      <td style={tdStyle}>{s !== undefined && s !== null && s !== '-' ? s : '-'}</td>
+                      <td style={tdStyle}>{kk !== undefined && kk !== null && kk !== '-' ? kk : '-'}</td>
+                    </Fragment>
+                  );
+                })}
+                <td style={{ ...tdStyle, fontWeight: 700, color: '#15803D' }}>{t.b}</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: '#DC0A1E' }}>{t.s}</td>
+                <td style={{ ...tdStyle, fontWeight: 700, color: '#92400E' }}>{t.k}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
