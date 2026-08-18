@@ -83,10 +83,12 @@ export default function ToReview() {
 
             <AnswerComparison q={q} />
 
-            {q.pembahasan_html && (
+            {(q.pembahasan_html || q.pembahasan_gambar_url) && (
               <div style={{ marginTop: '12px', padding: '12px', background: '#F9F9F7', borderRadius: '8px' }}>
                 <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.75rem', color: '#666', marginBottom: '6px' }}>Pembahasan</div>
-                <ToRichContent html={q.pembahasan_html} style={{ fontSize: '0.85rem', color: '#0D0D0D' }} />
+                {q.pembahasan_html && (
+                  <ToRichContent html={q.pembahasan_html} style={{ fontSize: '0.85rem', color: '#0D0D0D' }} />
+                )}
                 {q.pembahasan_gambar_url && (
                   <img
                     src={toDirectImg(q.pembahasan_gambar_url)}
