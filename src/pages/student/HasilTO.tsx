@@ -290,8 +290,6 @@ export default function StudentHasilTO() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 16px', color: '#0D0D0D' }}>Tryout</h1>
-
       <a href="https://abdismart.web.id/toAS/" target="_blank" rel="noopener noreferrer"
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '14px 20px', borderRadius: '12px', background: '#0D5C3A', color: '#FFE500', fontFamily: 'var(--font-body)', fontSize: '1rem', fontWeight: 700, textDecoration: 'none', marginBottom: '20px' }}>
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

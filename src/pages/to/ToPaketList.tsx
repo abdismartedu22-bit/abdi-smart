@@ -2,8 +2,10 @@ import { useState, useEffect, FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import AdminHasilTO from '../staff/HasilTO';
+import ToHasilRekap from './ToHasilRekap';
 import {
-  Overlay, ModalHeader, Field,
+  Overlay, ModalHeader, Field, ToTabs,
   input, btnPrimary, btnSecondary, btnEdit, btnGhost, muted, errorText, confirmBox, confirmTitle,
   fmtDateTime, toLocalInputValue, fromLocalInputValue,
 } from './shared';
@@ -14,6 +16,7 @@ const KELAS_OPTIONS = ['6SD', '9SMP', '10', '11', '12IPA', '12IPS'];
 export default function ToPaketList() {
   const location = useLocation();
   const base = location.pathname.startsWith('/staff') ? '/staff/to' : '/admin/to';
+  const [tab, setTab] = useState<'soal' | 'sertifikat'>('soal');
   const [packages, setPackages] = useState<ToPackage[]>([]);
   const [examCounts, setExamCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
@@ -50,39 +53,62 @@ export default function ToPaketList() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: 0, color: '#0D0D0D' }}>Try Out &mdash; Paket</h1>
-        <button onClick={() => setShowCreate(true)} style={btnPrimary}>+ Buat Paket TO</button>
-      </div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 16px', color: '#0D0D0D' }}>Try Out</h1>
 
-      {loading ? (
-        <p style={muted}>Memuat...</p>
-      ) : packages.length === 0 ? (
-        <p style={muted}>Belum ada paket try out.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {packages.map(pkg => (
-            <div key={pkg.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: '200px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: '#0D0D0D' }}>{pkg.nama}</span>
-                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px', background: pkg.type === 'TKA' ? '#EDE9FE' : '#DBEAFE', color: pkg.type === 'TKA' ? '#5B21B6' : '#1D4ED8' }}>
-                    {pkg.type}
-                  </span>
+      <ToTabs
+        tabs={[{ key: 'soal', label: 'Soal' }, { key: 'sertifikat', label: 'Sertifikat' }]}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {tab === 'soal' && (
+        <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '16px' }}>
+            <button onClick={() => setShowCreate(true)} style={btnPrimary}>+ Buat Paket TO</button>
+          </div>
+
+          {loading ? (
+            <p style={muted}>Memuat...</p>
+          ) : packages.length === 0 ? (
+            <p style={muted}>Belum ada paket try out.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {packages.map(pkg => (
+                <div key={pkg.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: '#0D0D0D' }}>{pkg.nama}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px', background: pkg.type === 'TKA' ? '#EDE9FE' : '#DBEAFE', color: pkg.type === 'TKA' ? '#5B21B6' : '#1D4ED8' }}>
+                        {pkg.type}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginTop: '3px' }}>
+                      {fmtDateTime(pkg.tanggal_mulai)} &mdash; {fmtDateTime(pkg.tanggal_selesai)}
+                      {' · '}{examCounts[pkg.id] ?? 0} ujian
+                      {pkg.target_kelas && pkg.target_kelas.length > 0 && ` · ${pkg.target_kelas.join(', ')}`}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <Link to={`${base}/paket/${pkg.id}`} style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>Kelola Ujian</Link>
+                    <button onClick={() => setEditPkg(pkg)} style={btnEdit}>Edit</button>
+                    <button onClick={() => setDeletePkg(pkg)} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
+                  </div>
                 </div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginTop: '3px' }}>
-                  {fmtDateTime(pkg.tanggal_mulai)} &mdash; {fmtDateTime(pkg.tanggal_selesai)}
-                  {' · '}{examCounts[pkg.id] ?? 0} ujian
-                  {pkg.target_kelas && pkg.target_kelas.length > 0 && ` · ${pkg.target_kelas.join(', ')}`}
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                <Link to={`${base}/paket/${pkg.id}`} style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block' }}>Kelola Ujian</Link>
-                <button onClick={() => setEditPkg(pkg)} style={btnEdit}>Edit</button>
-                <button onClick={() => setDeletePkg(pkg)} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
-              </div>
+              ))}
             </div>
-          ))}
+          )}
+        </>
+      )}
+
+      {tab === 'sertifikat' && (
+        <div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', margin: '0 0 16px', color: '#0D0D0D' }}>Hasil TO</h2>
+          <AdminHasilTO />
+
+          <div style={{ marginTop: '40px', paddingTop: '24px', borderTop: '2px solid #F3F2EE' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', margin: '0 0 16px', color: '#0D0D0D' }}>Rekap per Ujian Try Out</h2>
+            <ToHasilRekap />
+          </div>
         </div>
       )}
 

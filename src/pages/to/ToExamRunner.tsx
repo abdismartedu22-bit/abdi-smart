@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toDirectImg } from '../../lib/googleDriveImg';
-import { Overlay, ToRichContent, btnPrimary, btnSecondary, btnGhost, confirmBox, confirmTitle, muted } from './shared';
+import { Overlay, ToRichContent, Watermark, btnPrimary, btnSecondary, btnGhost, confirmBox, confirmTitle, muted } from './shared';
 import type { ToAttempt, ToQuestionTipe, ToGridConfig, ToJawaban } from '../../types';
 
 type RunnerQuestion = {
@@ -140,7 +140,8 @@ export default function ToExamRunner() {
         </div>
 
         {/* Question panel */}
-        <div style={{ flex: 1, minWidth: '280px', background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '20px' }}>
+        <div style={{ position: 'relative', flex: 1, minWidth: '280px', background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '20px', overflow: 'hidden' }}>
+          {profile?.display_name && <Watermark text={profile.display_name} />}
           <ToRichContent html={q.konten_html} style={{ fontSize: '0.92rem', color: '#0D0D0D', marginBottom: '14px', lineHeight: 1.6 }} />
 
           {q.gambar_url && (

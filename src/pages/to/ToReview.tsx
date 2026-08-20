@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toDirectImg } from '../../lib/googleDriveImg';
-import { ToRichContent, muted, errorText, TIPE_LABELS } from './shared';
+import { ToRichContent, Watermark, muted, errorText, TIPE_LABELS } from './shared';
 import type { ToAttempt, ToQuestionTipe, ToGridConfig, ToJawaban } from '../../types';
 
 type ReviewQuestion = {
@@ -67,7 +67,8 @@ export default function ToReview() {
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {questions.map((q, i) => (
-          <div key={q.id} style={{ background: '#fff', border: `1.5px solid ${q.benar === true ? '#86EFAC' : q.benar === false ? '#FCA5A5' : '#E2E1DC'}`, borderRadius: '10px', padding: '16px' }}>
+          <div key={q.id} style={{ position: 'relative', background: '#fff', border: `1.5px solid ${q.benar === true ? '#86EFAC' : q.benar === false ? '#FCA5A5' : '#E2E1DC'}`, borderRadius: '10px', padding: '16px', overflow: 'hidden' }}>
+            {profile?.display_name && <Watermark text={profile.display_name} />}
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
               <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#aaa' }}>Soal #{i + 1}</span>
               <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: '4px', background: '#F3F2EE', color: '#666' }}>{TIPE_LABELS[q.tipe]}</span>
@@ -116,13 +117,75 @@ function ScoreStat({ label, value, color }: { label: string; value: number; colo
 }
 
 function AnswerComparison({ q }: { q: ReviewQuestion }) {
+  if (q.tipe === 'grid_pernyataan') {
+    const labels = q.grid_config?.column_labels ?? ['Kolom 1', 'Kolom 2'];
+    const studentMap = (q.jawaban_siswa && typeof q.jawaban_siswa === 'object' && !Array.isArray(q.jawaban_siswa))
+      ? q.jawaban_siswa as Record<string, number> : {};
+    const correctMap = (q.jawaban_benar && typeof q.jawaban_benar === 'object' && !Array.isArray(q.jawaban_benar))
+      ? q.jawaban_benar as Record<string, number> : {};
+
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #E2E1DC', color: '#888', fontSize: '0.7rem' }}>Pernyataan</th>
+              <th style={{ padding: '6px 8px', borderBottom: '2px solid #E2E1DC', color: '#888', fontSize: '0.7rem', minWidth: '90px' }}>Jawabanmu</th>
+              <th style={{ padding: '6px 8px', borderBottom: '2px solid #E2E1DC', color: '#888', fontSize: '0.7rem', minWidth: '90px' }}>Kunci Jawaban</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(q.grid_config?.statements ?? []).map(s => {
+              const sVal = studentMap[s.id];
+              const cVal = correctMap[s.id];
+              const answered = sVal !== undefined;
+              const isRight = answered && sVal === cVal;
+              return (
+                <tr key={s.id}>
+                  <td style={{ padding: '6px 8px', borderBottom: '1px solid #F3F2EE' }}><ToRichContent html={s.text_html} /></td>
+                  <td style={{ padding: '6px 8px', borderBottom: '1px solid #F3F2EE', textAlign: 'center', fontWeight: 700, color: !answered ? '#999' : isRight ? '#15803D' : '#DC0A1E' }}>
+                    {answered ? labels[sVal] : '(kosong)'}
+                  </td>
+                  <td style={{ padding: '6px 8px', borderBottom: '1px solid #F3F2EE', textAlign: 'center', fontWeight: 700, color: '#15803D' }}>
+                    {labels[cVal]}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  if (q.tipe === 'centang_semua') {
+    const correctSet = new Set(Array.isArray(q.jawaban_benar) ? q.jawaban_benar as string[] : []);
+    const studentSet = new Set(Array.isArray(q.jawaban_siswa) ? q.jawaban_siswa as string[] : []);
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {(q.opsi ?? []).map((text, i) => {
+          const label = String.fromCharCode(65 + i);
+          const isCorrect = correctSet.has(label);
+          const isSelected = studentSet.has(label);
+          let bg = '#F9F9F7', border = '#E2E1DC', badge = '';
+          if (isCorrect && isSelected) { bg = '#F0FDF4'; border = '#86EFAC'; badge = '✓ Dipilih, benar'; }
+          else if (isCorrect && !isSelected) { bg = '#FFFBEB'; border = '#FCD34D'; badge = 'Seharusnya dipilih'; }
+          else if (!isCorrect && isSelected) { bg = '#FEF2F2'; border = '#FCA5A5'; badge = 'Dipilih, salah'; }
+          return (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: bg, border: `1.5px solid ${border}` }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', color: '#0D0D0D', flexShrink: 0 }}>{label}</span>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{text}</span>
+              {badge && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: isSelected && !isCorrect ? '#DC0A1E' : isCorrect && !isSelected ? '#92400E' : '#15803D', flexShrink: 0 }}>{badge}</span>}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   const fmt = (v: ToJawaban | null | undefined): string => {
     if (v === null || v === undefined) return '(kosong)';
-    if (Array.isArray(v)) return v.join(', ') || '(kosong)';
-    if (typeof v === 'object') {
-      const labels = q.grid_config?.column_labels ?? ['Kolom 1', 'Kolom 2'];
-      return (q.grid_config?.statements ?? []).map(s => `${labels[(v as Record<string, number>)[s.id]] ?? '-'}`).join(', ');
-    }
     return String(v);
   };
 

@@ -18,6 +18,82 @@ export function ToRichContent({ html, style }: { html: string; style?: React.CSS
   );
 }
 
+// Screenshot-deterrent watermark -- tiled, rotated, low-opacity text
+// laid over question content so it never blocks reading, but any
+// screenshot still carries an identifiable trace of who viewed it.
+// Parent must be `position: relative`; this is `position: absolute;
+// inset: 0` with `pointer-events: none` so it never intercepts clicks.
+export function Watermark({ text }: { text: string }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute',
+        inset: 0,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        zIndex: 1,
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, 170px)',
+        gridAutoRows: '80px',
+        justifyItems: 'center',
+        alignItems: 'center',
+      }}
+    >
+      {Array.from({ length: 80 }).map((_, i) => (
+        <span
+          key={i}
+          style={{
+            display: 'inline-block',
+            transform: 'rotate(-25deg)',
+            whiteSpace: 'nowrap',
+            fontFamily: 'var(--font-body)',
+            fontWeight: 700,
+            fontSize: '0.7rem',
+            color: 'rgba(13,13,13,0.07)',
+          }}
+        >
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// Landing-page tab bar (Soal / Sertifikat) -- only meant for the
+// top-level Try Out entry pages (ToPaketList, ToPaketListTaker), not
+// deep/focused flows like question editing or an active exam.
+export function ToTabs<T extends string>({ tabs, active, onChange }: { tabs: { key: T; label: string }[]; active: T; onChange: (t: T) => void }) {
+  return (
+    <div style={{ display: 'flex', gap: '6px', marginBottom: '20px', borderBottom: '2px solid #F3F2EE' }}>
+      {tabs.map(t => {
+        const isActive = t.key === active;
+        return (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => onChange(t.key)}
+            style={{
+              padding: '10px 18px',
+              marginBottom: '-2px',
+              background: 'none',
+              border: 'none',
+              borderBottom: isActive ? '2px solid #0D5C3A' : '2px solid transparent',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-body)',
+              fontWeight: 700,
+              fontSize: '0.9rem',
+              color: isActive ? '#0D5C3A' : '#888',
+            }}
+          >
+            {t.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Overlay({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px', overflowY: 'auto' }}>

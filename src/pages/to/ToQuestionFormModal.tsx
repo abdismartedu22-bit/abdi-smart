@@ -1,7 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
 import RichTextEditor from '../../lib/richText';
-import { toDirectImg } from '../../lib/googleDriveImg';
 import {
   Overlay, ModalHeader, Field, ToRichContent,
   input, btnPrimary, btnSecondary, btnGhost, errorText,
@@ -22,14 +21,15 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
   const [tipe, setTipe] = useState<ToQuestionTipe>(question?.tipe ?? 'pilihan_ganda');
   const [kontenHtml, setKontenHtml] = useState(question?.konten_html ?? '');
   const [pembahasanHtml, setPembahasanHtml] = useState(question?.pembahasan_html ?? '');
-  const [pembahasanGambarUrl, setPembahasanGambarUrl] = useState(question?.pembahasan_gambar_url ?? '');
-  const [gambarUrl, setGambarUrl] = useState(question?.gambar_url ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
   const initOptions = (): OptionItem[] => {
     if (question?.opsi && Array.isArray(question.opsi)) {
       return question.opsi.map((text, i) => ({ label: String.fromCharCode(65 + i), text }));
+    }
+    if (tipe === 'pilihan_ganda') {
+      return ['A', 'B', 'C', 'D', 'E'].map(label => ({ label, text: '' }));
     }
     return [{ label: 'A', text: '' }, { label: 'B', text: '' }];
   };
@@ -110,12 +110,10 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
       urutan: question?.urutan ?? nextUrutan,
       tipe,
       konten_html: kontenHtml,
-      gambar_url: gambarUrl.trim() || null,
       opsi,
       jawaban_benar,
       grid_config,
       pembahasan_html: pembahasanHtml.trim() || null,
-      pembahasan_gambar_url: pembahasanGambarUrl.trim() || null,
     };
   }
 
@@ -176,25 +174,6 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
 
           <Field label="Pertanyaan / Stimulus">
             <RichTextEditor value={kontenHtml} onChange={setKontenHtml} placeholder="Tulis soal di sini..." minHeight={100} />
-          </Field>
-
-          <Field label="Gambar Soal (opsional)">
-            <input
-              style={input}
-              value={gambarUrl}
-              onChange={e => setGambarUrl(e.target.value)}
-              placeholder="https://... atau link Google Drive"
-            />
-            {gambarUrl.trim() && (
-              <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC', background: '#F9F9F7' }}>
-                <img
-                  src={toDirectImg(gambarUrl.trim())}
-                  alt="Preview gambar"
-                  style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block' }}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-            )}
           </Field>
 
           {(tipe === 'pilihan_ganda' || tipe === 'centang_semua') && (
@@ -304,25 +283,6 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
 
           <Field label="Pembahasan (opsional, ditampilkan ke siswa saat review)">
             <RichTextEditor value={pembahasanHtml} onChange={setPembahasanHtml} placeholder="Jelaskan cara penyelesaian..." minHeight={80} />
-          </Field>
-
-          <Field label="Gambar Pembahasan (opsional)">
-            <input
-              style={input}
-              value={pembahasanGambarUrl}
-              onChange={e => setPembahasanGambarUrl(e.target.value)}
-              placeholder="https://... atau link Google Drive"
-            />
-            {pembahasanGambarUrl.trim() && (
-              <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC', background: '#F9F9F7' }}>
-                <img
-                  src={toDirectImg(pembahasanGambarUrl.trim())}
-                  alt="Preview gambar pembahasan"
-                  style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block' }}
-                  onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                />
-              </div>
-            )}
           </Field>
 
           {kontenHtml.trim() && (

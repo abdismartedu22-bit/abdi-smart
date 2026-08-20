@@ -123,6 +123,13 @@
 }
 .to-rich-text p { margin: 0 0 8px; }
 .to-rich-text p:last-child { margin-bottom: 0; }
+.to-rich-text img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  display: block;
+  margin: 8px 0;
+}
 .to-rich-text table {
   border-collapse: collapse;
   margin: 8px 0;

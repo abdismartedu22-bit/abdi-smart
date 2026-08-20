@@ -333,6 +333,8 @@ function UploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
 
 /* ── Main ──────────────────────────────────────────────────── */
 export default function StaffHasilTO() {
+  const { profile } = useAuth();
+  const isAdmin = profile?.role === 'admin';
   const [results, setResults] = useState<TOResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('');
@@ -381,8 +383,7 @@ export default function StaffHasilTO() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: 0, color: '#0D0D0D' }}>Hasil Tryout</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <button onClick={() => setShowModal(true)} style={btnPrimary}>+ Upload TO</button>
       </div>
 
@@ -441,12 +442,12 @@ export default function StaffHasilTO() {
                   >
                     {isOpen ? 'Tutup' : 'Detail'}
                   </button>
-                  <button
+                  {isAdmin && <button
                     onClick={() => setDeleteTarget(g)}
                     style={{ ...editBtn, color: '#DC0A1E', background: '#FFF0F1', borderColor: '#FECACA', flexShrink: 0 }}
                   >
                     Hapus
-                  </button>
+                  </button>}
                 </div>
 
                 {isOpen && (

@@ -17,7 +17,6 @@ const navByRole: Record<Role, NavItem[]> = {
     { label: 'Realisasi', href: '/admin/realisasi' },
     { label: 'Try Out', href: '/admin/to/paket' },
     { label: 'Quiz', href: '/admin/quiz' },
-    { label: 'Hasil TO', href: '/admin/hasil-to' },
     { label: 'Gedung', href: '/admin/gedung' },
     { label: 'Konten', href: '/admin/konten' },
     { label: 'Download', href: '/admin/download' },
@@ -62,20 +61,11 @@ interface Props {
   onClose: () => void;
 }
 
-const TO_ITEMS: NavItem[] = [
-  { label: 'Hasil TO', href: '/student/hasil-to' },
-];
-
-const TO_GRADES = ['6SD', '9SMP', '12IPA', '12IPS'];
-
 export default function Sidebar({ open, onClose }: Props) {
   const { profile } = useAuth();
   const isDesktop = useIsDesktop();
   const role = profile?.role ?? 'student';
-  const showTO = role === 'student' && TO_GRADES.includes(profile?.tingkat_kelas ?? '');
-  const items = role === 'student'
-    ? (showTO ? [...navByRole.student, ...TO_ITEMS] : navByRole.student)
-    : navByRole[role];
+  const items = navByRole[role];
 
   const inner = (
     <div style={{ width: '220px', minWidth: '220px', height: '100%', background: '#0D5C3A', display: 'flex', flexDirection: 'column' }}>

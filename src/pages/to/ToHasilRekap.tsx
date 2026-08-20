@@ -33,8 +33,6 @@ export default function ToHasilRekap() {
 
   return (
     <div>
-      <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 24px', color: '#0D0D0D' }}>Try Out &mdash; Hasil</h1>
-
       {loading ? (
         <p style={muted}>Memuat...</p>
       ) : rows.length === 0 ? (

@@ -32,6 +32,13 @@ type TOResult = {
   scores: Record<string, number>;
   total_score: number;
 };
+type TopScorer = {
+  exam_id: string;
+  mata_pelajaran: string;
+  nama_ujian: string;
+  top_student_name: string | null;
+  top_benar: number | null;
+};
 
 const HARI_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const TYPE_LABELS: Record<string, string> = {
@@ -64,6 +71,8 @@ export default function StudentHome() {
   const [nextSession, setNextSession] = useState<NextSession | null>(null);
   const [attendance, setAttendance] = useState({ hadir: 0, tidak_hadir: 0 });
   const [latestTO, setLatestTO] = useState<TOResult | null>(null);
+  const [topScorers, setTopScorers] = useState<TopScorer[]>([]);
+  const [topScorersPkgName, setTopScorersPkgName] = useState('');
   const [onlineData, setOnlineData] = useState<OnlineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [todayAtt, setTodayAtt] = useState<{ status: string | null } | null>(null);
@@ -273,6 +282,21 @@ export default function StudentHome() {
         .order('tanggal_to', { ascending: false })
         .limit(1);
       setLatestTO(((to ?? []) as TOResult[])[0] ?? null);
+    }
+
+    // Top scorer per subject for the most recent Try Out package
+    // targeting this student's kelas (or open to everyone).
+    const { data: pkgs } = await supabase
+      .from('to_packages')
+      .select('id, nama, target_kelas')
+      .order('tanggal_mulai', { ascending: false });
+    const kelas = profile?.tingkat_kelas ?? '';
+    const relevantPkg = ((pkgs ?? []) as { id: string; nama: string; target_kelas: string[] | null }[])
+      .find(p => !p.target_kelas || p.target_kelas.length === 0 || p.target_kelas.includes(kelas));
+    if (relevantPkg) {
+      const { data: scorers } = await supabase.rpc('get_to_top_scorers', { p_package_id: relevantPkg.id });
+      setTopScorers(((scorers ?? []) as TopScorer[]).filter(s => s.top_student_name));
+      setTopScorersPkgName(relevantPkg.nama);
     }
 
     setLoading(false);
@@ -504,24 +528,24 @@ export default function StudentHome() {
             )}
           </div>}
 
-          {/* Buka TO Abdi Smart */}
-          {isToKelas && (
-            <a
-              href="https://abdismart.web.id/toAS/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '14px 18px', background: '#0D5C3A', color: '#FFE500',
-                borderRadius: '12px', textDecoration: 'none', gap: '10px',
-              }}
-            >
-              <div>
-                <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem' }}>Kerjakan TO Online</div>
-                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(255,229,0,0.7)', marginTop: '2px' }}>abdismart.web.id</div>
+          {/* Top Scorer per mapel -- current Try Out package */}
+          {topScorers.length > 0 && (
+            <div style={card}>
+              <p style={label}>Top Scorer &mdash; {topScorersPkgName}</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {topScorers.map(s => (
+                  <div key={s.exam_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 12px', background: '#F9F9F7', borderRadius: '8px' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.82rem', color: '#0D0D0D' }}>{s.mata_pelajaran}</div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#888' }}>{s.top_student_name}</div>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 800, color: '#0D5C3A', flexShrink: 0 }}>
+                      {s.top_benar}
+                    </div>
+                  </div>
+                ))}
               </div>
-              <span style={{ fontSize: '1.2rem', opacity: 0.7 }}>&#8599;</span>
-            </a>
+            </div>
           )}
 
         </div>
