@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { useParams, Link, useLocation } from 'react-router-dom';
+import { useParams, Link, useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import ToQuestionFormModal from './ToQuestionFormModal';
@@ -12,6 +12,7 @@ import type { ToPackage, ToExam, ToQuestion, ToExamToken, Profile } from '../../
 
 export default function ToPaketDetail() {
   const { packageId } = useParams<{ packageId: string }>();
+  const navigate = useNavigate();
   const location = useLocation();
   const base = location.pathname.startsWith('/staff') ? '/staff/to' : '/admin/to';
   const [pkg, setPkg] = useState<ToPackage | null>(null);
@@ -158,6 +159,7 @@ export default function ToPaketDetail() {
                   )}
                   <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                     <button onClick={() => toggleExpand(exam.id)} style={btnGhost}>{isOpen ? 'Tutup' : `Soal (${qList.length || exam.jumlah_soal_target})`}</button>
+                    <button onClick={() => navigate(`${base}/hasil/${exam.id}`)} style={{ ...btnGhost, color: '#0D5C3A' }}>Hasil</button>
                     <button onClick={() => setEditExam(exam)} style={btnEdit}>Edit</button>
                     <button onClick={() => setDeleteExam(exam)} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
                   </div>

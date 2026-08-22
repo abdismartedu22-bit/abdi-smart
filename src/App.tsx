@@ -18,7 +18,6 @@ import AdminKonten from './pages/admin/Konten';
 
 import ToPaketList from './pages/to/ToPaketList';
 import ToPaketDetail from './pages/to/ToPaketDetail';
-import ToHasilRekap from './pages/to/ToHasilRekap';
 import ToStatistik from './pages/to/ToStatistik';
 import ToResetPeserta from './pages/to/ToResetPeserta';
 import ToPaketListTaker from './pages/to/ToPaketListTaker';
@@ -72,7 +71,6 @@ export default function App() {
               <Route path="/admin/gedung" element={<AdminGedung />} />
               <Route path="/admin/to/paket" element={<ToPaketList />} />
               <Route path="/admin/to/paket/:packageId" element={<ToPaketDetail />} />
-              <Route path="/admin/to/hasil" element={<ToHasilRekap />} />
               <Route path="/admin/to/hasil/:examId" element={<ToStatistik />} />
               <Route path="/admin/quiz" element={<AdminQuiz />} />
               <Route path="/admin/konten" element={<AdminKonten />} />
@@ -90,7 +88,6 @@ export default function App() {
               <Route path="/staff/gedung" element={<AdminGedung />} />
               <Route path="/staff/to/paket" element={<ToPaketList />} />
               <Route path="/staff/to/paket/:packageId" element={<ToPaketDetail />} />
-              <Route path="/staff/to/hasil" element={<ToHasilRekap />} />
               <Route path="/staff/to/hasil/:examId" element={<ToStatistik />} />
               <Route path="/staff/to/reset" element={<ToResetPeserta />} />
               <Route path="/staff/quiz" element={<AdminQuiz />} />

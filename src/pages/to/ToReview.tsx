@@ -29,6 +29,7 @@ export default function ToReview() {
 
   const [attempt, setAttempt] = useState<ToAttempt | null>(null);
   const [questions, setQuestions] = useState<ReviewQuestion[]>([]);
+  const [qStats, setQStats] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -37,14 +38,31 @@ export default function ToReview() {
     (async () => {
       setLoading(true);
       const { data: att } = await supabase.from('to_attempts').select('*').eq('id', attemptId).single();
-      setAttempt(att as ToAttempt);
+      const attemptRow = att as ToAttempt | null;
+      setAttempt(attemptRow);
 
       const { data, error: err } = await supabase.rpc('get_to_review', { p_attempt_id: attemptId });
       if (err) { setError(err.message.replace(/^.*: /, '')); setLoading(false); return; }
       setQuestions((data ?? []) as ReviewQuestion[]);
+
+      if (attemptRow?.exam_id) {
+        const { data: stats } = await supabase.rpc('get_to_question_stats', { p_exam_id: attemptRow.exam_id });
+        const map: Record<string, number> = {};
+        ((stats ?? []) as { question_id: string; pct_correct: number }[]).forEach(s => { map[s.question_id] = s.pct_correct; });
+        setQStats(map);
+      }
+
       setLoading(false);
     })();
   }, [attemptId]);
+
+  function difficultyBand(pct: number): { label: string; color: string } {
+    if (pct <= 20) return { label: 'Sangat Sulit', color: '#DC0A1E' };
+    if (pct <= 40) return { label: 'Sulit', color: '#EA580C' };
+    if (pct <= 60) return { label: 'Normal', color: '#A16207' };
+    if (pct <= 80) return { label: 'Mudah', color: '#15803D' };
+    return { label: 'Sangat Mudah', color: '#0D5C3A' };
+  }
 
   if (loading) return <p style={muted}>Memuat...</p>;
   if (error) return (
@@ -84,9 +102,19 @@ export default function ToReview() {
 
             <AnswerComparison q={q} />
 
-            {(q.pembahasan_html || q.pembahasan_gambar_url) && (
+            {(q.pembahasan_html || q.pembahasan_gambar_url || qStats[q.id] !== undefined) && (
               <div style={{ marginTop: '12px', padding: '12px', background: '#F9F9F7', borderRadius: '8px' }}>
-                <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.75rem', color: '#666', marginBottom: '6px' }}>Pembahasan</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.75rem', color: '#666' }}>Pembahasan</span>
+                  {qStats[q.id] !== undefined && (() => {
+                    const band = difficultyBand(qStats[q.id]);
+                    return (
+                      <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, padding: '2px 8px', borderRadius: '20px', background: '#fff', border: `1.5px solid ${band.color}`, color: band.color }}>
+                        {band.label} &middot; {qStats[q.id]}% siswa jawab benar
+                      </span>
+                    );
+                  })()}
+                </div>
                 {q.pembahasan_html && (
                   <ToRichContent html={q.pembahasan_html} style={{ fontSize: '0.85rem', color: '#0D0D0D' }} />
                 )}

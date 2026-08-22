@@ -34,8 +34,8 @@ export function Watermark({ text }: { text: string }) {
         pointerEvents: 'none',
         zIndex: 1,
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, 170px)',
-        gridAutoRows: '80px',
+        gridTemplateColumns: 'repeat(auto-fill, 260px)',
+        gridAutoRows: '130px',
         justifyItems: 'center',
         alignItems: 'center',
       }}
@@ -49,8 +49,8 @@ export function Watermark({ text }: { text: string }) {
             whiteSpace: 'nowrap',
             fontFamily: 'var(--font-body)',
             fontWeight: 700,
-            fontSize: '0.7rem',
-            color: 'rgba(13,13,13,0.07)',
+            fontSize: '1.3rem',
+            color: 'rgba(13,13,13,0.1)',
           }}
         >
           {text}

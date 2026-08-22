@@ -38,7 +38,9 @@ type TopScorer = {
   nama_ujian: string;
   top_student_name: string | null;
   top_benar: number | null;
+  total_soal: number | null;
 };
+type OngoingTO = { id: string; nama: string; tanggal_selesai: string };
 
 const HARI_ORDER = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const TYPE_LABELS: Record<string, string> = {
@@ -73,6 +75,7 @@ export default function StudentHome() {
   const [latestTO, setLatestTO] = useState<TOResult | null>(null);
   const [topScorers, setTopScorers] = useState<TopScorer[]>([]);
   const [topScorersPkgName, setTopScorersPkgName] = useState('');
+  const [ongoingTO, setOngoingTO] = useState<OngoingTO | null>(null);
   const [onlineData, setOnlineData] = useState<OnlineData | null>(null);
   const [loading, setLoading] = useState(true);
   const [todayAtt, setTodayAtt] = useState<{ status: string | null } | null>(null);
@@ -288,15 +291,32 @@ export default function StudentHome() {
     // targeting this student's kelas (or open to everyone).
     const { data: pkgs } = await supabase
       .from('to_packages')
-      .select('id, nama, target_kelas')
+      .select('id, nama, target_kelas, tanggal_mulai, tanggal_selesai')
       .order('tanggal_mulai', { ascending: false });
     const kelas = profile?.tingkat_kelas ?? '';
-    const relevantPkg = ((pkgs ?? []) as { id: string; nama: string; target_kelas: string[] | null }[])
-      .find(p => !p.target_kelas || p.target_kelas.length === 0 || p.target_kelas.includes(kelas));
+    type PkgRow = { id: string; nama: string; target_kelas: string[] | null; tanggal_mulai: string; tanggal_selesai: string };
+    const relevantPkgs = ((pkgs ?? []) as PkgRow[])
+      .filter(p => !p.target_kelas || p.target_kelas.length === 0 || p.target_kelas.includes(kelas));
+    const relevantPkg = relevantPkgs[0];
     if (relevantPkg) {
       const { data: scorers } = await supabase.rpc('get_to_top_scorers', { p_package_id: relevantPkg.id });
       setTopScorers(((scorers ?? []) as TopScorer[]).filter(s => s.top_student_name));
       setTopScorersPkgName(relevantPkg.nama);
+    }
+
+    const now = Date.now();
+    const ongoing = relevantPkgs.find(p => now >= new Date(p.tanggal_mulai).getTime() && now <= new Date(p.tanggal_selesai).getTime());
+    if (ongoing) {
+      const { data: examRows } = await supabase.from('to_exams').select('id').eq('package_id', ongoing.id);
+      const examIds = (examRows ?? []).map((e: { id: string }) => e.id);
+      const { data: attRows } = examIds.length > 0
+        ? await supabase.from('to_attempts').select('exam_id, status').eq('student_id', user!.id).in('exam_id', examIds)
+        : { data: [] };
+      const submittedIds = new Set((attRows ?? []).filter((a: { status: string }) => a.status === 'submitted').map((a: { exam_id: string }) => a.exam_id));
+      const allDone = examIds.length > 0 && examIds.every(id => submittedIds.has(id));
+      setOngoingTO(allDone ? null : { id: ongoing.id, nama: ongoing.nama, tanggal_selesai: ongoing.tanggal_selesai });
+    } else {
+      setOngoingTO(null);
     }
 
     setLoading(false);
@@ -346,6 +366,40 @@ export default function StudentHome() {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
 
           <AnnouncementSlider tingkatKelas={profile?.tingkat_kelas} />
+
+          {/* Ongoing Try Out banner */}
+          {ongoingTO && (
+            <div
+              onClick={() => navigate(`/student/to/paket/${ongoingTO.id}`)}
+              style={{
+                cursor: 'pointer',
+                background: 'linear-gradient(135deg, #0D5C3A 0%, #0A4A2E 100%)',
+                borderRadius: '14px',
+                padding: '18px 20px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '14px',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#4ADE80', flexShrink: 0 }} />
+                  <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.7rem', color: '#4ADE80', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                    Try Out Sedang Berlangsung
+                  </span>
+                </div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.05rem', color: '#fff' }}>{ongoingTO.nama}</div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: 'rgba(255,255,255,0.7)', marginTop: '2px' }}>
+                  Berakhir {new Date(ongoingTO.tanggal_selesai).toLocaleString('id-ID', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+              <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.82rem', color: '#0D5C3A', background: '#FFE500', padding: '9px 18px', borderRadius: '10px', flexShrink: 0 }}>
+                Kerjakan Sekarang
+              </span>
+            </div>
+          )}
 
           {/* Paket card per group */}
           {groups.map(g => {
@@ -532,18 +586,27 @@ export default function StudentHome() {
           {topScorers.length > 0 && (
             <div style={card}>
               <p style={label}>Top Scorer &mdash; {topScorersPkgName}</p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {topScorers.map(s => (
-                  <div key={s.exam_id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', padding: '8px 12px', background: '#F9F9F7', borderRadius: '8px' }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.82rem', color: '#0D0D0D' }}>{s.mata_pelajaran}</div>
-                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#888' }}>{s.top_student_name}</div>
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', fontWeight: 800, color: '#0D5C3A', flexShrink: 0 }}>
-                      {s.top_benar}
-                    </div>
-                  </div>
-                ))}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={thStyle}>Mata Pelajaran</th>
+                      <th style={thStyle}>Nama Siswa</th>
+                      <th style={{ ...thStyle, textAlign: 'right' }}>Jawaban Benar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {topScorers.map(s => (
+                      <tr key={s.exam_id}>
+                        <td style={tdStyle}>{s.mata_pelajaran}</td>
+                        <td style={tdStyle}>{s.top_student_name}</td>
+                        <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-display)', fontWeight: 800, color: '#0D5C3A' }}>
+                          {s.top_benar}/{s.total_soal}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -591,3 +654,5 @@ const muted: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '
 const card: React.CSSProperties = { background: '#fff', border: '1px solid #EBEBEB', borderRadius: '14px', padding: '18px', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' };
 const label: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 700, color: '#aaa', margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: '0.08em' };
 const chip: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: '#0D5C3A', background: '#EEF1FF', padding: '2px 8px', borderRadius: '99px', letterSpacing: '0.04em' };
+const thStyle: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: '#888', textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid #EBEBEB', textTransform: 'uppercase', letterSpacing: '0.04em' };
+const tdStyle: React.CSSProperties = { fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', padding: '9px 10px', borderBottom: '1px solid #F3F2EE' };

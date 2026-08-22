@@ -3,22 +3,44 @@ import { useParams, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { muted, btnGhost, fmtDateTime } from './shared';
-import type { ToExam, Profile } from '../../types';
+import type { ToExam, ToPackage, ToQuestion, ToAttempt, ToAnswer, Profile } from '../../types';
+
+type Merge = { s: { r: number; c: number }; e: { r: number; c: number } };
+type QStat = { question_id: string; urutan: number; pct_correct: number };
+
+// Mirrors the subject-key mapping in submit_to_attempt (docs/migration-try-out.sql)
+// so the Nilai column reads the same tryout_results.scores key that gets
+// auto-written (TKA) or manually uploaded (SNBT) for this subject.
+const SNBT_KEY: Record<string, string> = {
+  PU: 'pu', PK: 'pk', PPU: 'ppu', PBM: 'pbm', LBI: 'lbi', LBA: 'lba', PM: 'pm', PNM: 'pm',
+};
+const TKA_KEY: Record<string, string> = {
+  IND: 'ind', MATWA: 'matwa', ING: 'ing', FIS: 'fis', KIM: 'kim', BIO: 'bio', MATLAN: 'matlan',
+  EKO: 'eko', SOS: 'sos', SEJ: 'sej', GEO: 'geo', INDLAN: 'indlan', INGLAN: 'inglan',
+};
+function subjectKey(type: string, mataPelajaran: string): string | null {
+  const key = mataPelajaran.trim().toUpperCase();
+  return type === 'SNBT' ? (SNBT_KEY[key] ?? null) : (TKA_KEY[key] ?? null);
+}
 
 type StudentRow = {
   student_id: string;
+  username: string;
   display_name: string;
-  tingkat_kelas: string | null;
-  jurusan: string | null;
+  answers: Record<string, boolean | null>; // question_id -> benar
   jumlah_benar: number;
   jumlah_salah: number;
   jumlah_kosong: number;
+  nilai: number | null;
 };
 
 export default function ToStatistik() {
   const { examId } = useParams<{ examId: string }>();
   const navigate = useNavigate();
   const [exam, setExam] = useState<ToExam | null>(null);
+  const [pkg, setPkg] = useState<ToPackage | null>(null);
+  const [questions, setQuestions] = useState<ToQuestion[]>([]);
+  const [qStats, setQStats] = useState<Record<string, QStat>>({});
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -26,48 +48,119 @@ export default function ToStatistik() {
     if (!examId) return;
     (async () => {
       setLoading(true);
+
       const { data: e } = await supabase.from('to_exams').select('*').eq('id', examId).single();
-      setExam(e as ToExam);
+      const examRow = e as ToExam | null;
+      setExam(examRow);
+      if (!examRow) { setLoading(false); return; }
+
+      const [{ data: p }, { data: qs }, { data: statsData }] = await Promise.all([
+        supabase.from('to_packages').select('*').eq('id', examRow.package_id).single(),
+        supabase.from('to_questions').select('*').eq('exam_id', examId).order('urutan'),
+        supabase.rpc('get_to_question_stats', { p_exam_id: examId }),
+      ]);
+      const packageRow = p as ToPackage | null;
+      setPkg(packageRow);
+      const qList = (qs ?? []) as ToQuestion[];
+      setQuestions(qList);
+
+      const statsMap: Record<string, QStat> = {};
+      ((statsData ?? []) as QStat[]).forEach(s => { statsMap[s.question_id] = s; });
+      setQStats(statsMap);
 
       const { data: attempts } = await supabase.from('to_attempts')
-        .select('student_id, jumlah_benar, jumlah_salah, jumlah_kosong')
-        .eq('exam_id', examId).eq('status', 'submitted');
+        .select('*').eq('exam_id', examId).eq('status', 'submitted');
+      const attemptList = (attempts ?? []) as ToAttempt[];
 
-      const studentIds = Array.from(new Set((attempts ?? []).map((a: { student_id: string }) => a.student_id)));
-      let profiles: Profile[] = [];
-      if (studentIds.length > 0) {
-        const { data } = await supabase.from('profiles').select('*').in('id', studentIds);
-        profiles = (data ?? []) as Profile[];
-      }
+      const attemptIds = attemptList.map(a => a.id);
+      const { data: answers } = attemptIds.length > 0
+        ? await supabase.from('to_answers').select('*').in('attempt_id', attemptIds)
+        : { data: [] };
+      const answerList = (answers ?? []) as ToAnswer[];
+      const answersByAttempt: Record<string, Record<string, boolean | null>> = {};
+      answerList.forEach(a => {
+        (answersByAttempt[a.attempt_id] ??= {})[a.question_id] = a.benar;
+      });
+
+      const studentIds = Array.from(new Set(attemptList.map(a => a.student_id)));
+      const { data: profilesData } = studentIds.length > 0
+        ? await supabase.from('profiles').select('*').in('id', studentIds)
+        : { data: [] };
       const pMap: Record<string, Profile> = {};
-      profiles.forEach(p => { pMap[p.id] = p; });
+      ((profilesData ?? []) as Profile[]).forEach(pr => { pMap[pr.id] = pr; });
 
-      setRows((attempts ?? []).map((a: { student_id: string; jumlah_benar: number | null; jumlah_salah: number | null; jumlah_kosong: number | null }) => ({
-        student_id: a.student_id,
-        display_name: pMap[a.student_id]?.display_name ?? '-',
-        tingkat_kelas: pMap[a.student_id]?.tingkat_kelas ?? null,
-        jurusan: pMap[a.student_id]?.jurusan ?? null,
-        jumlah_benar: a.jumlah_benar ?? 0,
-        jumlah_salah: a.jumlah_salah ?? 0,
-        jumlah_kosong: a.jumlah_kosong ?? 0,
-      })).sort((a, b) => b.jumlah_benar - a.jumlah_benar));
+      const key = packageRow ? subjectKey(packageRow.type, examRow.mata_pelajaran) : null;
+      const { data: trData } = studentIds.length > 0 && packageRow
+        ? await supabase.from('tryout_results').select('student_id, scores')
+            .in('student_id', studentIds).eq('type', packageRow.type).eq('kode_to', examRow.package_id)
+        : { data: [] };
+      const trMap: Record<string, Record<string, unknown>> = {};
+      ((trData ?? []) as { student_id: string; scores: Record<string, unknown> | null }[]).forEach(r => {
+        trMap[r.student_id] = r.scores ?? {};
+      });
+
+      const builtRows: StudentRow[] = attemptList.map(a => {
+        const prof = pMap[a.student_id];
+        const scores = trMap[a.student_id] ?? {};
+        const rawNilai = key ? scores[key] : undefined;
+        const nilai = rawNilai !== undefined && rawNilai !== null && rawNilai !== '' ? Number(rawNilai) : null;
+        return {
+          student_id: a.student_id,
+          username: prof?.username ?? '-',
+          display_name: prof?.display_name ?? '-',
+          answers: answersByAttempt[a.id] ?? {},
+          jumlah_benar: a.jumlah_benar ?? 0,
+          jumlah_salah: a.jumlah_salah ?? 0,
+          jumlah_kosong: a.jumlah_kosong ?? 0,
+          nilai: nilai !== null && !isNaN(nilai) ? nilai : null,
+        };
+      }).sort((x, y) => y.jumlah_benar - x.jumlah_benar);
+
+      setRows(builtRows);
       setLoading(false);
     })();
   }, [examId]);
 
+  function cellFor(row: StudentRow, questionId: string): 'B' | 'S' | 'K' {
+    const b = row.answers[questionId];
+    if (b === true) return 'B';
+    if (b === false) return 'S';
+    return 'K';
+  }
+
   function exportExcel() {
     if (!exam) return;
-    const header = ['Nama', 'Kelas', 'Jurusan', 'Jumlah Benar', 'Jumlah Salah', 'Jumlah Kosong'];
-    const data = rows.map(r => [r.display_name, r.tingkat_kelas ?? '', r.jurusan ?? '', r.jumlah_benar, r.jumlah_salah, r.jumlah_kosong]);
-    const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+    const headerRow0: any[] = ['ID', 'Nama', 'SOAL', ...Array(Math.max(questions.length - 1, 0)).fill(''), 'TOTAL', '', '', ''];
+    const headerRow1: any[] = ['', '', ...questions.map(q => q.urutan), 'B', 'S', 'K', 'Nilai'];
+    const headerRow2: any[] = ['', '', ...questions.map(q => `${qStats[q.id]?.pct_correct ?? 0}%`), '', '', '', ''];
+    const merges: Merge[] = [];
+    if (questions.length > 0) {
+      merges.push({ s: { r: 0, c: 2 }, e: { r: 0, c: 1 + questions.length } });
+      merges.push({ s: { r: 0, c: 2 + questions.length }, e: { r: 0, c: 5 + questions.length } });
+    }
+
+    const dataRows = rows.map(r => [
+      r.username, r.display_name,
+      ...questions.map(q => cellFor(r, q.id)),
+      r.jumlah_benar, r.jumlah_salah, r.jumlah_kosong,
+      r.nilai !== null ? r.nilai.toFixed(2) : '-',
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([headerRow0, headerRow1, headerRow2, ...dataRows]);
+    ws['!merges'] = merges;
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Hasil TO');
     XLSX.writeFile(wb, `HasilTO_${exam.nama_ujian.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
   }
 
   function copyTable() {
-    const header = ['Nama', 'Kelas', 'Jurusan', 'Benar', 'Salah', 'Kosong'].join('\t');
-    const body = rows.map(r => [r.display_name, r.tingkat_kelas ?? '', r.jurusan ?? '', r.jumlah_benar, r.jumlah_salah, r.jumlah_kosong].join('\t')).join('\n');
+    const header = ['ID', 'Nama', ...questions.map(q => `Soal ${q.urutan}`), 'B', 'S', 'K', 'Nilai'].join('\t');
+    const body = rows.map(r => [
+      r.username, r.display_name,
+      ...questions.map(q => cellFor(r, q.id)),
+      r.jumlah_benar, r.jumlah_salah, r.jumlah_kosong,
+      r.nilai !== null ? r.nilai.toFixed(2) : '-',
+    ].join('\t')).join('\n');
     navigator.clipboard.writeText(`${header}\n${body}`);
   }
 
@@ -92,30 +185,63 @@ export default function ToStatistik() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <Stat label="Peserta" value={rows.length} />
         <Stat label="Rata-rata Jumlah Benar" value={avgBenar} />
+        {pkg?.type === 'SNBT' && (
+          <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '10px', padding: '14px 20px', display: 'flex', alignItems: 'center' }}>
+            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#9A3412', margin: 0, maxWidth: '260px' }}>
+              SNBT: Nilai dihitung manual. Download hasil ini lalu upload skor akhir lewat panel Hasil TO agar tampil ke siswa.
+            </p>
+          </div>
+        )}
       </div>
 
       {rows.length === 0 ? (
         <p style={muted}>Belum ada siswa yang menyelesaikan ujian ini.</p>
       ) : (
-        <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: '0', background: '#F9F9F7', borderBottom: '1px solid #E2E1DC', padding: '10px 16px' }}>
-            {['Nama', 'Kelas', 'Jurusan', 'Benar', 'Salah', 'Kosong'].map((h, i) => (
-              <span key={i} style={{ fontFamily: 'var(--font-body)', fontSize: '0.7rem', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{h}</span>
-            ))}
-          </div>
-          {rows.map((r, i) => (
-            <div key={r.student_id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: '0', padding: '10px 16px', borderBottom: i < rows.length - 1 ? '1px solid #F3F2EE' : 'none', alignItems: 'center', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-              <span style={{ fontWeight: 600, color: '#0D0D0D' }}>{r.display_name}</span>
-              <span style={{ color: '#666' }}>{r.tingkat_kelas ?? '-'}</span>
-              <span style={{ color: '#666' }}>{r.jurusan ?? '-'}</span>
-              <span style={{ color: '#15803D', fontWeight: 700 }}>{r.jumlah_benar}</span>
-              <span style={{ color: '#DC0A1E', fontWeight: 700 }}>{r.jumlah_salah}</span>
-              <span style={{ color: '#92400E', fontWeight: 700 }}>{r.jumlah_kosong}</span>
-            </div>
-          ))}
+        <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: `${420 + questions.length * 46}px`, fontFamily: 'var(--font-body)' }}>
+            <thead>
+              <tr>
+                <th rowSpan={2} style={thStyle}>ID</th>
+                <th rowSpan={2} style={thStyle}>Nama</th>
+                {questions.length > 0 && <th colSpan={questions.length} style={{ ...thStyle, textAlign: 'center', background: '#EEF1FF' }}>Soal</th>}
+                <th colSpan={4} style={{ ...thStyle, textAlign: 'center', background: '#0D5C3A', color: '#fff' }}>Total</th>
+              </tr>
+              <tr>
+                {questions.map(q => (
+                  <th key={q.id} style={{ ...thStyle, textAlign: 'center', minWidth: '42px' }}>
+                    {q.urutan}
+                    <div style={{ fontSize: '0.62rem', color: '#aaa', fontWeight: 600 }}>{qStats[q.id]?.pct_correct ?? 0}%</div>
+                  </th>
+                ))}
+                <th style={{ ...thStyle, textAlign: 'center' }}>B</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>S</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>K</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.student_id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
+                  <td style={tdStyle}>{r.username}</td>
+                  <td style={{ ...tdStyle, fontWeight: 600 }}>{r.display_name}</td>
+                  {questions.map(q => {
+                    const c = cellFor(r, q.id);
+                    const color = c === 'B' ? '#15803D' : c === 'S' ? '#DC0A1E' : '#92400E';
+                    return <td key={q.id} style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color }}>{c}</td>;
+                  })}
+                  <td style={{ ...tdStyle, textAlign: 'center', color: '#15803D', fontWeight: 700 }}>{r.jumlah_benar}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center', color: '#DC0A1E', fontWeight: 700 }}>{r.jumlah_salah}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center', color: '#92400E', fontWeight: 700 }}>{r.jumlah_kosong}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 800, color: r.nilai !== null ? '#0D5C3A' : '#ccc' }}>
+                    {r.nilai !== null ? r.nilai.toFixed(2) : '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
@@ -130,3 +256,12 @@ function Stat({ label, value }: { label: string; value: string | number }) {
     </div>
   );
 }
+
+const thStyle: React.CSSProperties = {
+  padding: '8px 10px', fontSize: '0.7rem', fontWeight: 700, color: '#666',
+  textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: '1px solid #E2E1DC',
+  background: '#F9F9F7', whiteSpace: 'nowrap',
+};
+const tdStyle: React.CSSProperties = {
+  padding: '8px 10px', fontSize: '0.82rem', color: '#0D0D0D', borderBottom: '1px solid #F3F2EE', whiteSpace: 'nowrap',
+};

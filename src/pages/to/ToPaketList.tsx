@@ -2,8 +2,7 @@ import { useState, useEffect, FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import AdminHasilTO from '../staff/HasilTO';
-import ToHasilRekap from './ToHasilRekap';
+import { UploadModal } from '../staff/HasilTO';
 import {
   Overlay, ModalHeader, Field, ToTabs,
   input, btnPrimary, btnSecondary, btnEdit, btnGhost, muted, errorText, confirmBox, confirmTitle,
@@ -21,6 +20,7 @@ export default function ToPaketList() {
   const [examCounts, setExamCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
 
+  const [showUpload, setShowUpload] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [editPkg, setEditPkg] = useState<ToPackage | null>(null);
   const [deletePkg, setDeletePkg] = useState<ToPackage | null>(null);
@@ -102,13 +102,40 @@ export default function ToPaketList() {
 
       {tab === 'sertifikat' && (
         <div>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', margin: '0 0 16px', color: '#0D0D0D' }}>Hasil TO</h2>
-          <AdminHasilTO />
-
-          <div style={{ marginTop: '40px', paddingTop: '24px', borderTop: '2px solid #F3F2EE' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.15rem', margin: '0 0 16px', color: '#0D0D0D' }}>Rekap per Ujian Try Out</h2>
-            <ToHasilRekap />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            <p style={{ ...muted, margin: 0 }}>Pilih paket untuk melihat hasil per mata pelajaran.</p>
+            <button onClick={() => setShowUpload(true)} style={btnPrimary}>+ Upload Skor SNBT</button>
           </div>
+
+          {loading ? (
+            <p style={muted}>Memuat...</p>
+          ) : packages.length === 0 ? (
+            <p style={muted}>Belum ada paket try out.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {packages.map(pkg => (
+                <div key={pkg.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: '200px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: '#0D0D0D' }}>{pkg.nama}</span>
+                      <span style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.65rem', padding: '2px 8px', borderRadius: '10px', background: pkg.type === 'TKA' ? '#EDE9FE' : '#DBEAFE', color: pkg.type === 'TKA' ? '#5B21B6' : '#1D4ED8' }}>
+                        {pkg.type}
+                      </span>
+                    </div>
+                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#888', marginTop: '3px' }}>
+                      {fmtDateTime(pkg.tanggal_mulai)} &mdash; {fmtDateTime(pkg.tanggal_selesai)}
+                      {' · '}{examCounts[pkg.id] ?? 0} mata pelajaran
+                    </div>
+                  </div>
+                  <Link to={`${base}/paket/${pkg.id}`} style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block', color: '#0D5C3A' }}>Lihat Hasil</Link>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showUpload && (
+            <UploadModal onClose={() => setShowUpload(false)} onSaved={() => setShowUpload(false)} />
+          )}
         </div>
       )}
 

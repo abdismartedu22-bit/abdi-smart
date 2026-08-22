@@ -125,7 +125,7 @@ async function parseFile(
 }
 
 /* ── Upload Modal ──────────────────────────────────────────── */
-function UploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+export function UploadModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [type, setType] = useState<'SNBT' | 'TKA'>('SNBT');

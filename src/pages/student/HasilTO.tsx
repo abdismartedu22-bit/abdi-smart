@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -48,71 +49,233 @@ function numVal(v: number | null | undefined): number | null {
   return isNaN(n) ? null : n;
 }
 
-/* --- RADAR CHART --- */
-function RadarChart({ fields, values, maxVal }: {
+/* --- SUNBURST RADAR (layered polar-area chart) --- */
+function hexToRgba(hex: string, alpha: number) {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function SunburstRadar({ fields, values, maxVal }: {
   fields: { key: string; label: string; color: string }[];
   values: number[];
   maxVal: number;
 }) {
   const n = fields.length;
-  const cx = 200, cy = 195, R = 148;
+  const cx = 200, cy = 200, R = 128, R0 = 40;
 
   function angle(i: number) { return (i * 2 * Math.PI / n) - Math.PI / 2; }
-  function pt(i: number, r: number) {
-    const a = angle(i);
-    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
-  }
-  function ta(i: number) {
-    const a = angle(i);
-    const cos = Math.cos(a);
-    if (cos < -0.3) return 'end';
-    if (cos > 0.3) return 'start';
-    return 'middle';
-  }
-  function db(i: number) {
-    const sin = Math.sin(angle(i));
-    if (sin < -0.4) return 'auto';
-    if (sin > 0.4) return 'hanging';
-    return 'middle';
-  }
+  function pt(a: number, r: number) { return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }; }
 
-  const gridRings = [0.2, 0.4, 0.6, 0.8, 1.0];
-  const gridPoints = gridRings.map(s =>
-    Array.from({ length: n }, (_, i) => pt(i, R * s)).map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
-  );
+  const gap = 0.045; // radian gap between wedges
+  const sectors = fields.map((f, i) => {
+    const mid = angle(i);
+    const half = Math.PI / n - gap / 2;
+    return { start: mid - half, end: mid + half, mid };
+  });
 
-  const dataPoints = values.map((v, i) => pt(i, R * Math.min(1, Math.max(0, v / maxVal))));
-  const dataPath = dataPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ') + ' Z';
+  const gridRings = [0.25, 0.5, 0.75, 1.0];
+  const overall = values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+
+  const badgeR = R + 46;
+
+  // Stretch the actual data spread across the full radius so differences
+  // between subjects stay visible even when every score sits in a narrow
+  // band of maxVal (e.g. 650-820 out of 1000 barely moves on a 0-1000 scale).
+  const vMin = Math.min(...values, maxVal);
+  const vMax = Math.max(...values, 0);
+  const spread = vMax - vMin;
+  const scaleFloor = spread > 0 ? Math.max(0, vMin - spread * 1.2) : vMin * 0.85;
+  const scaleTop = spread > 0 ? vMax + spread * 0.3 : vMax * 1.15 || 1;
+  function fracOf(v: number) {
+    if (scaleTop - scaleFloor <= 0) return 1;
+    return Math.min(1, Math.max(0, (v - scaleFloor) / (scaleTop - scaleFloor)));
+  }
 
   return (
-    <svg viewBox="0 0 400 400" style={{ width: '100%', maxWidth: '300px', display: 'block', margin: '0 auto' }}>
-      {gridPoints.map((pts, k) => (
-        <polygon key={k} points={pts} fill="none" stroke="#E2E1DC" strokeWidth={k === 4 ? 1.5 : 1} />
-      ))}
-      {gridRings.map((s, k) => {
-        const p = pt(0, R * s);
+    <svg viewBox="0 0 400 400" style={{ width: '100%', maxWidth: '340px', display: 'block', margin: '0 auto', overflow: 'visible' }}>
+      {/* faint background wedge (full territory) */}
+      {sectors.map((s, i) => {
+        const p1 = pt(s.start, R);
+        const p2 = pt(s.end, R);
         return (
-          <text key={k} x={p.x + 4} y={p.y} fontSize="9" fill="#ccc" fontFamily="var(--font-body)">{Math.round(maxVal * s)}</text>
+          <path key={`bg-${i}`}
+            d={`M ${cx},${cy} L ${p1.x.toFixed(1)},${p1.y.toFixed(1)} A ${R},${R} 0 0,1 ${p2.x.toFixed(1)},${p2.y.toFixed(1)} Z`}
+            fill={hexToRgba(fields[i].color, 0.16)} />
         );
       })}
-      {Array.from({ length: n }, (_, i) => {
-        const p = pt(i, R);
-        return <line key={i} x1={cx} y1={cy} x2={p.x.toFixed(1)} y2={p.y.toFixed(1)} stroke="#E2E1DC" strokeWidth="1" />;
-      })}
-      <path d={dataPath} fill="rgba(230,100,30,0.15)" stroke="#E6641E" strokeWidth="2.5" strokeLinejoin="round" />
-      {dataPoints.map((p, i) => (
-        <circle key={i} cx={p.x.toFixed(1)} cy={p.y.toFixed(1)} r="4" fill="#E6641E" />
-      ))}
-      {Array.from({ length: n }, (_, i) => {
-        const p = pt(i, R + 24);
+      {/* filled wedge up to value */}
+      {sectors.map((s, i) => {
+        const frac = fracOf(values[i] ?? 0);
+        const r = R0 + (R - R0) * frac;
+        const p1 = pt(s.start, r);
+        const p2 = pt(s.end, r);
+        const p1i = pt(s.start, R0);
+        const p2i = pt(s.end, R0);
         return (
-          <text key={i} x={p.x.toFixed(1)} y={p.y.toFixed(1)} textAnchor={ta(i)} dominantBaseline={db(i)}
-            fontSize="13" fontFamily="var(--font-body)" fontWeight="700" fill="#0D0D0D">
-            {fields[i].label}
-          </text>
+          <path key={`fg-${i}`}
+            d={`M ${p1i.x.toFixed(1)},${p1i.y.toFixed(1)} L ${p1.x.toFixed(1)},${p1.y.toFixed(1)} A ${r},${r} 0 0,1 ${p2.x.toFixed(1)},${p2.y.toFixed(1)} L ${p2i.x.toFixed(1)},${p2i.y.toFixed(1)} A ${R0},${R0} 0 0,0 ${p1i.x.toFixed(1)},${p1i.y.toFixed(1)} Z`}
+            fill={hexToRgba(fields[i].color, 0.88)} stroke={fields[i].color} strokeWidth="2" strokeLinejoin="round" />
         );
       })}
+      {/* ring gridlines */}
+      {gridRings.map((s, k) => (
+        <circle key={k} cx={cx} cy={cy} r={R0 + (R - R0) * s} fill="none" stroke="#fff" strokeWidth="1" opacity="0.7" />
+      ))}
+      {/* connector dashed lines + value badges */}
+      {fields.map((f, i) => {
+        const outer = pt(angle(i), R);
+        const b = pt(angle(i), badgeR);
+        const v = values[i] ?? 0;
+        return (
+          <g key={`badge-${i}`}>
+            <line x1={outer.x.toFixed(1)} y1={outer.y.toFixed(1)} x2={b.x.toFixed(1)} y2={b.y.toFixed(1)}
+              stroke={f.color} strokeWidth="1.5" strokeDasharray="2,2" opacity="0.7" />
+            <circle cx={b.x.toFixed(1)} cy={b.y.toFixed(1)} r="32" fill="#fff" stroke={f.color} strokeWidth="2.5" />
+            <text x={b.x.toFixed(1)} y={(b.y - 5).toFixed(1)} textAnchor="middle" fontSize="13" fontFamily="var(--font-body)" fontWeight="800" fill={f.color}>
+              {f.label}
+            </text>
+            <text x={b.x.toFixed(1)} y={(b.y + 13).toFixed(1)} textAnchor="middle" fontSize="14" fontFamily="var(--font-body)" fontWeight="800" fill="#0D0D0D">
+              {v.toFixed(2)}
+            </text>
+          </g>
+        );
+      })}
+      {/* center overall circle */}
+      <circle cx={cx} cy={cy} r={R0 - 4} fill="#fff" stroke="#E2E1DC" strokeWidth="1.5" />
+      <text x={cx} y={cy - 10} textAnchor="middle" fontSize="10" fontFamily="var(--font-body)" fontWeight="800" fill="#888" letterSpacing="0.05em">
+        OVERALL
+      </text>
+      <text x={cx} y={cy + 11} textAnchor="middle" fontSize="19" fontFamily="var(--font-display)" fontWeight="800" fill="#0D0D0D">
+        {overall.toFixed(2)}
+      </text>
+      <text x={cx} y={cy + 24} textAnchor="middle" fontSize="9" fontFamily="var(--font-body)" fontWeight="700" fill="#aaa">
+        /{maxVal}
+      </text>
     </svg>
+  );
+}
+
+/* --- CERTIFICATE (SNBT only) --- */
+const SNBT_CERT_GROUPS = [
+  { title: 'Tes Potensi Skolastik', items: [
+    { key: 'pu', label: 'Penalaran Umum' },
+    { key: 'pk', label: 'Kemampuan Kuantitatif' },
+    { key: 'ppu', label: 'Pengetahuan dan Pemahaman Umum' },
+    { key: 'pbm', label: 'Pemahaman Bacaan dan Menulis' },
+  ] },
+  { title: 'Tes Literasi Bahasa', items: [
+    { key: 'lbi', label: 'Tes Literasi Bahasa Indonesia' },
+    { key: 'lba', label: 'Tes Literasi Bahasa Inggris' },
+  ] },
+];
+
+function TOCertificate({ cert, studentName, label }: { cert: TOResult; studentName: string; label: string }) {
+  const dateLabel = cert.tanggal_to
+    ? new Date(cert.tanggal_to + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+    : '-';
+  const year = cert.tanggal_to ? cert.tanggal_to.slice(0, 4) : String(new Date().getFullYear());
+  const val = (key: string) => (numVal(cert.scores?.[key]) ?? 0).toFixed(2);
+  const qrValue = `https://abdismart.web.id/verify/${cert.id}`;
+
+  return (
+    <div style={{ ...card, padding: '20px 16px' }}>
+      <p style={sectionLabel}>{label}</p>
+      <div style={{ position: 'relative', width: '100%', maxWidth: '520px', margin: '0 auto' }}>
+        <div style={{ paddingBottom: '100%' }} />
+        <div style={{
+          position: 'absolute', inset: 0,
+          borderRadius: '50%', overflow: 'hidden', background: '#FFFDE0',
+          border: '1px solid #EDE9C8', boxShadow: '0 8px 30px rgba(0,0,0,0.08)',
+        }}>
+        <img
+          src="/logo.png"
+          alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.16 }}
+          onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+        />
+
+        <div style={{ position: 'relative', zIndex: 1, padding: '5% 11% 3%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', textAlign: 'center', height: '100%', boxSizing: 'border-box', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '8px' }}>
+            <div style={{ width: '11%', aspectRatio: '1', borderRadius: '50%', overflow: 'hidden', background: '#FFE500', marginBottom: '4px' }}>
+              <img src="/logo.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '1.3rem', lineHeight: 1.15, color: '#0D0D0D', letterSpacing: '-0.01em' }}>ABDI SMART</div>
+            <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.78rem', lineHeight: 1.2, color: '#333' }}>Les Privat | Bimbel</div>
+          </div>
+
+          <div style={{ borderBottom: '1.5px solid #0D0D0D', paddingBottom: '7px', marginBottom: '9px', width: '92%' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.85rem', color: '#0D0D0D', lineHeight: 1.3 }}>
+              SERTIFIKAT HASIL TRY OUT {(cert.nama_to ?? '').toUpperCase()}
+            </div>
+            <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.72rem', color: '#0D0D0D', lineHeight: 1.25, marginTop: '3px' }}>
+              UJIAN TULIS BERBASIS KOMPUTER (UTBK) SNBT {year}
+            </div>
+          </div>
+
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.15, color: '#0D0D0D', marginBottom: '6px' }}>
+            {studentName}
+          </div>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#333', marginBottom: '12px', lineHeight: 1.35 }}>
+            Telah mengikuti Try Out pada {dateLabel}<br />dengan hasil sebagai berikut:
+          </div>
+
+          <div style={{ display: 'flex', gap: '4%', width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '24%', flexShrink: 0 }}>
+              <QRCodeSVG value={qrValue} size={200} style={{ width: '100%', height: 'auto', display: 'block' }} />
+            </div>
+            <div style={{ textAlign: 'left', flex: 1 }}>
+              {SNBT_CERT_GROUPS.map(g => (
+                <div key={g.title} style={{ marginBottom: '5px' }}>
+                  <div style={{ fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: '0.72rem', lineHeight: 1.4, color: '#0D0D0D' }}>{g.title}</div>
+                  {g.items.map(it => (
+                    <div key={it.key} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', fontFamily: 'var(--font-body)', fontSize: '0.68rem', lineHeight: 1.4, color: '#0D0D0D', paddingLeft: '10px' }}>
+                      <span>{it.label}</span>
+                      <span style={{ fontWeight: 700 }}>{val(it.key)}</span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px', fontFamily: 'var(--font-body)', fontWeight: 800, fontSize: '0.72rem', lineHeight: 1.4, color: '#0D0D0D' }}>
+                <span>Penalaran Matematika</span>
+                <span>{val('pm')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TopFocusAreaCards({ fields, values }: {
+  fields: { key: string; label: string; color: string }[];
+  values: number[];
+}) {
+  if (fields.length === 0) return null;
+  let topIdx = 0, focusIdx = 0;
+  fields.forEach((_, i) => {
+    if ((values[i] ?? 0) > (values[topIdx] ?? 0)) topIdx = i;
+    if ((values[i] ?? 0) < (values[focusIdx] ?? 0)) focusIdx = i;
+  });
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '16px' }}>
+      <div style={{ background: '#F0FDF4', border: '1px solid #BBF7D0', borderRadius: '10px', padding: '12px' }}>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 800, color: '#16A34A', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Top Area</div>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '1.05rem', fontWeight: 800, color: '#0D0D0D', marginTop: '3px' }}>
+          {fields[topIdx].label} ({(values[topIdx] ?? 0).toFixed(2)})
+        </div>
+      </div>
+      <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '10px', padding: '12px' }}>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 800, color: '#DC2626', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Focus Area</div>
+        <div style={{ fontFamily: 'var(--font-body)', fontSize: '1.05rem', fontWeight: 800, color: '#0D0D0D', marginTop: '3px' }}>
+          {fields[focusIdx].label} ({(values[focusIdx] ?? 0).toFixed(2)})
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -368,14 +531,27 @@ export default function StudentHasilTO() {
                 </div>
               </div>
 
-              {/* Radar chart */}
+              {/* Certificate -- only for a specific selected SNBT TO, not "Semua TO" */}
+              {filterType === 'SNBT' && selectedKodeTo && filteredSorted.length > 0 && (
+                <TOCertificate
+                  cert={filteredSorted[filteredSorted.length - 1]}
+                  studentName={profile?.display_name ?? '-'}
+                  label="Sertifikat Hasil TO"
+                />
+              )}
+
+              {/* Sunburst radar chart */}
               {activeFields.length >= 3 && (
                 <div style={{ ...card, padding: '20px 16px' }}>
-                  <p style={sectionLabel}>Rata-rata Semua TO</p>
-                  <RadarChart
+                  <p style={sectionLabel}>{selectedKodeTo ? `Skor ${selectedKodeTo}` : 'Rata-rata Semua TO'}</p>
+                  <SunburstRadar
                     fields={activeFields}
                     values={activeFields.map(f => averages[f.key] ?? 0)}
                     maxVal={maxVal}
+                  />
+                  <TopFocusAreaCards
+                    fields={activeFields}
+                    values={activeFields.map(f => averages[f.key] ?? 0)}
                   />
                 </div>
               )}
@@ -383,7 +559,7 @@ export default function StudentHasilTO() {
               {/* Averages table */}
               {activeFields.length > 0 && (
                 <div style={card}>
-                  <p style={sectionLabel}>Rata-rata per Mapel</p>
+                  <p style={sectionLabel}>{selectedKodeTo ? 'Skor per Mapel' : 'Rata-rata per Mapel'}</p>
                   <div style={{ overflowX: 'auto', marginTop: '8px' }}>
                     <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: `${activeFields.length * 72}px` }}>
                       <thead>
@@ -415,6 +591,7 @@ export default function StudentHasilTO() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px', flexWrap: 'wrap' }}>
                     <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Mapel</span>
                     <button onClick={() => setSelectedMapel('ALL')} style={mapelBtn(selectedMapel === 'ALL', '#0D5C3A')}>ALL</button>
+                    <button onClick={() => setSelectedMapel('RATA')} style={mapelBtn(selectedMapel === 'RATA', '#E6641E')}>Rata-rata</button>
                     {activeFields.map(f => (
                       <button key={f.key} onClick={() => setSelectedMapel(f.key)} style={mapelBtn(selectedMapel === f.key, f.color)}>
                         {f.label}
@@ -424,6 +601,8 @@ export default function StudentHasilTO() {
 
                   {selectedMapel === 'ALL' ? (
                     <MultiLineChart series={chartSeries} xLabels={xLabels} maxVal={maxVal} />
+                  ) : selectedMapel === 'RATA' ? (
+                    <BarChart values={activeFields.map(f => averages[f.key] ?? 0)} xLabels={activeFields.map(f => f.label)} />
                   ) : singleSeries ? (
                     <BarChart values={singleSeries.values.map(v => v ?? 0)} xLabels={xLabels} />
                   ) : null}

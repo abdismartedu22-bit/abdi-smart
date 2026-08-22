@@ -157,7 +157,14 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
                   <button
                     key={t}
                     type="button"
-                    onClick={() => setTipe(t)}
+                    onClick={() => {
+                      setTipe(t);
+                      if (!question) {
+                        setOptions(t === 'pilihan_ganda'
+                          ? ['A', 'B', 'C', 'D', 'E'].map(label => ({ label, text: '' }))
+                          : [{ label: 'A', text: '' }, { label: 'B', text: '' }]);
+                      }
+                    }}
                     style={{
                       padding: '6px 14px', borderRadius: '20px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '0.78rem',
                       border: active ? `2px solid ${tb.color}40` : '2px solid #E2E1DC',

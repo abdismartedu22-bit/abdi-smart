@@ -6,34 +6,7 @@ import { startOfMonth, format } from 'date-fns';
 import * as XLSX from 'xlsx';
 
 type Group = { id: string; nama: string; kode: string };
-type ReportType = 'jadwal' | 'absensi' | 'hasil-to' | 'kelas' | 'gedung';
-type Merge = { s: { r: number; c: number }; e: { r: number; c: number } };
-
-const SNBT_FIELDS = [
-  { key: 'pu',  label: 'PU' },
-  { key: 'pk',  label: 'PK' },
-  { key: 'ppu', label: 'PPU' },
-  { key: 'pbm', label: 'PBM' },
-  { key: 'lbi', label: 'LBI' },
-  { key: 'lba', label: 'LBA' },
-  { key: 'pm',  label: 'PNM' },
-];
-
-const TKA_FIELDS = [
-  { key: 'ind',    label: 'BAHASA INDONESIA' },
-  { key: 'matwa',  label: 'MATEMATIKA WAJIB' },
-  { key: 'ing',    label: 'BAHASA INGGRIS' },
-  { key: 'fis',    label: 'FISIKA' },
-  { key: 'kim',    label: 'KIMIA' },
-  { key: 'bio',    label: 'BIOLOGI' },
-  { key: 'matlan', label: 'MATEMATIKA LANJUT' },
-  { key: 'eko',    label: 'EKONOMI' },
-  { key: 'sos',    label: 'SOSIOLOGI' },
-  { key: 'sej',    label: 'SEJARAH' },
-  { key: 'geo',    label: 'GEOGRAFI' },
-  { key: 'indlan', label: 'BAHASA INDONESIA LANJUT' },
-  { key: 'inglan', label: 'BAHASA INGGRIS LANJUT' },
-];
+type ReportType = 'jadwal' | 'absensi' | 'kelas' | 'gedung';
 
 const HARI_OFFSET: Record<string, number> = { Senin: 0, Selasa: 1, Rabu: 2, Kamis: 3, Jumat: 4, Sabtu: 5, Minggu: 6 };
 const HARI_ABB: Record<string, string>   = { Senin: 'SN', Selasa: 'SL', Rabu: 'RB', Kamis: 'KM', Jumat: 'JM', Sabtu: 'SB', Minggu: 'MG' };
@@ -61,9 +34,6 @@ export default function DownloadPage() {
   const [jadwalWeek, setJadwalWeek] = useState<Date>(() => getWeekStart());
   const [absenFrom, setAbsenFrom] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
   const [absenTo, setAbsenTo]     = useState(() => format(new Date(), 'yyyy-MM-dd'));
-  const [toFrom, setToFrom] = useState(() => format(startOfMonth(new Date()), 'yyyy-MM-dd'));
-  const [toTo, setToTo]     = useState(() => format(new Date(), 'yyyy-MM-dd'));
-  const [toType, setToType] = useState('');
 
   useEffect(() => {
     supabase.from('groups').select('id, nama, kode').order('nama').then(({ data }) => {
@@ -206,118 +176,6 @@ export default function DownloadPage() {
     setLoading(false);
   }
 
-  // ── HASIL TO ─────────────────────────────────────────────────────────────────
-  async function downloadHasilTO() {
-    setLoading(true);
-
-    let q = supabase
-      .from('tryout_results')
-      .select('type, nama_to, tanggal_to, scores, total_score, student:profiles!student_id(display_name, username)')
-      .gte('tanggal_to', toFrom)
-      .lte('tanggal_to', toTo)
-      .order('tanggal_to', { ascending: false });
-
-    if (toType) q = q.eq('type', toType);
-
-    const { data } = await q;
-    const rows = (data ?? []) as any[];
-
-    const snbtRows = rows.filter(r => r.type === 'SNBT');
-    const tkaRows  = rows.filter(r => r.type === 'TKA');
-
-    const wb = XLSX.utils.book_new();
-
-    if (toType !== 'TKA') {
-      const { sheetData, merges } = buildSnbtSheet(snbtRows);
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
-      ws['!merges'] = merges;
-      XLSX.utils.book_append_sheet(wb, ws, 'TABEL TO SNBT');
-    }
-
-    if (toType !== 'SNBT') {
-      const { sheetData, merges } = buildTkaSheet(tkaRows);
-      const ws = XLSX.utils.aoa_to_sheet(sheetData);
-      ws['!merges'] = merges;
-      XLSX.utils.book_append_sheet(wb, ws, 'HASIL TO TKA');
-    }
-
-    XLSX.writeFile(wb, `HasilTO_${toFrom}_sd_${toTo}.xlsx`);
-    setLoading(false);
-  }
-
-  function buildSnbtSheet(rows: any[]): { sheetData: any[][]; merges: Merge[] } {
-    // Row 0: NIS, Nama, [subtest merged over B/S/K cols, SKOR col], ..., RATA-RATA
-    // Row 1: "",  "",   [B, S, K, ""], ..., ""
-    const headerRow0: any[] = ['NIS', 'Nama'];
-    const headerRow1: any[] = ['', ''];
-    const merges: Merge[] = [];
-
-    SNBT_FIELDS.forEach((f, i) => {
-      const startCol = 2 + i * 4;
-      headerRow0.push(f.label, '', '', 'SKOR');
-      headerRow1.push('B', 'S', 'K', '');
-      merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 2 } });
-    });
-    headerRow0.push('RATA-RATA');
-    headerRow1.push('');
-
-    const dataRows = rows.map(r => {
-      const s = r.scores ?? {};
-      const row: any[] = [r.student?.username ?? '-', r.student?.display_name ?? '-'];
-      for (const f of SNBT_FIELDS) {
-        const b = s[f.key + '_b'];
-        const sVal = s[f.key + '_s'];
-        const k = s[f.key + '_k'];
-        const skor = s[f.key];
-        row.push(
-          b !== undefined && b !== null ? b : '-',
-          sVal !== undefined && sVal !== null ? sVal : '-',
-          k !== undefined && k !== null ? k : '-',
-          skor !== undefined && skor !== null && skor !== '' && skor !== '-' ? Number(skor).toFixed(2) : '-',
-        );
-      }
-      row.push(typeof r.total_score === 'number' ? r.total_score.toFixed(2) : '-');
-      return row;
-    });
-
-    return { sheetData: [headerRow0, headerRow1, ...dataRows], merges };
-  }
-
-  function buildTkaSheet(rows: any[]): { sheetData: any[][]; merges: Merge[] } {
-    // Row 0: ID, NIS, NAMA, [subject merged over B/S/K/N cols], ...
-    // Row 1: "",  "",  "",  [B, S, K, N], ...
-    const headerRow0: any[] = ['ID', 'NIS', 'NAMA'];
-    const headerRow1: any[] = ['', '', ''];
-    const merges: Merge[] = [];
-
-    TKA_FIELDS.forEach((f, i) => {
-      const startCol = 3 + i * 4;
-      headerRow0.push(f.label, '', '', '');
-      headerRow1.push('B', 'S', 'K', 'N');
-      merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 3 } });
-    });
-
-    const dataRows = rows.map((r, idx) => {
-      const s = r.scores ?? {};
-      const row: any[] = [idx + 1, r.student?.username ?? '-', r.student?.display_name ?? '-'];
-      for (const f of TKA_FIELDS) {
-        const b = s[f.key + '_b'];
-        const sVal = s[f.key + '_s'];
-        const k = s[f.key + '_k'];
-        const skor = s[f.key];
-        row.push(
-          b !== undefined && b !== null ? b : '-',
-          sVal !== undefined && sVal !== null ? sVal : '-',
-          k !== undefined && k !== null ? k : '-',
-          skor !== undefined && skor !== null && skor !== '' && skor !== '-' ? Number(skor) : '-',
-        );
-      }
-      return row;
-    });
-
-    return { sheetData: [headerRow0, headerRow1, ...dataRows], merges };
-  }
-
   // ── KELAS ────────────────────────────────────────────────────────────────────
   async function downloadKelas() {
     setLoading(true);
@@ -392,7 +250,6 @@ export default function DownloadPage() {
   function handleDownload() {
     if (effectiveReportType === 'jadwal')   downloadJadwal();
     else if (effectiveReportType === 'absensi')   downloadAbsensi();
-    else if (effectiveReportType === 'hasil-to')  downloadHasilTO();
     else if (effectiveReportType === 'kelas')     downloadKelas();
     else                                           downloadGedung();
   }
@@ -416,7 +273,6 @@ export default function DownloadPage() {
             <select value={reportType} onChange={e => setReportType(e.target.value as ReportType)} style={selectStyle}>
               <option value="absensi">Rekap Realisasi</option>
               <option value="jadwal">Input Jadwal</option>
-              <option value="hasil-to">Hasil Tryout</option>
               <option value="kelas">Data Kelas</option>
               <option value="gedung">Data Gedung</option>
             </select>
@@ -466,29 +322,6 @@ export default function DownloadPage() {
                 <select value={filterGroup} onChange={e => setFilterGroup(e.target.value)} style={selectStyle}>
                   <option value="">Semua Grup</option>
                   {groups.map(g => <option key={g.id} value={g.id}>{g.nama}</option>)}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {effectiveReportType === 'hasil-to' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div>
-                  <label style={labelStyle}>Dari</label>
-                  <input type="date" value={toFrom} onChange={e => setToFrom(e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
-                </div>
-                <div>
-                  <label style={labelStyle}>Sampai</label>
-                  <input type="date" value={toTo} onChange={e => setToTo(e.target.value)} style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }} />
-                </div>
-              </div>
-              <div>
-                <label style={labelStyle}>Jenis TO (opsional)</label>
-                <select value={toType} onChange={e => setToType(e.target.value)} style={selectStyle}>
-                  <option value="">Semua Jenis</option>
-                  <option value="SNBT">SNBT</option>
-                  <option value="TKA">TKA</option>
                 </select>
               </div>
             </div>
