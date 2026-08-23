@@ -100,7 +100,8 @@ function UsersTab() {
     const [{ data: u }, { data: g }] = await Promise.all([
       supabase.from('profiles')
         .select('*, student_groups(group_id, groups(id, nama, kode))')
-        .order('role').order('display_name'),
+        .order('role').order('display_name')
+        .range(0, 4999),
       supabase.from('groups').select('*').order('nama'),
     ]);
     setUsers((u ?? []) as UserRow[]);
@@ -682,8 +683,8 @@ function GroupsTab() {
 
     // Load all members per group
     const [{ data: sg }, { data: om }] = await Promise.all([
-      supabase.from('student_groups').select('group_id, profiles!student_id(id, display_name, nama)').order('group_id'),
-      supabase.from('profiles').select('id, display_name, nama').eq('role', 'student').in('tingkat_kelas', ['12IPA', '12IPS']).eq('is_active', true).order('display_name'),
+      supabase.from('student_groups').select('group_id, profiles!student_id(id, display_name, nama)').order('group_id').range(0, 4999),
+      supabase.from('profiles').select('id, display_name, nama').eq('role', 'student').in('tingkat_kelas', ['12IPA', '12IPS']).eq('is_active', true).order('display_name').range(0, 4999),
     ]);
 
     const map: Record<string, GroupMember[]> = {};

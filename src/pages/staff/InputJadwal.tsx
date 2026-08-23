@@ -97,7 +97,7 @@ export default function InputJadwal() {
         .eq('week_start', ws)
         .order('created_at', { ascending: false }), // most recently added first
       supabase.from('groups').select('*').eq('active', true).order('nama'),
-      supabase.from('profiles').select('id, display_name').eq('role', 'teacher').order('display_name'),
+      supabase.from('profiles').select('id, display_name').eq('role', 'teacher').order('display_name').range(0, 4999),
       supabase.from('gedung').select('id, nama, ruangan, kapasitas').ilike('status', 'aktif').order('nama').order('ruangan'),
     ]);
     setSchedules((sched ?? []) as unknown as ScheduleRow[]);
