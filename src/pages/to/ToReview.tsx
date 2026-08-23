@@ -77,10 +77,10 @@ export default function ToReview() {
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
       <Link to={base} style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#0D5C3A', textDecoration: 'none' }}>&larr; Kembali</Link>
 
-      <div style={{ background: '#0D5C3A', border: '1.5px solid #1B7A50', borderRadius: '6px', padding: '24px', margin: '14px 0 20px', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
+      <div style={{ background: '#0D5C3A', border: '3px solid #fff', borderRadius: '4px', padding: '24px', margin: '14px 0 20px', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
         <div style={{ padding: '0 28px' }}><ScoreStat label="Benar" value={attempt.jumlah_benar ?? 0} color="#86EFAC" /></div>
-        <div style={{ padding: '0 28px', borderLeft: '1.5px solid rgba(255,255,255,0.18)' }}><ScoreStat label="Salah" value={attempt.jumlah_salah ?? 0} color="#FCA5A5" /></div>
-        <div style={{ padding: '0 28px', borderLeft: '1.5px solid rgba(255,255,255,0.18)' }}><ScoreStat label="Kosong" value={attempt.jumlah_kosong ?? 0} color="#FDE68A" /></div>
+        <div style={{ padding: '0 28px', borderLeft: '2.5px solid rgba(255,255,255,0.4)' }}><ScoreStat label="Salah" value={attempt.jumlah_salah ?? 0} color="#FCA5A5" /></div>
+        <div style={{ padding: '0 28px', borderLeft: '2.5px solid rgba(255,255,255,0.4)' }}><ScoreStat label="Kosong" value={attempt.jumlah_kosong ?? 0} color="#FDE68A" /></div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -138,8 +138,8 @@ export default function ToReview() {
 function ScoreStat({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div>
-      <div style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, color }}>{value}</div>
-      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#D6EEE2' }}>{label}</div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: '2.2rem', fontWeight: 900, color }}>{value}</div>
+      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.8rem', fontWeight: 700, color: '#D6EEE2', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
     </div>
   );
 }
