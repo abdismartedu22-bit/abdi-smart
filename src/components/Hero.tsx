@@ -79,7 +79,7 @@ export default function Hero() {
               className="pill"
               style={{ background: 'var(--color-red)', color: '#fff' }}
             >
-              Bimbel Bali
+              Bimbel
             </span>
             <span
               className="pill"
