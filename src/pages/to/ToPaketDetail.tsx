@@ -19,6 +19,7 @@ export default function ToPaketDetail() {
   const [exams, setExams] = useState<ToExam[]>([]);
   const [tokens, setTokens] = useState<Record<string, ToExamToken>>({});
   const [questions, setQuestions] = useState<Record<string, ToQuestion[]>>({});
+  const [questionCounts, setQuestionCounts] = useState<Record<string, number>>({});
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
@@ -44,10 +45,19 @@ export default function ToPaketDetail() {
       supabase.from('to_exam_tokens').select('*'),
     ]);
     setPkg(p ?? null);
-    setExams((e ?? []) as ToExam[]);
+    const examList = (e ?? []) as ToExam[];
+    setExams(examList);
     const tMap: Record<string, ToExamToken> = {};
     (t ?? []).forEach((row: ToExamToken) => { tMap[row.exam_id] = row; });
     setTokens(tMap);
+
+    if (examList.length > 0) {
+      const { data: q } = await supabase.from('to_questions').select('exam_id').in('exam_id', examList.map(x => x.id));
+      const counts: Record<string, number> = {};
+      (q ?? []).forEach((row: { exam_id: string }) => { counts[row.exam_id] = (counts[row.exam_id] ?? 0) + 1; });
+      setQuestionCounts(counts);
+    }
+
     setLoading(false);
   }
 
@@ -158,7 +168,7 @@ export default function ToPaketDetail() {
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-                    <button onClick={() => toggleExpand(exam.id)} style={btnGhost}>{isOpen ? 'Tutup' : `Soal (${qList.length || exam.jumlah_soal_target})`}</button>
+                    <button onClick={() => toggleExpand(exam.id)} style={btnGhost}>{isOpen ? 'Tutup' : `Soal (${questions[exam.id]?.length ?? questionCounts[exam.id] ?? 0}/${exam.jumlah_soal_target})`}</button>
                     <button onClick={() => navigate(`${base}/hasil/${exam.id}`)} style={{ ...btnGhost, color: '#0D5C3A' }}>Hasil</button>
                     <button onClick={() => setEditExam(exam)} style={btnEdit}>Edit</button>
                     <button onClick={() => setDeleteExam(exam)} style={{ ...btnGhost, color: '#DC0A1E' }}>Hapus</button>
@@ -285,6 +295,10 @@ function ExamFormModal({ packageId, pkg, exam, nextUrutan, onClose, onDone }: {
       .then(({ data }) => setTeachers((data ?? []) as Profile[]));
   }, []);
 
+  const rangeMinutes = form.tanggal_mulai && form.tanggal_selesai
+    ? Math.max(0, Math.floor((new Date(form.tanggal_selesai).getTime() - new Date(form.tanggal_mulai).getTime()) / 60000))
+    : 0;
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -298,6 +312,11 @@ function ExamFormModal({ packageId, pkg, exam, nextUrutan, onClose, onDone }: {
     if (selesai <= mulai) { setError('Tanggal selesai harus setelah tanggal mulai'); return; }
     if (mulai < pkgMulai || selesai > pkgSelesai) {
       setError(`Waktu ujian harus berada dalam rentang paket (${fmtDateTime(pkg.tanggal_mulai)} – ${fmtDateTime(pkg.tanggal_selesai)})`);
+      return;
+    }
+
+    if (form.durasi_menit > rangeMinutes) {
+      setError(`Jumlah menit tidak boleh lebih dari rentang tanggal mulai–selesai (${rangeMinutes} menit)`);
       return;
     }
 
@@ -353,7 +372,12 @@ function ExamFormModal({ packageId, pkg, exam, nextUrutan, onClose, onDone }: {
               <input style={input} type="number" min="0" value={form.jumlah_soal_target} onChange={e => setForm(f => ({ ...f, jumlah_soal_target: parseInt(e.target.value) || 0 }))} />
             </Field>
             <Field label="Waktu (menit)">
-              <input style={input} type="number" min="1" value={form.durasi_menit} onChange={e => setForm(f => ({ ...f, durasi_menit: parseInt(e.target.value) || 1 }))} required />
+              <input
+                style={input} type="number" min="1" max={rangeMinutes || undefined}
+                value={form.durasi_menit}
+                onChange={e => setForm(f => ({ ...f, durasi_menit: parseInt(e.target.value) || 1 }))}
+                required
+              />
             </Field>
             <Field label="Acak Soal">
               <select style={{ ...input, cursor: 'pointer' }} value={form.acak_soal ? 'acak' : 'urut'} onChange={e => setForm(f => ({ ...f, acak_soal: e.target.value === 'acak' }))}>
@@ -380,6 +404,7 @@ function ExamFormModal({ packageId, pkg, exam, nextUrutan, onClose, onDone }: {
           </div>
           <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '-6px 0 0' }}>
             Harus berada dalam rentang paket: {fmtDateTime(pkg.tanggal_mulai)} &ndash; {fmtDateTime(pkg.tanggal_selesai)}
+            {rangeMinutes > 0 && <> &middot; Maks. waktu ujian: {rangeMinutes} menit</>}
           </p>
           {error && <p style={errorText}>{error}</p>}
           <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
