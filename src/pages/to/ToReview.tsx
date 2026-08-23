@@ -192,6 +192,16 @@ function AnswerComparison({ q }: { q: ReviewQuestion }) {
 
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontFamily: 'var(--font-body)', fontSize: '0.82rem', marginBottom: '2px' }}>
+          <div>
+            <div style={{ color: '#888', fontSize: '0.7rem', marginBottom: '2px' }}>Jawabanmu</div>
+            <div style={{ color: '#0D0D0D', fontWeight: 600 }}>{selectedLabel || '(kosong)'}</div>
+          </div>
+          <div>
+            <div style={{ color: '#888', fontSize: '0.7rem', marginBottom: '2px' }}>Kunci Jawaban</div>
+            <div style={{ color: '#15803D', fontWeight: 600 }}>{correctLabel || '-'}</div>
+          </div>
+        </div>
         {(q.opsi ?? []).map((text, i) => {
           const label = String.fromCharCode(65 + i);
           const isCorrect = label === correctLabel;
