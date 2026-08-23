@@ -106,7 +106,7 @@ export default function ToStatistik() {
         const nilai = rawNilai !== undefined && rawNilai !== null && rawNilai !== '' ? Number(rawNilai) : null;
         return {
           student_id: a.student_id,
-          username: prof?.username ?? '-',
+          username: a.student_id,
           display_name: prof?.display_name ?? '-',
           answers: answersByAttempt[a.id] ?? {},
           jumlah_benar: a.jumlah_benar ?? 0,
@@ -204,7 +204,6 @@ export default function ToStatistik() {
           <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '420px', fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr>
-                <th style={thStyle}>ID</th>
                 <th style={thStyle}>Nama</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>B</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>S</th>
@@ -215,7 +214,6 @@ export default function ToStatistik() {
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.student_id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
-                  <td style={tdStyle}>{r.username}</td>
                   <td style={{ ...tdStyle, fontWeight: 600 }}>{r.display_name}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#15803D', fontWeight: 700 }}>{r.jumlah_benar}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#DC0A1E', fontWeight: 700 }}>{r.jumlah_salah}</td>
