@@ -591,7 +591,6 @@ export default function StudentHome() {
                   <thead>
                     <tr>
                       <th style={thStyle}>Mata Pelajaran</th>
-                      <th style={thStyle}>Nama Siswa</th>
                       <th style={{ ...thStyle, textAlign: 'right' }}>Jawaban Benar</th>
                     </tr>
                   </thead>
@@ -599,7 +598,6 @@ export default function StudentHome() {
                     {topScorers.map(s => (
                       <tr key={s.exam_id}>
                         <td style={tdStyle}>{s.mata_pelajaran}</td>
-                        <td style={tdStyle}>{s.top_student_name}</td>
                         <td style={{ ...tdStyle, textAlign: 'right', fontFamily: 'var(--font-display)', fontWeight: 800, color: '#0D5C3A' }}>
                           {s.top_benar}/{s.total_soal}
                         </td>

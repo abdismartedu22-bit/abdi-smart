@@ -77,10 +77,10 @@ export default function ToReview() {
     <div style={{ maxWidth: '720px', margin: '0 auto' }}>
       <Link to={base} style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#0D5C3A', textDecoration: 'none' }}>&larr; Kembali</Link>
 
-      <div style={{ background: '#0D5C3A', borderRadius: '12px', padding: '24px', margin: '14px 0 20px', display: 'flex', gap: '24px', justifyContent: 'center', textAlign: 'center' }}>
-        <ScoreStat label="Benar" value={attempt.jumlah_benar ?? 0} color="#86EFAC" />
-        <ScoreStat label="Salah" value={attempt.jumlah_salah ?? 0} color="#FCA5A5" />
-        <ScoreStat label="Kosong" value={attempt.jumlah_kosong ?? 0} color="#FDE68A" />
+      <div style={{ background: '#0D5C3A', border: '1.5px solid #1B7A50', borderRadius: '6px', padding: '24px', margin: '14px 0 20px', display: 'flex', justifyContent: 'center', textAlign: 'center' }}>
+        <div style={{ padding: '0 28px' }}><ScoreStat label="Benar" value={attempt.jumlah_benar ?? 0} color="#86EFAC" /></div>
+        <div style={{ padding: '0 28px', borderLeft: '1.5px solid rgba(255,255,255,0.18)' }}><ScoreStat label="Salah" value={attempt.jumlah_salah ?? 0} color="#FCA5A5" /></div>
+        <div style={{ padding: '0 28px', borderLeft: '1.5px solid rgba(255,255,255,0.18)' }}><ScoreStat label="Kosong" value={attempt.jumlah_kosong ?? 0} color="#FDE68A" /></div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -182,6 +182,32 @@ function AnswerComparison({ q }: { q: ReviewQuestion }) {
             })}
           </tbody>
         </table>
+      </div>
+    );
+  }
+
+  if (q.tipe === 'pilihan_ganda') {
+    const correctLabel = typeof q.jawaban_benar === 'string' ? q.jawaban_benar.trim() : '';
+    const selectedLabel = typeof q.jawaban_siswa === 'string' ? q.jawaban_siswa.trim() : '';
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        {(q.opsi ?? []).map((text, i) => {
+          const label = String.fromCharCode(65 + i);
+          const isCorrect = label === correctLabel;
+          const isSelected = label === selectedLabel;
+          let bg = '#F9F9F7', border = '#E2E1DC', badge = '';
+          if (isCorrect && isSelected) { bg = '#F0FDF4'; border = '#86EFAC'; badge = '✓ Dipilih, benar'; }
+          else if (isCorrect && !isSelected) { bg = '#FFFBEB'; border = '#FCD34D'; badge = 'Kunci Jawaban'; }
+          else if (!isCorrect && isSelected) { bg = '#FEF2F2'; border = '#FCA5A5'; badge = 'Dipilih, salah'; }
+          return (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: bg, border: `1.5px solid ${border}` }}>
+              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', color: '#0D0D0D', flexShrink: 0 }}>{label}</span>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{text}</span>
+              {badge && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: isSelected && !isCorrect ? '#DC0A1E' : isCorrect && !isSelected ? '#92400E' : '#15803D', flexShrink: 0 }}>{badge}</span>}
+            </div>
+          );
+        })}
       </div>
     );
   }

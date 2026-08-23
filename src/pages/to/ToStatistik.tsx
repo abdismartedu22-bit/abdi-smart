@@ -201,21 +201,11 @@ export default function ToStatistik() {
         <p style={muted}>Belum ada siswa yang menyelesaikan ujian ini.</p>
       ) : (
         <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px' }}>
-          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: `${420 + questions.length * 46}px`, fontFamily: 'var(--font-body)' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '420px', fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr>
-                <th rowSpan={2} style={thStyle}>ID</th>
-                <th rowSpan={2} style={thStyle}>Nama</th>
-                {questions.length > 0 && <th colSpan={questions.length} style={{ ...thStyle, textAlign: 'center', background: '#EEF1FF' }}>Soal</th>}
-                <th colSpan={4} style={{ ...thStyle, textAlign: 'center', background: '#0D5C3A', color: '#fff' }}>Total</th>
-              </tr>
-              <tr>
-                {questions.map(q => (
-                  <th key={q.id} style={{ ...thStyle, textAlign: 'center', minWidth: '42px' }}>
-                    {q.urutan}
-                    <div style={{ fontSize: '0.62rem', color: '#aaa', fontWeight: 600 }}>{qStats[q.id]?.pct_correct ?? 0}%</div>
-                  </th>
-                ))}
+                <th style={thStyle}>ID</th>
+                <th style={thStyle}>Nama</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>B</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>S</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>K</th>
@@ -227,11 +217,6 @@ export default function ToStatistik() {
                 <tr key={r.student_id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
                   <td style={tdStyle}>{r.username}</td>
                   <td style={{ ...tdStyle, fontWeight: 600 }}>{r.display_name}</td>
-                  {questions.map(q => {
-                    const c = cellFor(r, q.id);
-                    const color = c === 'B' ? '#15803D' : c === 'S' ? '#DC0A1E' : '#92400E';
-                    return <td key={q.id} style={{ ...tdStyle, textAlign: 'center', fontWeight: 700, color }}>{c}</td>;
-                  })}
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#15803D', fontWeight: 700 }}>{r.jumlah_benar}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#DC0A1E', fontWeight: 700 }}>{r.jumlah_salah}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#92400E', fontWeight: 700 }}>{r.jumlah_kosong}</td>
