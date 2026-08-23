@@ -188,13 +188,6 @@ export default function ToStatistik() {
       <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', flexWrap: 'wrap' }}>
         <Stat label="Peserta" value={rows.length} />
         <Stat label="Rata-rata Jumlah Benar" value={avgBenar} />
-        {pkg?.type === 'SNBT' && (
-          <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: '10px', padding: '14px 20px', display: 'flex', alignItems: 'center' }}>
-            <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#9A3412', margin: 0, maxWidth: '260px' }}>
-              SNBT: Nilai dihitung manual. Download hasil ini lalu upload skor akhir lewat panel Hasil TO agar tampil ke siswa.
-            </p>
-          </div>
-        )}
       </div>
 
       {rows.length === 0 ? (
