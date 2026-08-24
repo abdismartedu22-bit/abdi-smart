@@ -17,6 +17,7 @@ const SNBT_KEY: Record<string, string> = {
 const TKA_KEY: Record<string, string> = {
   IND: 'ind', MATWA: 'matwa', ING: 'ing', FIS: 'fis', KIM: 'kim', BIO: 'bio', MATLAN: 'matlan',
   EKO: 'eko', SOS: 'sos', SEJ: 'sej', GEO: 'geo', INDLAN: 'indlan', INGLAN: 'inglan',
+  ANT: 'ant', PPKN: 'ppkn',
 };
 function subjectKey(type: string, mataPelajaran: string): string | null {
   const key = mataPelajaran.trim().toUpperCase();

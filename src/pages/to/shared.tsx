@@ -4,6 +4,37 @@
 
 import { renderMathToHtml } from '../../components/shared/MathText';
 
+// Canonical subject code lists -- must exactly match the CASE mapping
+// in submit_to_attempt (docs/migration-try-out.sql). Mata Pelajaran is
+// a dropdown constrained to these, not free text, so a typo can never
+// silently fail to auto-score.
+export const SNBT_SUBJECTS = [
+  { code: 'PU', label: 'Penalaran Umum' },
+  { code: 'PK', label: 'Kemampuan Kuantitatif' },
+  { code: 'PPU', label: 'Pengetahuan dan Pemahaman Umum' },
+  { code: 'PBM', label: 'Pemahaman Bacaan dan Menulis' },
+  { code: 'LBI', label: 'Literasi Bahasa Indonesia' },
+  { code: 'LBA', label: 'Literasi Bahasa Inggris' },
+  { code: 'PM', label: 'Penalaran Matematika' },
+];
+export const TKA_SUBJECTS = [
+  { code: 'MATWA', label: 'Matematika' },
+  { code: 'IND', label: 'Bahasa Indonesia' },
+  { code: 'ING', label: 'Bahasa Inggris' },
+  { code: 'MATLAN', label: 'Matematika Tingkat Lanjut' },
+  { code: 'INDLAN', label: 'Bahasa Indonesia Tingkat Lanjut' },
+  { code: 'INGLAN', label: 'Bahasa Inggris Tingkat Lanjut' },
+  { code: 'FIS', label: 'Fisika' },
+  { code: 'KIM', label: 'Kimia' },
+  { code: 'BIO', label: 'Biologi' },
+  { code: 'EKO', label: 'Ekonomi' },
+  { code: 'GEO', label: 'Geografi' },
+  { code: 'SOS', label: 'Sosiologi' },
+  { code: 'SEJ', label: 'Sejarah' },
+  { code: 'ANT', label: 'Antropologi' },
+  { code: 'PPKN', label: 'Pendidikan Pancasila' },
+];
+
 // Renders Tiptap-authored HTML (konten_html/pembahasan_html/grid
 // statement text) with $...$/$$...$$ KaTeX math resolved via the
 // existing, unmodified renderMathToHtml() -- see richText.tsx for

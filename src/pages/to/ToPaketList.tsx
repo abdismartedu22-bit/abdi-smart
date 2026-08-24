@@ -1,5 +1,6 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { UploadModal } from '../staff/HasilTO';
@@ -7,10 +8,61 @@ import {
   Overlay, ModalHeader, Field, ToTabs,
   input, btnPrimary, btnSecondary, btnEdit, btnGhost, muted, errorText, confirmBox, confirmTitle,
   fmtDateTime, toLocalInputValue, fromLocalInputValue,
+  SNBT_SUBJECTS, TKA_SUBJECTS,
 } from './shared';
 import type { ToPackage } from '../../types';
 
 const KELAS_OPTIONS = ['6SD', '9SMP', '10', '11', '12IPA', '12IPS'];
+type Merge = { s: { r: number; c: number }; e: { r: number; c: number } };
+
+async function downloadPackage(pkg: ToPackage) {
+  const { data } = await supabase
+    .from('tryout_results')
+    .select('student_id, scores, student:profiles!student_id(display_name)')
+    .eq('type', pkg.type)
+    .eq('kode_to', pkg.id);
+  const rows = (data ?? []) as unknown as { student_id: string; scores: Record<string, unknown> | null; student: { display_name: string } | null }[];
+
+  if (rows.length === 0) {
+    alert('Belum ada hasil untuk paket ini.');
+    return;
+  }
+
+  const subjects = pkg.type === 'SNBT' ? SNBT_SUBJECTS : TKA_SUBJECTS;
+  const dateStr = pkg.tanggal_mulai.slice(0, 10);
+
+  const headerRow0: any[] = ['Date', 'Tryout ID', 'Student ID', 'Nama'];
+  const headerRow1: any[] = ['', '', '', ''];
+  const merges: Merge[] = [];
+  subjects.forEach((s, i) => {
+    const startCol = 4 + i * 4;
+    headerRow0.push(s.code, '', '', '');
+    headerRow1.push('B', 'S', 'K', pkg.type === 'SNBT' ? 'SKOR' : 'N');
+    merges.push({ s: { r: 0, c: startCol }, e: { r: 0, c: startCol + 3 } });
+  });
+
+  const dataRows = rows.map(r => {
+    const sc = r.scores ?? {};
+    const row: any[] = [dateStr, pkg.id, r.student_id, r.student?.display_name ?? '-'];
+    subjects.forEach(s => {
+      const key = s.code.toLowerCase();
+      const b = sc[`${key}_b`], sVal = sc[`${key}_s`], k = sc[`${key}_k`], skor = sc[key];
+      row.push(
+        b !== undefined && b !== null ? b : '-',
+        sVal !== undefined && sVal !== null ? sVal : '-',
+        k !== undefined && k !== null ? k : '-',
+        skor !== undefined && skor !== null && skor !== '' ? skor : '-',
+      );
+    });
+    return row;
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([headerRow0, headerRow1, ...dataRows]);
+  ws['!merges'] = merges;
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Hasil TO');
+  XLSX.writeFile(wb, `HasilTO_${pkg.nama.replace(/[^a-zA-Z0-9]/g, '_')}.xlsx`);
+}
 
 export default function ToPaketList() {
   const location = useLocation();
@@ -19,6 +71,7 @@ export default function ToPaketList() {
   const [packages, setPackages] = useState<ToPackage[]>([]);
   const [examCounts, setExamCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'SNBT' | 'TKA'>('ALL');
 
   const [showUpload, setShowUpload] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -51,6 +104,28 @@ export default function ToPaketList() {
     load();
   }
 
+  const filteredPackages = packages.filter(p => typeFilter === 'ALL' || p.type === typeFilter);
+
+  const typeFilterPills = (
+    <div style={{ display: 'flex', gap: '6px' }}>
+      {(['ALL', 'SNBT', 'TKA'] as const).map(t => (
+        <button
+          key={t}
+          onClick={() => setTypeFilter(t)}
+          style={{
+            padding: '7px 14px', borderRadius: '20px', cursor: 'pointer',
+            fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.8rem',
+            border: typeFilter === t ? '2px solid #0D5C3A' : '2px solid #E2E1DC',
+            background: typeFilter === t ? '#D6EEE2' : '#F9F9F7',
+            color: typeFilter === t ? '#0D5C3A' : '#888',
+          }}
+        >
+          {t === 'ALL' ? 'Semua' : t}
+        </button>
+      ))}
+    </div>
+  );
+
   return (
     <div>
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', margin: '0 0 16px', color: '#0D0D0D' }}>Try Out</h1>
@@ -63,17 +138,18 @@ export default function ToPaketList() {
 
       {tab === 'soal' && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+            {typeFilterPills}
             <button onClick={() => setShowCreate(true)} style={btnPrimary}>+ Buat Paket TO</button>
           </div>
 
           {loading ? (
             <p style={muted}>Memuat...</p>
-          ) : packages.length === 0 ? (
+          ) : filteredPackages.length === 0 ? (
             <p style={muted}>Belum ada paket try out.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {packages.map(pkg => (
+              {filteredPackages.map(pkg => (
                 <div key={pkg.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -102,18 +178,19 @@ export default function ToPaketList() {
 
       {tab === 'sertifikat' && (
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-            <p style={{ ...muted, margin: 0 }}>Pilih paket untuk melihat hasil per mata pelajaran.</p>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '10px' }}>
+            {typeFilterPills}
             <button onClick={() => setShowUpload(true)} style={btnPrimary}>+ Upload Skor SNBT</button>
           </div>
+          <p style={{ ...muted, margin: '0 0 16px' }}>Pilih paket untuk melihat hasil per mata pelajaran.</p>
 
           {loading ? (
             <p style={muted}>Memuat...</p>
-          ) : packages.length === 0 ? (
+          ) : filteredPackages.length === 0 ? (
             <p style={muted}>Belum ada paket try out.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {packages.map(pkg => (
+              {filteredPackages.map(pkg => (
                 <div key={pkg.id} style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: '200px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -127,7 +204,10 @@ export default function ToPaketList() {
                       {' · '}{examCounts[pkg.id] ?? 0} mata pelajaran
                     </div>
                   </div>
-                  <Link to={`${base}/paket/${pkg.id}`} style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block', color: '#0D5C3A' }}>Lihat Hasil</Link>
+                  <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+                    <button onClick={() => downloadPackage(pkg)} style={btnGhost}>Download</button>
+                    <Link to={`${base}/paket/${pkg.id}`} style={{ ...btnGhost, textDecoration: 'none', display: 'inline-block', color: '#0D5C3A' }}>Lihat Hasil</Link>
+                  </div>
                 </div>
               ))}
             </div>

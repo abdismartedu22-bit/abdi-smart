@@ -47,8 +47,8 @@ const TYPE_LABELS: Record<string, string> = {
   SNBT: 'SNBT', TKA: 'TKA', 'TKA-Saintek': 'TKA', 'TKA-Soshum': 'TKA',
 };
 const TYPE_FIELDS: Record<string, Array<{ key: string; label: string }>> = {
-  SNBT: [{ key: 'pu', label: 'PU' }, { key: 'ppu', label: 'PPU' }, { key: 'pbm', label: 'PBM' }, { key: 'pk', label: 'PK' }, { key: 'lbi', label: 'LBI' }, { key: 'lbe', label: 'LBE' }, { key: 'pm', label: 'PM' }],
-  TKA: [{ key: 'mat', label: 'Mat' }, { key: 'fis', label: 'Fis' }, { key: 'kim', label: 'Kim' }, { key: 'bio', label: 'Bio' }, { key: 'geo', label: 'Geo' }, { key: 'sej', label: 'Sej' }, { key: 'sos', label: 'Sos' }, { key: 'eko', label: 'Eko' }],
+  SNBT: [{ key: 'pu', label: 'PU' }, { key: 'ppu', label: 'PPU' }, { key: 'pbm', label: 'PBM' }, { key: 'pk', label: 'PK' }, { key: 'lbi', label: 'LBI' }, { key: 'lba', label: 'LBA' }, { key: 'pm', label: 'PM' }],
+  TKA: [{ key: 'matwa', label: 'MatWa' }, { key: 'ind', label: 'Ind' }, { key: 'ing', label: 'Ing' }, { key: 'matlan', label: 'MatLan' }, { key: 'indlan', label: 'IndLan' }, { key: 'inglan', label: 'IngLan' }, { key: 'fis', label: 'Fis' }, { key: 'kim', label: 'Kim' }, { key: 'bio', label: 'Bio' }, { key: 'eko', label: 'Eko' }, { key: 'geo', label: 'Geo' }, { key: 'sos', label: 'Sos' }, { key: 'sej', label: 'Sej' }, { key: 'ant', label: 'Ant' }, { key: 'ppkn', label: 'PPKn' }],
   'TKA-Saintek': [{ key: 'mat', label: 'Mat' }, { key: 'fis', label: 'Fis' }, { key: 'kim', label: 'Kim' }, { key: 'bio', label: 'Bio' }],
   'TKA-Soshum': [{ key: 'geo', label: 'Geo' }, { key: 'sej', label: 'Sej' }, { key: 'sos', label: 'Sos' }, { key: 'eko', label: 'Eko' }],
 };

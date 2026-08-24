@@ -7,6 +7,7 @@ import {
   Overlay, ModalHeader, Field, ToRichContent,
   input, btnPrimary, btnSecondary, btnEdit, btnGhost, muted, errorText, confirmBox, confirmTitle,
   TIPE_LABELS, TIPE_BADGE, fmtDateTime, toLocalInputValue, fromLocalInputValue,
+  SNBT_SUBJECTS, TKA_SUBJECTS,
 } from './shared';
 import type { ToPackage, ToExam, ToQuestion, ToExamToken, Profile } from '../../types';
 
@@ -355,7 +356,12 @@ function ExamFormModal({ packageId, pkg, exam, nextUrutan, onClose, onDone }: {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             <Field label="Mata Pelajaran">
-              <input style={input} value={form.mata_pelajaran} onChange={e => setForm(f => ({ ...f, mata_pelajaran: e.target.value }))} placeholder="cth. Penalaran Matematika" required />
+              <select style={{ ...input, cursor: 'pointer' }} value={form.mata_pelajaran} onChange={e => setForm(f => ({ ...f, mata_pelajaran: e.target.value }))} required>
+                <option value="">- Pilih Mata Pelajaran -</option>
+                {(pkg.type === 'SNBT' ? SNBT_SUBJECTS : TKA_SUBJECTS).map(s => (
+                  <option key={s.code} value={s.code}>{s.code} &mdash; {s.label}</option>
+                ))}
+              </select>
             </Field>
             <Field label="Guru">
               <select style={{ ...input, cursor: 'pointer' }} value={form.teacher_id} onChange={e => setForm(f => ({ ...f, teacher_id: e.target.value }))}>

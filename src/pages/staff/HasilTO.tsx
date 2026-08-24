@@ -36,12 +36,11 @@ type ParsedRow = {
 /* ── Field definitions ──────────────────────────────────────── */
 const SNBT_KEYS = ['pu', 'pk', 'ppu', 'pbm', 'lbi', 'lba', 'pm'];
 const SNBT_LABELS: Record<string, string> = { pu: 'PU', pk: 'PK', ppu: 'PPU', pbm: 'PBM', lbi: 'LBI', lba: 'LBA', pm: 'PM' };
-const TKA_KEYS = ['ind', 'matwa', 'ing', 'fis', 'kim', 'bio', 'matlan', 'eko', 'sos', 'sej', 'geo', 'indlan', 'inglan', 'mapel1', 'mapel2', 'mapel3'];
+const TKA_KEYS = ['matwa', 'ind', 'ing', 'matlan', 'indlan', 'inglan', 'fis', 'kim', 'bio', 'eko', 'geo', 'sos', 'sej', 'ant', 'ppkn'];
 const TKA_LABELS: Record<string, string> = {
-  ind: 'B.Indonesia', matwa: 'Mat.Wajib', ing: 'B.Inggris', fis: 'Fisika',
-  kim: 'Kimia', bio: 'Biologi', matlan: 'Mat.Lanjut', eko: 'Ekonomi',
-  sos: 'Sosiologi', sej: 'Sejarah', geo: 'Geografi', indlan: 'B.Ind.Lanjut', inglan: 'B.Ing.Lanjut',
-  mapel1: 'Mapel 1', mapel2: 'Mapel 2', mapel3: 'Mapel 3',
+  matwa: 'Matematika', ind: 'B.Indonesia', ing: 'B.Inggris', matlan: 'Mat.Lanjut',
+  indlan: 'B.Ind.Lanjut', inglan: 'B.Ing.Lanjut', fis: 'Fisika', kim: 'Kimia', bio: 'Biologi',
+  eko: 'Ekonomi', geo: 'Geografi', sos: 'Sosiologi', sej: 'Sejarah', ant: 'Antropologi', ppkn: 'PPKn',
 };
 
 const TYPE_BG: Record<string, { bg: string; color: string }> = {
@@ -226,7 +225,7 @@ export function UploadModal({ onClose, onSaved }: { onClose: () => void; onSaved
             <strong>Format kolom {type}:</strong><br />
             {type === 'SNBT'
               ? 'Date | Tryout ID | Student ID | Nama | PU (B,S,K,SKOR) | PK | PPU | PBM | LBI | LBA | PM'
-              : 'Date | Tryout ID | Student ID | Nama | IND (B,S,K,N) | MatWa | Ing | Fis | Kim | Bio | MatLan | Eko | Sos | Sej | Geo | IndLan | IngLan | Mapel1 | Mapel2 | Mapel3'}
+              : 'Date | Tryout ID | Student ID | Nama | MatWa (B,S,K,N) | Ind | Ing | MatLan | IndLan | IngLan | Fis | Kim | Bio | Eko | Geo | Sos | Sej | Ant | PPKn'}
             <br /><span style={{ color: '#888' }}>Nilai "-" = tidak mengambil mapel, akan dilewati.</span>
           </p>
         </div>
