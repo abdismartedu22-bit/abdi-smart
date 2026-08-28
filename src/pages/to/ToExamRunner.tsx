@@ -211,7 +211,7 @@ function QuestionInput({ q, value, onChange }: { q: RunnerQuestion; value: ToJaw
               }}
             >
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: active ? '#0D5C3A' : '#aaa' }}>{label}</span>
-              <span>{text}</span>
+              <ToRichContent html={text} style={{ flex: 1 }} />
             </button>
           );
         })}
@@ -242,7 +242,7 @@ function QuestionInput({ q, value, onChange }: { q: RunnerQuestion; value: ToJaw
               }}
             >
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: active ? '#7C3AED' : '#aaa' }}>{label}</span>
-              <span>{text}</span>
+              <ToRichContent html={text} style={{ flex: 1 }} />
             </button>
           );
         })}

@@ -213,7 +213,7 @@ function AnswerComparison({ q }: { q: ReviewQuestion }) {
           return (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: bg, border: `1.5px solid ${border}` }}>
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', color: '#0D0D0D', flexShrink: 0 }}>{label}</span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{text}</span>
+              <ToRichContent html={text} style={{ fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }} />
               {badge && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: isSelected && !isCorrect ? '#DC0A1E' : isCorrect && !isSelected ? '#92400E' : '#15803D', flexShrink: 0 }}>{badge}</span>}
             </div>
           );
@@ -239,7 +239,7 @@ function AnswerComparison({ q }: { q: ReviewQuestion }) {
           return (
             <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: bg, border: `1.5px solid ${border}` }}>
               <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', color: '#0D0D0D', flexShrink: 0 }}>{label}</span>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }}>{text}</span>
+              <ToRichContent html={text} style={{ fontSize: '0.85rem', color: '#0D0D0D', flex: 1 }} />
               {badge && <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', fontWeight: 700, color: isSelected && !isCorrect ? '#DC0A1E' : isCorrect && !isSelected ? '#92400E' : '#15803D', flexShrink: 0 }}>{badge}</span>}
             </div>
           );
