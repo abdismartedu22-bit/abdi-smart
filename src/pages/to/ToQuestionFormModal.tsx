@@ -89,6 +89,25 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
     });
   }
 
+  function wrapSelectionInStatement(openTag: string, closeTag: string) {
+    const id = focusedStatementId ?? gridStatements[0]?.id;
+    if (!id) return;
+    const el = statementRefs.current[id];
+    const current = gridStatements.find(x => x.id === id)?.text_html ?? '';
+    const start = el?.selectionStart ?? current.length;
+    const end = el?.selectionEnd ?? current.length;
+    const selected = current.slice(start, end);
+    const next = current.slice(0, start) + openTag + selected + closeTag + current.slice(end);
+    setGridStatements(arr => arr.map(x => x.id === id ? { ...x, text_html: next } : x));
+    requestAnimationFrame(() => {
+      const node = statementRefs.current[id];
+      if (!node) return;
+      node.focus();
+      const cursor = selected ? start + openTag.length + selected.length + closeTag.length : start + openTag.length;
+      node.selectionStart = node.selectionEnd = cursor;
+    });
+  }
+
   function addOption() {
     if (options.length >= 6) return;
     const label = String.fromCharCode(65 + options.length);
@@ -274,8 +293,15 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
 
               <div style={{ border: '1.5px solid #E2E1DC', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '8px 10px', background: '#F9F9F7', borderBottom: showStatementSymbols || showStatementImagePanel ? '1px solid #E2E1DC' : 'none' }}>
+                  <button type="button" onClick={() => wrapSelectionInStatement('<strong>', '</strong>')} style={statementToolbarBtn(false)}>B</button>
+                  <button type="button" onClick={() => wrapSelectionInStatement('<em>', '</em>')} style={{ ...statementToolbarBtn(false), fontStyle: 'italic' }}>I</button>
+                  <button type="button" onClick={() => wrapSelectionInStatement('<u>', '</u>')} style={{ ...statementToolbarBtn(false), textDecoration: 'underline' }}>U</button>
+                  <button type="button" onClick={() => wrapSelectionInStatement('<sub>', '</sub>')} style={statementToolbarBtn(false)}>X₂</button>
+                  <button type="button" onClick={() => wrapSelectionInStatement('<sup>', '</sup>')} style={statementToolbarBtn(false)}>X²</button>
+                  <span style={{ width: '1px', background: '#E2E1DC', margin: '0 2px' }} />
                   <button type="button" onClick={() => { setShowStatementSymbols(v => !v); setShowStatementImagePanel(false); }} style={statementToolbarBtn(showStatementSymbols)}>&Sigma; Simbol</button>
                   <button type="button" onClick={() => { setShowStatementImagePanel(v => !v); setShowStatementSymbols(false); }} style={statementToolbarBtn(showStatementImagePanel)}>&#128247; Gambar</button>
+                  <button type="button" onClick={() => insertIntoStatement('<table><tr><th></th><th></th></tr><tr><td></td><td></td></tr></table>')} style={statementToolbarBtn(false)}>+ Tabel</button>
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', color: '#aaa', alignSelf: 'center', marginLeft: '4px' }}>
                     &rarr; disisipkan ke pernyataan yang sedang diklik
                   </span>
