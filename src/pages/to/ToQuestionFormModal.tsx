@@ -1,6 +1,7 @@
-import { useState, FormEvent } from 'react';
+import { useState, useRef, FormEvent } from 'react';
 import { supabase } from '../../lib/supabase';
-import RichTextEditor from '../../lib/richText';
+import RichTextEditor, { QUICK_SYMBOLS } from '../../lib/richText';
+import { toDirectImg } from '../../lib/googleDriveImg';
 import {
   Overlay, ModalHeader, Field, ToRichContent,
   input, btnPrimary, btnSecondary, btnGhost, errorText,
@@ -62,6 +63,31 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
       ? (question.jawaban_benar as Record<string, number>)
       : {}
   );
+
+  // Statement text is plain HTML in a <textarea> (not a full Tiptap
+  // instance per row -- too heavy for a list of short true/false
+  // statements), so symbol/image insertion is done manually via the
+  // last-focused statement's cursor position, tracked here.
+  const statementRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const [focusedStatementId, setFocusedStatementId] = useState<string | null>(null);
+  const [showStatementSymbols, setShowStatementSymbols] = useState(false);
+  const [showStatementImagePanel, setShowStatementImagePanel] = useState(false);
+  const [statementImageUrl, setStatementImageUrl] = useState('');
+
+  function insertIntoStatement(text: string) {
+    const id = focusedStatementId ?? gridStatements[0]?.id;
+    if (!id) return;
+    const el = statementRefs.current[id];
+    const current = gridStatements.find(x => x.id === id)?.text_html ?? '';
+    const start = el?.selectionStart ?? current.length;
+    const end = el?.selectionEnd ?? current.length;
+    const next = current.slice(0, start) + text + current.slice(end);
+    setGridStatements(arr => arr.map(x => x.id === id ? { ...x, text_html: next } : x));
+    requestAnimationFrame(() => {
+      const node = statementRefs.current[id];
+      if (node) { node.focus(); node.selectionStart = node.selectionEnd = start + text.length; }
+    });
+  }
 
   function addOption() {
     if (options.length >= 6) return;
@@ -245,14 +271,58 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
                 <input style={input} value={gridLabels[0]} onChange={e => setGridLabels(l => [e.target.value, l[1]])} placeholder="Label kolom 1 (cth. Benar)" />
                 <input style={input} value={gridLabels[1]} onChange={e => setGridLabels(l => [l[0], e.target.value])} placeholder="Label kolom 2 (cth. Salah)" />
               </div>
+
+              <div style={{ border: '1.5px solid #E2E1DC', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '8px 10px', background: '#F9F9F7', borderBottom: showStatementSymbols || showStatementImagePanel ? '1px solid #E2E1DC' : 'none' }}>
+                  <button type="button" onClick={() => { setShowStatementSymbols(v => !v); setShowStatementImagePanel(false); }} style={statementToolbarBtn(showStatementSymbols)}>&Sigma; Simbol</button>
+                  <button type="button" onClick={() => { setShowStatementImagePanel(v => !v); setShowStatementSymbols(false); }} style={statementToolbarBtn(showStatementImagePanel)}>&#128247; Gambar</button>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.68rem', color: '#aaa', alignSelf: 'center', marginLeft: '4px' }}>
+                    &rarr; disisipkan ke pernyataan yang sedang diklik
+                  </span>
+                </div>
+                {showStatementSymbols && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', padding: '8px 10px' }}>
+                    {QUICK_SYMBOLS.map(sym => (
+                      <button key={sym.label} type="button" onClick={() => insertIntoStatement(sym.insert)} style={{ minWidth: '30px', padding: '5px 7px', background: '#fff', color: '#0D0D0D', border: '1px solid #E2E1DC', borderRadius: '6px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+                        {sym.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {showStatementImagePanel && (
+                  <div style={{ display: 'flex', gap: '8px', padding: '8px 10px' }}>
+                    <input
+                      style={{ ...input, flex: 1 }} value={statementImageUrl}
+                      onChange={e => setStatementImageUrl(e.target.value)}
+                      placeholder="Tempel link gambar (Google Drive / URL langsung)"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const url = statementImageUrl.trim();
+                        if (!url) return;
+                        insertIntoStatement(`<img src="${toDirectImg(url)}" />`);
+                        setStatementImageUrl('');
+                        setShowStatementImagePanel(false);
+                      }}
+                      style={btnGhost}
+                    >
+                      Sisipkan
+                    </button>
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {gridStatements.map((s, i) => (
                   <div key={s.id} style={{ border: '1.5px solid #E2E1DC', borderRadius: '8px', padding: '10px', background: '#F9F9F7' }}>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
                       <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#aaa', paddingTop: '8px' }}>{i + 1}.</span>
                       <textarea
+                        ref={el => { statementRefs.current[s.id] = el; }}
                         style={{ ...input, flex: 1, minHeight: '44px', resize: 'vertical' }}
                         value={s.text_html}
+                        onFocus={() => setFocusedStatementId(s.id)}
                         onChange={e => setGridStatements(arr => arr.map(x => x.id === s.id ? { ...x, text_html: e.target.value } : x))}
                         placeholder="Teks pernyataan..."
                       />
@@ -260,6 +330,11 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
                         <button type="button" onClick={() => removeStatement(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#D1D5DB', fontSize: '1rem', padding: '4px' }}>×</button>
                       )}
                     </div>
+                    {s.text_html.trim() && (
+                      <div style={{ paddingLeft: '26px', marginTop: '6px' }}>
+                        <ToRichContent html={s.text_html} style={{ fontSize: '0.8rem', color: '#555' }} />
+                      </div>
+                    )}
                     <div style={{ display: 'flex', gap: '8px', marginTop: '8px', paddingLeft: '26px' }}>
                       {gridLabels.map((label, colIdx) => {
                         const active = gridAnswers[s.id] === colIdx;
@@ -309,4 +384,19 @@ export default function ToQuestionFormModal({ examId, question, nextUrutan, onCl
       </div>
     </Overlay>
   );
+}
+
+function statementToolbarBtn(active: boolean): React.CSSProperties {
+  return {
+    padding: '5px 10px',
+    background: active ? '#D6EEE2' : 'none',
+    color: active ? '#0D5C3A' : '#666',
+    border: '1px solid #E2E1DC',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontFamily: 'var(--font-body)',
+    fontWeight: 700,
+    fontSize: '0.78rem',
+    lineHeight: 1,
+  };
 }

@@ -65,7 +65,7 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
 }
 
 // Plain Unicode symbols -- render instantly, no KaTeX needed.
-const QUICK_SYMBOLS: { label: string; insert: string }[] = [
+export const QUICK_SYMBOLS: { label: string; insert: string }[] = [
   { label: '×', insert: '×' },
   { label: '÷', insert: '÷' },
   { label: '±', insert: '±' },
@@ -90,7 +90,7 @@ const QUICK_SYMBOLS: { label: string; insert: string }[] = [
 // MathText/KaTeX renders them (see richText.tsx integration note).
 // Placeholder letters (a, b, n, ...) are left for the author to
 // select and overwrite.
-const MATH_TEMPLATES: { label: string; insert: string }[] = [
+export const MATH_TEMPLATES: { label: string; insert: string }[] = [
   { label: 'Pecahan', insert: '$\\frac{a}{b}$' },
   { label: 'Akar', insert: '$\\sqrt{a}$' },
   { label: 'Akar Pangkat n', insert: '$\\sqrt[n]{a}$' },
