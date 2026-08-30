@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { supabase } from '../../lib/supabase';
-import { muted, btnGhost, fmtDateTime } from './shared';
-import type { ToExam, ToPackage, ToQuestion, ToAttempt, ToAnswer, Profile } from '../../types';
+import { muted, btnGhost, fmtDateTime, input } from './shared';
+import { isJawabanBenar } from '../../lib/toAnswerCheck';
+import type { ToExam, ToPackage, ToQuestion, ToAttempt, ToAnswer, ToJawaban, Profile } from '../../types';
 
 type Merge = { s: { r: number; c: number }; e: { r: number; c: number } };
 type QStat = { question_id: string; urutan: number; pct_correct: number };
@@ -29,7 +30,9 @@ type StudentRow = {
   student_id: string;
   username: string;
   display_name: string;
-  answers: Record<string, boolean | null>; // question_id -> benar
+  status: 'in_progress' | 'submitted';
+  deadline_at: string | null;
+  answers: Record<string, boolean | null>; // question_id -> live-graded benar (kosong = null)
   jumlah_benar: number;
   jumlah_salah: number;
   jumlah_kosong: number;
@@ -45,7 +48,9 @@ export default function ToStatistik() {
   const [qStats, setQStats] = useState<Record<string, QStat>>({});
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [resettingId, setResettingId] = useState<string | null>(null);
+  const [extendingId, setExtendingId] = useState<string | null>(null);
+  const [extendMinutes, setExtendMinutes] = useState('10');
+  const [savingExtend, setSavingExtend] = useState(false);
 
   useEffect(() => { if (examId) load(); }, [examId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -73,7 +78,7 @@ export default function ToStatistik() {
       setQStats(statsMap);
 
       const { data: attempts } = await supabase.from('to_attempts')
-        .select('*').eq('exam_id', examId).eq('status', 'submitted').is('voided_at', null);
+        .select('*').eq('exam_id', examId).in('status', ['in_progress', 'submitted']).is('voided_at', null);
       const attemptList = (attempts ?? []) as ToAttempt[];
 
       const attemptIds = attemptList.map(a => a.id);
@@ -81,10 +86,29 @@ export default function ToStatistik() {
         ? await supabase.from('to_answers').select('*').in('attempt_id', attemptIds)
         : { data: [] };
       const answerList = (answers ?? []) as ToAnswer[];
-      const answersByAttempt: Record<string, Record<string, boolean | null>> = {};
+      const jawabanByAttempt: Record<string, Record<string, ToJawaban | null>> = {};
       answerList.forEach(a => {
-        (answersByAttempt[a.attempt_id] ??= {})[a.question_id] = a.benar;
+        (jawabanByAttempt[a.attempt_id] ??= {})[a.question_id] = a.jawaban;
       });
+
+      // Live-graded regardless of submit status -- correctness only
+      // needs jawaban vs jawaban_benar, not the persisted `benar`
+      // column (which submit_to_attempt only writes at submission).
+      // This is what lets in-progress attempts show real B/S/K as the
+      // student answers, not just a blank placeholder until they submit.
+      function gradeAttempt(attemptId: string) {
+        const answersMap: Record<string, boolean | null> = {};
+        let benar = 0, salah = 0, kosong = 0;
+        qList.forEach(q => {
+          const jawaban = jawabanByAttempt[attemptId]?.[q.id] ?? null;
+          const result = isJawabanBenar(q, jawaban);
+          answersMap[q.id] = result;
+          if (result === null) kosong++;
+          else if (result) benar++;
+          else salah++;
+        });
+        return { answersMap, benar, salah, kosong };
+      }
 
       const studentIds = Array.from(new Set(attemptList.map(a => a.student_id)));
       const { data: profilesData } = studentIds.length > 0
@@ -108,15 +132,18 @@ export default function ToStatistik() {
         const scores = trMap[a.student_id] ?? {};
         const rawNilai = key ? scores[key] : undefined;
         const nilai = rawNilai !== undefined && rawNilai !== null && rawNilai !== '' ? Number(rawNilai) : null;
+        const graded = gradeAttempt(a.id);
         return {
           attempt_id: a.id,
           student_id: a.student_id,
           username: prof?.username ?? '-',
           display_name: prof?.display_name ?? '-',
-          answers: answersByAttempt[a.id] ?? {},
-          jumlah_benar: a.jumlah_benar ?? 0,
-          jumlah_salah: a.jumlah_salah ?? 0,
-          jumlah_kosong: a.jumlah_kosong ?? 0,
+          status: a.status,
+          deadline_at: a.deadline_at,
+          answers: graded.answersMap,
+          jumlah_benar: graded.benar,
+          jumlah_salah: graded.salah,
+          jumlah_kosong: graded.kosong,
           nilai: nilai !== null && !isNaN(nilai) ? nilai : null,
         };
       }).sort((x, y) => y.jumlah_benar - x.jumlah_benar);
@@ -125,10 +152,13 @@ export default function ToStatistik() {
       setLoading(false);
   }
 
-  async function handleReset(row: StudentRow) {
-    setResettingId(row.attempt_id);
-    await supabase.rpc('reset_to_attempt', { p_attempt_id: row.attempt_id, p_reason: 'Direset oleh staff/admin' });
-    setResettingId(null);
+  async function handleExtend(row: StudentRow) {
+    const minutes = parseInt(extendMinutes, 10);
+    if (!minutes || minutes <= 0) return;
+    setSavingExtend(true);
+    await supabase.rpc('extend_to_attempt', { p_attempt_id: row.attempt_id, p_minutes: minutes });
+    setSavingExtend(false);
+    setExtendingId(null);
     load();
   }
 
@@ -202,7 +232,7 @@ export default function ToStatistik() {
       </div>
 
       {rows.length === 0 ? (
-        <p style={muted}>Belum ada siswa yang menyelesaikan ujian ini.</p>
+        <p style={muted}>Belum ada siswa yang mengerjakan ujian ini.</p>
       ) : (
         <div style={{ overflowX: 'auto', background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px' }}>
           <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '420px', fontFamily: 'var(--font-body)' }}>
@@ -210,11 +240,12 @@ export default function ToStatistik() {
               <tr>
                 <th style={thStyle}>Username</th>
                 <th style={thStyle}>Nama</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>Status</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>B</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>S</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>K</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>Nilai</th>
-                <th style={{ ...thStyle, textAlign: 'center' }}>Timer</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>Waktu</th>
               </tr>
             </thead>
             <tbody>
@@ -222,6 +253,15 @@ export default function ToStatistik() {
                 <tr key={r.student_id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
                   <td style={tdStyle}>{r.username}</td>
                   <td style={{ ...tdStyle, fontWeight: 600 }}>{r.display_name}</td>
+                  <td style={{ ...tdStyle, textAlign: 'center' }}>
+                    <span style={{
+                      fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.68rem', padding: '3px 9px', borderRadius: '20px',
+                      background: r.status === 'submitted' ? '#D1FAE5' : '#FEF9C3',
+                      color: r.status === 'submitted' ? '#065F46' : '#92400E',
+                    }}>
+                      {r.status === 'submitted' ? 'Selesai' : 'Sedang Mengerjakan'}
+                    </span>
+                  </td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#15803D', fontWeight: 700 }}>{r.jumlah_benar}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#DC0A1E', fontWeight: 700 }}>{r.jumlah_salah}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#92400E', fontWeight: 700 }}>{r.jumlah_kosong}</td>
@@ -229,13 +269,28 @@ export default function ToStatistik() {
                     {r.nilai !== null ? r.nilai.toFixed(2) : '-'}
                   </td>
                   <td style={{ ...tdStyle, textAlign: 'center' }}>
-                    <button
-                      onClick={() => handleReset(r)}
-                      disabled={resettingId === r.attempt_id}
-                      style={{ ...btnGhost, color: '#DC0A1E', padding: '4px 10px', fontSize: '0.72rem' }}
-                    >
-                      {resettingId === r.attempt_id ? 'Mereset...' : 'Reset'}
-                    </button>
+                    {r.status !== 'in_progress' ? (
+                      <span style={{ color: '#ccc' }}>-</span>
+                    ) : extendingId === r.attempt_id ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                        <input
+                          type="number" min="1" value={extendMinutes}
+                          onChange={e => setExtendMinutes(e.target.value)}
+                          style={{ ...input, width: '56px', padding: '4px 6px', fontSize: '0.75rem' }}
+                        />
+                        <button onClick={() => handleExtend(r)} disabled={savingExtend} style={{ ...btnGhost, color: '#0D5C3A', padding: '4px 8px', fontSize: '0.7rem' }}>
+                          {savingExtend ? '...' : 'OK'}
+                        </button>
+                        <button onClick={() => setExtendingId(null)} style={{ ...btnGhost, padding: '4px 8px', fontSize: '0.7rem' }}>Batal</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                        <span style={{ fontSize: '0.68rem', color: '#888' }}>{r.deadline_at ? fmtDateTime(r.deadline_at) : '-'}</span>
+                        <button onClick={() => { setExtendingId(r.attempt_id); setExtendMinutes('10'); }} style={{ ...btnGhost, color: '#0D5C3A', padding: '3px 9px', fontSize: '0.7rem' }}>
+                          + Waktu
+                        </button>
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
