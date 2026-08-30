@@ -25,6 +25,7 @@ function subjectKey(type: string, mataPelajaran: string): string | null {
 }
 
 type StudentRow = {
+  attempt_id: string;
   student_id: string;
   username: string;
   display_name: string;
@@ -44,13 +45,15 @@ export default function ToStatistik() {
   const [qStats, setQStats] = useState<Record<string, QStat>>({});
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  useEffect(() => { if (examId) load(); }, [examId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function load() {
     if (!examId) return;
-    (async () => {
-      setLoading(true);
+    setLoading(true);
 
-      const { data: e } = await supabase.from('to_exams').select('*').eq('id', examId).single();
+    const { data: e } = await supabase.from('to_exams').select('*').eq('id', examId).single();
       const examRow = e as ToExam | null;
       setExam(examRow);
       if (!examRow) { setLoading(false); return; }
@@ -70,7 +73,7 @@ export default function ToStatistik() {
       setQStats(statsMap);
 
       const { data: attempts } = await supabase.from('to_attempts')
-        .select('*').eq('exam_id', examId).eq('status', 'submitted');
+        .select('*').eq('exam_id', examId).eq('status', 'submitted').is('voided_at', null);
       const attemptList = (attempts ?? []) as ToAttempt[];
 
       const attemptIds = attemptList.map(a => a.id);
@@ -106,8 +109,9 @@ export default function ToStatistik() {
         const rawNilai = key ? scores[key] : undefined;
         const nilai = rawNilai !== undefined && rawNilai !== null && rawNilai !== '' ? Number(rawNilai) : null;
         return {
+          attempt_id: a.id,
           student_id: a.student_id,
-          username: a.student_id,
+          username: prof?.username ?? '-',
           display_name: prof?.display_name ?? '-',
           answers: answersByAttempt[a.id] ?? {},
           jumlah_benar: a.jumlah_benar ?? 0,
@@ -119,8 +123,14 @@ export default function ToStatistik() {
 
       setRows(builtRows);
       setLoading(false);
-    })();
-  }, [examId]);
+  }
+
+  async function handleReset(row: StudentRow) {
+    setResettingId(row.attempt_id);
+    await supabase.rpc('reset_to_attempt', { p_attempt_id: row.attempt_id, p_reason: 'Direset oleh staff/admin' });
+    setResettingId(null);
+    load();
+  }
 
   function cellFor(row: StudentRow, questionId: string): 'B' | 'S' | 'K' {
     const b = row.answers[questionId];
@@ -141,7 +151,7 @@ export default function ToStatistik() {
     }
 
     const dataRows = rows.map(r => [
-      r.username, r.display_name,
+      r.student_id, r.display_name,
       ...questions.map(q => cellFor(r, q.id)),
       r.jumlah_benar, r.jumlah_salah, r.jumlah_kosong,
       r.nilai !== null ? r.nilai.toFixed(2) : '-',
@@ -157,7 +167,7 @@ export default function ToStatistik() {
   function copyTable() {
     const header = ['ID', 'Nama', ...questions.map(q => `Soal ${q.urutan}`), 'B', 'S', 'K', 'Nilai'].join('\t');
     const body = rows.map(r => [
-      r.username, r.display_name,
+      r.student_id, r.display_name,
       ...questions.map(q => cellFor(r, q.id)),
       r.jumlah_benar, r.jumlah_salah, r.jumlah_kosong,
       r.nilai !== null ? r.nilai.toFixed(2) : '-',
@@ -198,22 +208,34 @@ export default function ToStatistik() {
           <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: '420px', fontFamily: 'var(--font-body)' }}>
             <thead>
               <tr>
+                <th style={thStyle}>Username</th>
                 <th style={thStyle}>Nama</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>B</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>S</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>K</th>
                 <th style={{ ...thStyle, textAlign: 'center' }}>Nilai</th>
+                <th style={{ ...thStyle, textAlign: 'center' }}>Timer</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.student_id} style={{ background: i % 2 === 0 ? '#fff' : '#F9FAFB' }}>
+                  <td style={tdStyle}>{r.username}</td>
                   <td style={{ ...tdStyle, fontWeight: 600 }}>{r.display_name}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#15803D', fontWeight: 700 }}>{r.jumlah_benar}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#DC0A1E', fontWeight: 700 }}>{r.jumlah_salah}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', color: '#92400E', fontWeight: 700 }}>{r.jumlah_kosong}</td>
                   <td style={{ ...tdStyle, textAlign: 'center', fontWeight: 800, color: r.nilai !== null ? '#0D5C3A' : '#ccc' }}>
                     {r.nilai !== null ? r.nilai.toFixed(2) : '-'}
+                  </td>
+                  <td style={{ ...tdStyle, textAlign: 'center' }}>
+                    <button
+                      onClick={() => handleReset(r)}
+                      disabled={resettingId === r.attempt_id}
+                      style={{ ...btnGhost, color: '#DC0A1E', padding: '4px 10px', fontSize: '0.72rem' }}
+                    >
+                      {resettingId === r.attempt_id ? 'Mereset...' : 'Reset'}
+                    </button>
                   </td>
                 </tr>
               ))}
