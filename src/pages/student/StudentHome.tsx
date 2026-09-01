@@ -287,8 +287,10 @@ export default function StudentHome() {
       setLatestTO(((to ?? []) as TOResult[])[0] ?? null);
     }
 
-    // Top scorer per subject for the most recent Try Out package
-    // targeting this student's kelas (or open to everyone).
+    // Top scorer per subject -- only for a package that's still within
+    // its active window (masa TO). Once tanggal_selesai passes, the
+    // widget disappears entirely rather than sticking around forever
+    // showing a stale package's scorers.
     const { data: pkgs } = await supabase
       .from('to_packages')
       .select('id, nama, target_kelas, tanggal_mulai, tanggal_selesai')
@@ -297,15 +299,17 @@ export default function StudentHome() {
     type PkgRow = { id: string; nama: string; target_kelas: string[] | null; tanggal_mulai: string; tanggal_selesai: string };
     const relevantPkgs = ((pkgs ?? []) as PkgRow[])
       .filter(p => !p.target_kelas || p.target_kelas.length === 0 || p.target_kelas.includes(kelas));
-    const relevantPkg = relevantPkgs[0];
-    if (relevantPkg) {
-      const { data: scorers } = await supabase.rpc('get_to_top_scorers', { p_package_id: relevantPkg.id });
-      setTopScorers(((scorers ?? []) as TopScorer[]).filter(s => s.top_student_name));
-      setTopScorersPkgName(relevantPkg.nama);
-    }
 
     const now = Date.now();
     const ongoing = relevantPkgs.find(p => now >= new Date(p.tanggal_mulai).getTime() && now <= new Date(p.tanggal_selesai).getTime());
+
+    if (ongoing) {
+      const { data: scorers } = await supabase.rpc('get_to_top_scorers', { p_package_id: ongoing.id });
+      setTopScorers(((scorers ?? []) as TopScorer[]).filter(s => s.top_student_name));
+      setTopScorersPkgName(ongoing.nama);
+    } else {
+      setTopScorers([]);
+    }
     if (ongoing) {
       const { data: examRows } = await supabase.from('to_exams').select('id').eq('package_id', ongoing.id);
       const examIds = (examRows ?? []).map((e: { id: string }) => e.id);
