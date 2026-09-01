@@ -269,25 +269,33 @@ export default function ToStatistik() {
                     {r.nilai !== null ? r.nilai.toFixed(2) : '-'}
                   </td>
                   <td style={{ ...tdStyle, textAlign: 'center' }}>
-                    {r.status !== 'in_progress' ? (
-                      <span style={{ color: '#ccc' }}>-</span>
-                    ) : extendingId === r.attempt_id ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                        <input
-                          type="number" min="1" value={extendMinutes}
-                          onChange={e => setExtendMinutes(e.target.value)}
-                          style={{ ...input, width: '56px', padding: '4px 6px', fontSize: '0.75rem' }}
-                        />
-                        <button onClick={() => handleExtend(r)} disabled={savingExtend} style={{ ...btnGhost, color: '#0D5C3A', padding: '4px 8px', fontSize: '0.7rem' }}>
-                          {savingExtend ? '...' : 'OK'}
-                        </button>
-                        <button onClick={() => setExtendingId(null)} style={{ ...btnGhost, padding: '4px 8px', fontSize: '0.7rem' }}>Batal</button>
+                    {extendingId === r.attempt_id ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                        {r.status === 'submitted' && (
+                          <span style={{ fontSize: '0.62rem', color: '#DC0A1E', maxWidth: '110px' }}>Ini akan membuka kembali ujian yang sudah selesai</span>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
+                          <input
+                            type="number" min="1" value={extendMinutes}
+                            onChange={e => setExtendMinutes(e.target.value)}
+                            style={{ ...input, width: '56px', padding: '4px 6px', fontSize: '0.75rem' }}
+                          />
+                          <button onClick={() => handleExtend(r)} disabled={savingExtend} style={{ ...btnGhost, color: '#0D5C3A', padding: '4px 8px', fontSize: '0.7rem' }}>
+                            {savingExtend ? '...' : 'OK'}
+                          </button>
+                          <button onClick={() => setExtendingId(null)} style={{ ...btnGhost, padding: '4px 8px', fontSize: '0.7rem' }}>Batal</button>
+                        </div>
                       </div>
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                        <span style={{ fontSize: '0.68rem', color: '#888' }}>{r.deadline_at ? fmtDateTime(r.deadline_at) : '-'}</span>
-                        <button onClick={() => { setExtendingId(r.attempt_id); setExtendMinutes('10'); }} style={{ ...btnGhost, color: '#0D5C3A', padding: '3px 9px', fontSize: '0.7rem' }}>
-                          + Waktu
+                        {r.status === 'in_progress' && (
+                          <span style={{ fontSize: '0.68rem', color: '#888' }}>{r.deadline_at ? fmtDateTime(r.deadline_at) : '-'}</span>
+                        )}
+                        <button
+                          onClick={() => { setExtendingId(r.attempt_id); setExtendMinutes('10'); }}
+                          style={{ ...btnGhost, color: r.status === 'submitted' ? '#DC0A1E' : '#0D5C3A', padding: '3px 9px', fontSize: '0.7rem' }}
+                        >
+                          {r.status === 'submitted' ? '+ Waktu (Buka Kembali)' : '+ Waktu'}
                         </button>
                       </div>
                     )}
