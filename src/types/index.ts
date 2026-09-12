@@ -84,7 +84,7 @@ export interface TryoutResult {
   created_at: string;
 }
 
-export type QuizTipe = 'pilihan_ganda' | 'isian_singkat' | 'benar_salah' | 'centang_semua';
+export type QuizTipe = 'pilihan_ganda' | 'isian_singkat' | 'benar_salah' | 'centang_semua' | 'grid_pernyataan';
 
 export interface Quiz {
   id: string;
@@ -95,6 +95,16 @@ export interface Quiz {
   created_at: string;
 }
 
+export interface QuizGridStatement {
+  id: string;
+  text_html: string;
+}
+
+export interface QuizGridConfig {
+  column_labels: [string, string];
+  statements: QuizGridStatement[];
+}
+
 export interface QuizQuestion {
   id: string;
   quiz_id: string;
@@ -102,9 +112,10 @@ export interface QuizQuestion {
   tipe: QuizTipe;
   pertanyaan: string;
   opsi: string[] | null;
-  jawaban_benar: string | string[];
+  jawaban_benar: string | string[] | Record<string, number>;
   poin: number;
   gambar_url?: string | null;
+  grid_config?: QuizGridConfig | null;
 }
 
 export interface QuizSession {
@@ -123,7 +134,7 @@ export interface QuizAnswer {
   quiz_session_id: string;
   student_id: string;
   question_id: string;
-  jawaban: string | string[] | null;
+  jawaban: string | string[] | Record<string, number> | null;
   skor: number | null;
   submitted_at: string;
 }

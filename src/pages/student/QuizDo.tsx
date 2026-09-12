@@ -2,21 +2,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate, useParams } from 'react-router-dom';
-import MathText from '../../components/shared/MathText';
+import { RichContent } from '../../lib/richText';
 import { toDirectImg } from '../../lib/googleDriveImg';
-import type { QuizTipe } from '../../types';
-
-type QuizQuestion = {
-  id: string;
-  quiz_id: string;
-  urutan: number;
-  tipe: QuizTipe;
-  pertanyaan: string;
-  opsi: string[] | null;
-  jawaban_benar: string | string[];
-  poin: number;
-  gambar_url?: string | null;
-};
+import type { QuizTipe, QuizQuestion } from '../../types';
 
 type ActiveSession = {
   id: string;
@@ -25,7 +13,9 @@ type ActiveSession = {
   group: { nama: string; kode: string };
 };
 
-function gradeAnswer(q: QuizQuestion, jawaban: string | string[] | null): number {
+type QuizAnswerValue = string | string[] | Record<string, number>;
+
+function gradeAnswer(q: QuizQuestion, jawaban: QuizAnswerValue | null): number {
   if (jawaban === null || jawaban === undefined) return 0;
   const benar = q.jawaban_benar;
   if (q.tipe === 'pilihan_ganda' || q.tipe === 'benar_salah') {
@@ -43,6 +33,14 @@ function gradeAnswer(q: QuizQuestion, jawaban: string | string[] | null): number
     const partial = Math.max(0, correct - incorrect) / correctSet.size;
     return Math.round(partial * q.poin * 10) / 10;
   }
+  if (q.tipe === 'grid_pernyataan') {
+    const correctMap = (benar ?? {}) as Record<string, number>;
+    const studentMap = (jawaban ?? {}) as Record<string, number>;
+    const statements = q.grid_config?.statements ?? [];
+    if (statements.length === 0) return 0;
+    const correctCount = statements.filter(s => studentMap[s.id] === correctMap[s.id]).length;
+    return Math.round((correctCount / statements.length) * q.poin * 10) / 10;
+  }
   return 0;
 }
 
@@ -53,7 +51,7 @@ export default function StudentQuizDo() {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<ActiveSession | null>(null);
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
+  const [answers, setAnswers] = useState<Record<string, QuizAnswerValue>>({});
   const [totalPoin, setTotalPoin] = useState(0);
   const [submitting, setSubmitting] = useState(false);
 
@@ -116,6 +114,13 @@ export default function StudentQuizDo() {
     });
   }
 
+  function setGridPick(qId: string, statementId: string, colIdx: number) {
+    setAnswers(prev => ({
+      ...prev,
+      [qId]: { ...((prev[qId] as Record<string, number>) ?? {}), [statementId]: colIdx },
+    }));
+  }
+
   async function handleSubmit() {
     if (!session || !user) return;
     setSubmitting(true);
@@ -143,7 +148,10 @@ export default function StudentQuizDo() {
 
   const answeredCount = questions.filter(q => {
     const a = answers[q.id];
-    return a !== undefined && a !== null && (Array.isArray(a) ? a.length > 0 : String(a).trim() !== '');
+    if (a === undefined || a === null) return false;
+    if (Array.isArray(a)) return a.length > 0;
+    if (typeof a === 'object') return Object.keys(a).length > 0;
+    return String(a).trim() !== '';
   }).length;
 
   return (
@@ -210,7 +218,7 @@ export default function StudentQuizDo() {
                 </span>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.92rem', color: '#0D0D0D', lineHeight: 1.7 }}>
-                    <MathText text={q.pertanyaan} />
+                    <RichContent html={q.pertanyaan} />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
                     <span style={{ ...tipeBadge(q.tipe) }}>{TIPE_LABELS[q.tipe]}</span>
@@ -229,7 +237,7 @@ export default function StudentQuizDo() {
                         <input type="radio" name={`q_${q.id}`} checked={selected} onChange={() => setAnswer(q.id, label)} style={{ flexShrink: 0 }} />
                         <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: selected ? '#0D5C3A' : '#aaa', minWidth: '20px' }}>{label}</span>
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: '#0D0D0D', flex: 1, lineHeight: 1.5 }}>
-                          <MathText text={opt} />
+                          <RichContent html={opt} />
                         </span>
                       </label>
                     );
@@ -273,11 +281,46 @@ export default function StudentQuizDo() {
                         <input type="checkbox" checked={checked} onChange={() => toggleCheckbox(q.id, label)} style={{ flexShrink: 0 }} />
                         <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: checked ? '#6D28D9' : '#aaa', minWidth: '20px' }}>{label}</span>
                         <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: '#0D0D0D', flex: 1, lineHeight: 1.5 }}>
-                          <MathText text={opt} />
+                          <RichContent html={opt} />
                         </span>
                       </label>
                     );
                   })}
+                </div>
+              )}
+
+              {q.tipe === 'grid_pernyataan' && q.grid_config && (
+                <div style={{ overflowX: 'auto', paddingLeft: '4px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: 'left', padding: '8px', borderBottom: '2px solid #E2E1DC' }}>Pernyataan</th>
+                        {q.grid_config.column_labels.map((l, i) => (
+                          <th key={i} style={{ padding: '8px', borderBottom: '2px solid #E2E1DC', textAlign: 'center', minWidth: '90px' }}>{l}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {q.grid_config.statements.map(s => {
+                        const gridAns = (ans && typeof ans === 'object' && !Array.isArray(ans)) ? ans as Record<string, number> : {};
+                        return (
+                          <tr key={s.id}>
+                            <td style={{ padding: '8px', borderBottom: '1px solid #F3F2EE' }}><RichContent html={s.text_html} /></td>
+                            {q.grid_config!.column_labels.map((_, colIdx) => (
+                              <td key={colIdx} style={{ padding: '8px', borderBottom: '1px solid #F3F2EE', textAlign: 'center' }}>
+                                <input
+                                  type="radio"
+                                  name={`grid-${q.id}-${s.id}`}
+                                  checked={gridAns[s.id] === colIdx}
+                                  onChange={() => setGridPick(q.id, s.id, colIdx)}
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
@@ -312,6 +355,7 @@ const TIPE_LABELS: Record<QuizTipe, string> = {
   isian_singkat: 'Isian Singkat',
   benar_salah: 'Benar / Salah',
   centang_semua: 'Centang Semua Benar',
+  grid_pernyataan: 'Pernyataan (Grid)',
 };
 
 const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
@@ -319,6 +363,7 @@ const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
   isian_singkat: { background: '#D1FAE5', color: '#065F46' },
   benar_salah:   { background: '#FEF9C3', color: '#92400E' },
   centang_semua: { background: '#EDE9FE', color: '#5B21B6' },
+  grid_pernyataan: { background: '#E0E7FF', color: '#4338CA' },
 };
 
 function tipeBadge(tipe: QuizTipe): React.CSSProperties {

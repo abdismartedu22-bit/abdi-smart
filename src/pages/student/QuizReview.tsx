@@ -1,26 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ReactNode } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import MathText from '../../components/shared/MathText';
+import { RichContent } from '../../lib/richText';
 import { toDirectImg } from '../../lib/googleDriveImg';
-import type { QuizTipe } from '../../types';
+import type { QuizTipe, QuizQuestion } from '../../types';
 
-type QuizQuestion = {
-  id: string;
-  quiz_id: string;
-  urutan: number;
-  tipe: QuizTipe;
-  pertanyaan: string;
-  opsi: string[] | null;
-  jawaban_benar: string | string[];
-  poin: number;
-  gambar_url?: string | null;
-};
+type QuizAnswerValue = string | string[] | Record<string, number>;
 
 type StudentAnswer = {
   question_id: string;
-  jawaban: string | string[] | null;
+  jawaban: QuizAnswerValue | null;
   skor: number;
 };
 
@@ -31,38 +21,105 @@ type SessionInfo = {
   session_date: string;
 };
 
-function renderStudentAnswer(q: QuizQuestion, jawaban: string | string[] | null): string {
+function renderStudentAnswer(q: QuizQuestion, jawaban: QuizAnswerValue | null): ReactNode {
   if (jawaban === null || jawaban === undefined) return '(tidak dijawab)';
   if (q.tipe === 'pilihan_ganda') {
     const label = String(jawaban);
     const idx = label.charCodeAt(0) - 65;
-    if (q.opsi && q.opsi[idx] !== undefined) return `${label}. ${q.opsi[idx]}`;
+    if (q.opsi && q.opsi[idx] !== undefined) {
+      return <span style={{ display: 'flex', gap: '6px' }}>{label}.<RichContent html={q.opsi[idx]} style={{ flex: 1 }} /></span>;
+    }
     return label;
   }
   if (q.tipe === 'centang_semua') {
     const labels = Array.isArray(jawaban) ? jawaban as string[] : [String(jawaban)];
     if (labels.length === 0) return '(tidak dijawab)';
-    if (q.opsi) return labels.map(l => { const idx = l.charCodeAt(0) - 65; return `${l}. ${q.opsi![idx] ?? l}`; }).join(', ');
+    if (q.opsi) {
+      return (
+        <>
+          {labels.map(l => {
+            const idx = l.charCodeAt(0) - 65;
+            return (
+              <div key={l} style={{ display: 'flex', gap: '6px' }}>{l}.<RichContent html={q.opsi![idx] ?? l} style={{ flex: 1 }} /></div>
+            );
+          })}
+        </>
+      );
+    }
     return labels.join(', ');
   }
   return String(jawaban);
 }
 
-function renderCorrectAnswer(q: QuizQuestion): string {
+function renderCorrectAnswer(q: QuizQuestion): ReactNode {
   const benar = q.jawaban_benar;
   if (q.tipe === 'pilihan_ganda') {
     const label = String(benar);
     const idx = label.charCodeAt(0) - 65;
-    if (q.opsi && q.opsi[idx] !== undefined) return `${label}. ${q.opsi[idx]}`;
+    if (q.opsi && q.opsi[idx] !== undefined) {
+      return <span style={{ display: 'flex', gap: '6px' }}>{label}.<RichContent html={q.opsi[idx]} style={{ flex: 1 }} /></span>;
+    }
     return label;
   }
   if (q.tipe === 'centang_semua') {
     const labels = Array.isArray(benar) ? benar as string[] : [String(benar)];
-    if (q.opsi) return labels.map(l => { const idx = l.charCodeAt(0) - 65; return `${l}. ${q.opsi![idx] ?? l}`; }).join(', ');
+    if (q.opsi) {
+      return (
+        <>
+          {labels.map(l => {
+            const idx = l.charCodeAt(0) - 65;
+            return (
+              <div key={l} style={{ display: 'flex', gap: '6px' }}>{l}.<RichContent html={q.opsi![idx] ?? l} style={{ flex: 1 }} /></div>
+            );
+          })}
+        </>
+      );
+    }
     return labels.join(', ');
   }
   if (q.tipe === 'isian_singkat') return String(benar).split('|').map(s => s.trim()).join(' atau ');
   return String(benar);
+}
+
+function GridAnswerComparison({ q, studentJawaban }: { q: QuizQuestion; studentJawaban: QuizAnswerValue | null }) {
+  const labels = q.grid_config?.column_labels ?? ['Kolom 1', 'Kolom 2'];
+  const studentMap = (studentJawaban && typeof studentJawaban === 'object' && !Array.isArray(studentJawaban))
+    ? studentJawaban as Record<string, number> : {};
+  const correctMap = (q.jawaban_benar && typeof q.jawaban_benar === 'object' && !Array.isArray(q.jawaban_benar))
+    ? q.jawaban_benar as Record<string, number> : {};
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-body)', fontSize: '0.82rem' }}>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', padding: '6px 8px', borderBottom: '2px solid #E2E1DC', color: '#888', fontSize: '0.7rem' }}>Pernyataan</th>
+            <th style={{ padding: '6px 8px', borderBottom: '2px solid #E2E1DC', color: '#888', fontSize: '0.7rem', minWidth: '90px' }}>Jawabanmu</th>
+            <th style={{ padding: '6px 8px', borderBottom: '2px solid #E2E1DC', color: '#888', fontSize: '0.7rem', minWidth: '90px' }}>Kunci Jawaban</th>
+          </tr>
+        </thead>
+        <tbody>
+          {(q.grid_config?.statements ?? []).map(s => {
+            const sVal = studentMap[s.id];
+            const cVal = correctMap[s.id];
+            const answered = sVal !== undefined;
+            const isRight = answered && sVal === cVal;
+            return (
+              <tr key={s.id}>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #F3F2EE' }}><RichContent html={s.text_html} /></td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #F3F2EE', textAlign: 'center', fontWeight: 700, color: !answered ? '#999' : isRight ? '#15803D' : '#DC0A1E' }}>
+                  {answered ? labels[sVal] : '(kosong)'}
+                </td>
+                <td style={{ padding: '6px 8px', borderBottom: '1px solid #F3F2EE', textAlign: 'center', fontWeight: 700, color: '#15803D' }}>
+                  {labels[cVal]}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function scoreColor(pct: number) {
@@ -217,29 +274,33 @@ export default function StudentQuizReview() {
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '14px' }}>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#0D5C3A', flexShrink: 0, fontSize: '1rem', lineHeight: 1.4 }}>{qi + 1}.</span>
                   <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.92rem', color: '#0D0D0D', lineHeight: 1.7 }}>
-                    <MathText text={q.pertanyaan} />
+                    <RichContent html={q.pertanyaan} />
                   </div>
                 </div>
 
                 {/* Answer comparison */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  <div style={{ background: '#F9F9F7', borderRadius: '8px', padding: '12px 14px' }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '6px' }}>
-                      Jawabanmu
+                {q.tipe === 'grid_pernyataan' ? (
+                  <GridAnswerComparison q={q} studentJawaban={ans?.jawaban ?? null} />
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={{ background: '#F9F9F7', borderRadius: '8px', padding: '12px 14px' }}>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '6px' }}>
+                        Jawabanmu
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: ansColor, fontWeight: 600, lineHeight: 1.5 }}>
+                        {renderStudentAnswer(q, ans?.jawaban ?? null)}
+                      </div>
                     </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: ansColor, fontWeight: 600, lineHeight: 1.5 }}>
-                      {renderStudentAnswer(q, ans?.jawaban ?? null)}
+                    <div style={{ background: '#F0FDF4', borderRadius: '8px', padding: '12px 14px' }}>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '6px' }}>
+                        Kunci Jawaban
+                      </div>
+                      <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#15803D', fontWeight: 600, lineHeight: 1.5 }}>
+                        {renderCorrectAnswer(q)}
+                      </div>
                     </div>
                   </div>
-                  <div style={{ background: '#F0FDF4', borderRadius: '8px', padding: '12px 14px' }}>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.65rem', fontWeight: 700, color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '6px' }}>
-                      Kunci Jawaban
-                    </div>
-                    <div style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#15803D', fontWeight: 600, lineHeight: 1.5 }}>
-                      {renderCorrectAnswer(q)}
-                    </div>
-                  </div>
-                </div>
+                )}
               </div>
             </div>
           );
@@ -264,6 +325,7 @@ const TIPE_LABELS: Record<QuizTipe, string> = {
   isian_singkat: 'Isian Singkat',
   benar_salah: 'Benar / Salah',
   centang_semua: 'Centang Semua Benar',
+  grid_pernyataan: 'Pernyataan (Grid)',
 };
 
 const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
@@ -271,6 +333,7 @@ const TIPE_BADGE_STYLES: Record<QuizTipe, React.CSSProperties> = {
   isian_singkat: { background: '#D1FAE5', color: '#065F46' },
   benar_salah:   { background: '#FEF9C3', color: '#92400E' },
   centang_semua: { background: '#EDE9FE', color: '#5B21B6' },
+  grid_pernyataan: { background: '#E0E7FF', color: '#4338CA' },
 };
 
 function tipeBadge(tipe: QuizTipe): React.CSSProperties {

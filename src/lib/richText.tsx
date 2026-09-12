@@ -11,6 +11,7 @@ import TableHeader from '@tiptap/extension-table-header';
 import Placeholder from '@tiptap/extension-placeholder';
 import Image from '@tiptap/extension-image';
 import { toDirectImg } from './googleDriveImg';
+import { renderMathToHtml } from '../components/shared/MathText';
 
 interface Props {
   value: string;
@@ -61,6 +62,17 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
         Klik tombol &ldquo;&Sigma; Simbol&rdquo; untuk menyisipkan simbol matematika, atau ketik langsung dengan diapit tanda $...$. Jangan terapkan bold/underline/sub/superscript di dalam tanda $...$.
       </div>
     </div>
+  );
+}
+
+// Renders author-produced Tiptap HTML (bold/table/img/etc.) plus any
+// $...$ LaTeX inside it. Mirrors src/pages/to/shared.tsx's ToRichContent
+// -- duplicated here (rather than imported) to keep Quiz fully parallel
+// to Try Out, matching how the rest of Quiz's types/scoring are kept separate.
+export function RichContent({ html, style }: { html: string; style?: React.CSSProperties }) {
+  return (
+    <div className="to-rich-text" style={{ fontFamily: 'var(--font-body)', ...style }}
+      dangerouslySetInnerHTML={{ __html: renderMathToHtml(html) }} />
   );
 }
 
