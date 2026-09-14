@@ -651,7 +651,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
     setGridAnswers(a => { const n = { ...a }; delete n[id]; return n; });
   }
 
-  const [gambarUrl, setGambarUrl] = useState(question?.gambar_url ?? '');
+  const [pembahasanHtml, setPembahasanHtml] = useState(question?.pembahasan_html ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -693,7 +693,7 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
       jawaban_benar = gridAnswers;
     }
 
-    return { quiz_id: quizId, urutan: question?.urutan ?? nextUrutan, tipe, pertanyaan, opsi, jawaban_benar, grid_config, poin, gambar_url: gambarUrl.trim() || null };
+    return { quiz_id: quizId, urutan: question?.urutan ?? nextUrutan, tipe, pertanyaan, opsi, jawaban_benar, grid_config, poin, pembahasan_html: pembahasanHtml.trim() || null };
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -757,31 +757,6 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
           <Field label="Pertanyaan">
             <RichTextEditor value={pertanyaan} onChange={setPertanyaan} placeholder="Tulis soal di sini..." minHeight={100} />
           </Field>
-
-          {/* Gambar URL (optional for all tipe) */}
-          {true && (
-            <Field label="Gambar Soal (opsional)">
-              <input
-                style={input}
-                value={gambarUrl}
-                onChange={e => setGambarUrl(e.target.value)}
-                placeholder="https://... atau link Google Drive"
-              />
-              {gambarUrl.trim() && (
-                <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E1DC', background: '#F9F9F7' }}>
-                  <img
-                    src={toDirectImg(gambarUrl.trim())}
-                    alt="Preview gambar"
-                    style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block' }}
-                    onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                  />
-                </div>
-              )}
-              <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.72rem', color: '#888', margin: '4px 0 0' }}>
-                Google Drive: buka file &rarr; Share &rarr; Anyone with link &rarr; copy link
-              </p>
-            </Field>
-          )}
 
           {/* Options (PG / centang_semua) */}
           {(tipe === 'pilihan_ganda' || tipe === 'centang_semua') && (
@@ -1039,6 +1014,10 @@ function QuestionFormModal({ quizId, question, nextUrutan, onClose, onDone }: {
               <button type="button" onClick={addStatement} style={{ ...btnGhost, alignSelf: 'flex-start', fontSize: '0.78rem', color: '#0D5C3A', borderColor: '#0D5C3A', marginTop: '8px' }}>+ Tambah Pernyataan</button>
             </Field>
           )}
+
+          <Field label="Pembahasan (opsional, ditampilkan ke siswa saat review)">
+            <RichTextEditor value={pembahasanHtml} onChange={setPembahasanHtml} placeholder="Jelaskan cara penyelesaian..." minHeight={80} />
+          </Field>
 
           {/* Poin */}
           <Field label="Poin per Soal">

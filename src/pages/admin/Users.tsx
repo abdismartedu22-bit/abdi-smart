@@ -226,7 +226,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
   const [form, setForm] = useState({
     display_name: '', nama: '', username: '', email: '', password: '',
     role: 'student' as Role,
-    group_id: '',
+    group_ids: [] as string[],
     tempat_lahir: '', tanggal_lahir: '', sekolah: '', tingkat_kelas: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -240,7 +240,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       return;
     }
     if (form.role === 'student') {
-      if (!form.group_id) { setError('Pilih grup untuk siswa'); return; }
+      if (form.group_ids.length === 0) { setError('Pilih minimal 1 grup untuk siswa'); return; }
       if (!form.nama) { setError('Nama lengkap wajib diisi untuk siswa'); return; }
       if (!form.tempat_lahir) { setError('Tempat lahir wajib diisi untuk siswa'); return; }
       if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi untuk siswa'); return; }
@@ -262,7 +262,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
         username: form.username,
         display_name: form.display_name,
         role: form.role,
-        group_ids: form.role === 'student' && form.group_id ? [form.group_id] : [],
+        group_ids: form.role === 'student' ? form.group_ids : [],
       }),
     });
     const json = await res.json();
@@ -305,7 +305,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {ROLES.map(r => (
                 <label key={r} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-                  <input type="radio" name="role" value={r} checked={form.role === r} onChange={() => setForm(f => ({ ...f, role: r, group_id: '' }))} />
+                  <input type="radio" name="role" value={r} checked={form.role === r} onChange={() => setForm(f => ({ ...f, role: r, group_ids: [] }))} />
                   {roleLabel[r]}
                 </label>
               ))}
@@ -317,7 +317,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
                 {groups.length === 0 ? (
                   <p style={{ ...errorStyle, color: '#A16207' }}>Belum ada grup. Buat grup terlebih dahulu di tab Grup.</p>
                 ) : (
-                  <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
+                  <GroupMultiSelect groups={groups} value={form.group_ids} onChange={ids => setForm(f => ({ ...f, group_ids: ids }))} />
                 )}
               </FieldRow>
               <FieldRow label="Nama Lengkap (sesuai NIS/NIK) *">
@@ -356,12 +356,12 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
 /* ===================== EDIT USER MODAL ===================== */
 
 function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRow; groups: Group[]; isSelf: boolean; onClose: () => void; onDone: () => void }) {
-  const currentGroupId = (user.student_groups ?? [])[0]?.group_id ?? '';
+  const currentGroupIds = (user.student_groups ?? []).map(sg => sg.group_id);
   const [form, setForm] = useState({
     display_name: user.display_name,
     role: user.role,
     is_active: user.is_active !== false,
-    group_id: currentGroupId,
+    group_ids: currentGroupIds,
     nama: user.nama ?? '',
     tempat_lahir: user.tempat_lahir ?? '',
     tanggal_lahir: user.tanggal_lahir ?? '',
@@ -382,7 +382,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
     e.preventDefault();
     setError('');
     if (form.role === 'student') {
-      if (!form.group_id) { setError('Pilih grup untuk siswa'); return; }
+      if (form.group_ids.length === 0) { setError('Pilih minimal 1 grup untuk siswa'); return; }
       if (!form.nama) { setError('Nama lengkap wajib diisi'); return; }
       if (!form.tempat_lahir) { setError('Tempat lahir wajib diisi'); return; }
       if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi'); return; }
@@ -405,8 +405,8 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
 
     if (form.role === 'student') {
       await supabase.from('student_groups').delete().eq('student_id', user.id);
-      if (form.group_id) {
-        await supabase.from('student_groups').insert({ student_id: user.id, group_id: form.group_id });
+      if (form.group_ids.length > 0) {
+        await supabase.from('student_groups').insert(form.group_ids.map(gid => ({ student_id: user.id, group_id: gid })));
       }
     }
 
@@ -448,7 +448,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {ROLES.map(r => (
                 <label key={r} style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', fontFamily: 'var(--font-body)', fontSize: '0.85rem' }}>
-                  <input type="radio" name="role_edit" value={r} checked={form.role === r} onChange={() => setForm(f => ({ ...f, role: r, group_id: '' }))} />
+                  <input type="radio" name="role_edit" value={r} checked={form.role === r} onChange={() => setForm(f => ({ ...f, role: r, group_ids: [] }))} />
                   {roleLabel[r]}
                 </label>
               ))}
@@ -488,7 +488,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
                 {groups.length === 0 ? (
                   <p style={{ ...errorStyle, color: '#A16207' }}>Belum ada grup aktif.</p>
                 ) : (
-                  <GroupSelect groups={groups} value={form.group_id} onChange={id => setForm(f => ({ ...f, group_id: id }))} />
+                  <GroupMultiSelect groups={groups} value={form.group_ids} onChange={ids => setForm(f => ({ ...f, group_ids: ids }))} />
                 )}
               </FieldRow>
               <FieldRow label="Nama Lengkap (sesuai NIS/NIK) *">
@@ -506,7 +506,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
                 <input style={inputStyle} value={form.sekolah} onChange={e => setForm(f => ({ ...f, sekolah: e.target.value }))} placeholder="cth. SMAN 1 Denpasar" required />
               </FieldRow>
               <FieldRow label="Tingkat Kelas *">
-                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value, group_id: '' }))} required>
+                <select style={inputStyle} value={form.tingkat_kelas} onChange={e => setForm(f => ({ ...f, tingkat_kelas: e.target.value, group_ids: [] }))} required>
                   <option value="">-- Pilih tingkat kelas --</option>
                   {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
@@ -991,49 +991,79 @@ function PaginationBar({ page, totalPages, total, onChange }: { page: number; to
 
 /* ===================== SEARCHABLE GROUP SELECT ===================== */
 
-function GroupSelect({ groups, value, onChange }: { groups: Group[]; value: string; onChange: (id: string) => void }) {
+// Students can be in more than one group at once (e.g. moving/overlapping
+// classes), so this picks any number of groups: a chip row of what's
+// selected, plus a search dropdown of what isn't picked yet.
+function GroupMultiSelect({ groups, value, onChange }: { groups: Group[]; value: string[]; onChange: (ids: string[]) => void }) {
   const [search, setSearch] = useState('');
   const [open, setOpen] = useState(false);
-  const selected = groups.find(g => g.id === value);
-  const filtered = groups.filter(g =>
+  const selectedGroups = value.map(id => groups.find(g => g.id === id)).filter((g): g is Group => !!g);
+  const available = groups.filter(g => !value.includes(g.id));
+  const filtered = available.filter(g =>
     g.nama.toLowerCase().includes(search.toLowerCase()) ||
     g.kode.toLowerCase().includes(search.toLowerCase())
   );
 
+  function add(id: string) { onChange([...value, id]); }
+  function remove(id: string) { onChange(value.filter(v => v !== id)); }
+
   return (
-    <div style={{ position: 'relative' }}>
-      <input
-        value={open ? search : (selected ? selected.nama : '')}
-        onChange={e => setSearch(e.target.value)}
-        onFocus={() => { setOpen(true); setSearch(''); }}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Cari dan pilih grup..."
-        style={inputStyle}
-      />
-      {open && (
-        <div style={{
-          position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0,
-          background: '#fff', border: '1px solid #E2E1DC', borderRadius: '7px',
-          zIndex: 20, maxHeight: '200px', overflowY: 'auto',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-        }}>
-          {filtered.length === 0 ? (
-            <div style={{ padding: '10px 12px', fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>Tidak ditemukan</div>
-          ) : filtered.map(g => (
-            <div
-              key={g.id}
-              onMouseDown={() => onChange(g.id)}
-              style={{
-                padding: '9px 12px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center',
-                background: value === g.id ? '#F0F3FF' : 'transparent',
-                fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D',
-              }}
-            >
-              <span style={{ background: g.warna, color: g.warna_text, padding: '1px 6px', borderRadius: '3px', fontSize: '0.68rem', fontWeight: 700, maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.nama}</span>
-            </div>
+    <div>
+      {selectedGroups.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '8px' }}>
+          {selectedGroups.map(g => (
+            <span key={g.id} style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              background: g.warna, color: g.warna_text, padding: '3px 6px 3px 10px', borderRadius: '20px',
+              fontFamily: 'var(--font-body)', fontSize: '0.75rem', fontWeight: 700,
+            }}>
+              {g.nama}
+              <button
+                type="button"
+                onClick={() => remove(g.id)}
+                style={{ background: 'rgba(255,255,255,0.3)', border: 'none', borderRadius: '50%', width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'inherit', fontSize: '0.7rem', lineHeight: 1, padding: 0 }}
+              >
+                ×
+              </button>
+            </span>
           ))}
         </div>
       )}
+      <div style={{ position: 'relative' }}>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          placeholder="Cari dan tambah grup..."
+          style={inputStyle}
+        />
+        {open && (
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 2px)', left: 0, right: 0,
+            background: '#fff', border: '1px solid #E2E1DC', borderRadius: '7px',
+            zIndex: 20, maxHeight: '200px', overflowY: 'auto',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+          }}>
+            {filtered.length === 0 ? (
+              <div style={{ padding: '10px 12px', fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666' }}>
+                {available.length === 0 ? 'Semua grup sudah dipilih' : 'Tidak ditemukan'}
+              </div>
+            ) : filtered.map(g => (
+              <div
+                key={g.id}
+                onMouseDown={() => { add(g.id); setSearch(''); }}
+                style={{
+                  padding: '9px 12px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center',
+                  fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#0D0D0D',
+                }}
+              >
+                <span style={{ background: g.warna, color: g.warna_text, padding: '1px 6px', borderRadius: '3px', fontSize: '0.68rem', fontWeight: 700, maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.nama}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

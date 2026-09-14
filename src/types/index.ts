@@ -116,6 +116,7 @@ export interface QuizQuestion {
   poin: number;
   gambar_url?: string | null;
   grid_config?: QuizGridConfig | null;
+  pembahasan_html?: string | null;
 }
 
 export interface QuizSession {

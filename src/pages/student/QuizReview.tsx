@@ -301,6 +301,15 @@ export default function StudentQuizReview() {
                     </div>
                   </div>
                 )}
+
+                {q.pembahasan_html && (
+                  <div style={{ marginTop: '12px', padding: '12px', background: '#F9F9F7', borderRadius: '8px' }}>
+                    <div style={{ fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.65rem', color: '#aaa', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '6px' }}>
+                      Pembahasan
+                    </div>
+                    <RichContent html={q.pembahasan_html} style={{ fontSize: '0.85rem', color: '#0D0D0D' }} />
+                  </div>
+                )}
               </div>
             </div>
           );
