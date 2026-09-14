@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Login() {
-  const { user, loading } = useAuth();
+  const { user, loading, blockedReason, clearBlockedReason } = useAuth();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState('');
@@ -20,6 +20,7 @@ export default function Login() {
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
     setError('');
+    clearBlockedReason();
     setSubmitting(true);
 
     try {
@@ -129,13 +130,13 @@ export default function Login() {
             </div>
           </div>
 
-          {error && (
+          {(error || blockedReason) && (
             <div style={{
               background: '#FFF0F1', border: '1px solid #FFC8CC',
               borderRadius: '8px', padding: '10px 12px',
               fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#DC0A1E',
             }}>
-              {error}
+              {error || blockedReason}
             </div>
           )}
 

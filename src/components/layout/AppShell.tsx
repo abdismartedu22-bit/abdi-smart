@@ -14,7 +14,7 @@ const roleBadge: Record<Role, { label: string; bg: string; color: string }> = {
 };
 
 export default function AppShell() {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 768);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -22,6 +22,7 @@ export default function AppShell() {
 
   const role = profile?.role ?? 'student';
   const badge = roleBadge[role];
+  const needsConsent = profile?.role === 'student' && !profile.consent_at;
 
   async function handleSignOut() {
     await signOut();
@@ -169,6 +170,54 @@ export default function AppShell() {
       {showChangePw && (
         <ChangePwModal onClose={() => setShowChangePw(false)} />
       )}
+
+      {/* Anti-copy consent notice -- reappears every login until agreed */}
+      {needsConsent && profile && (
+        <ConsentModal profileId={profile.id} onAgree={refreshProfile} />
+      )}
+    </div>
+  );
+}
+
+function ConsentModal({ profileId, onAgree }: { profileId: string; onAgree: () => Promise<void> }) {
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleAgree() {
+    setSubmitting(true);
+    await supabase.from('profiles').update({ consent_at: new Date().toISOString() }).eq('id', profileId);
+    await onAgree();
+    setSubmitting(false);
+  }
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 300,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+    }}>
+      <div style={{
+        background: '#fff', borderRadius: '12px', padding: '32px',
+        width: '100%', maxWidth: '440px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+      }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', margin: '0 0 14px', color: '#0D0D0D' }}>
+          Pemberitahuan Penting
+        </h2>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.9rem', color: '#2E2E2E', lineHeight: 1.7, margin: '0 0 24px' }}>
+          Seluruh soal, materi, dan konten pembelajaran di sistem ini adalah milik Abdi Smart dan tidak
+          diperkenankan untuk disalin, difoto, diperbanyak, atau disebarluaskan dalam bentuk apa pun tanpa izin.
+          Pelanggaran terhadap ketentuan ini akan dikenakan sanksi sesuai peraturan yang berlaku.
+        </p>
+        <button
+          onClick={handleAgree}
+          disabled={submitting}
+          style={{
+            width: '100%', padding: '12px', background: submitting ? '#6B7280' : '#0D5C3A', color: '#fff',
+            border: 'none', borderRadius: '8px', cursor: submitting ? 'not-allowed' : 'pointer',
+            fontFamily: 'var(--font-body)', fontWeight: 700, fontSize: '0.92rem',
+          }}
+        >
+          {submitting ? 'Menyimpan...' : 'Saya Mengerti dan Menyetujui'}
+        </button>
+      </div>
     </div>
   );
 }

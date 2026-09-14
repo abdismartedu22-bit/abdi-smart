@@ -7,6 +7,9 @@ interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
+  blockedReason: string | null;
+  clearBlockedReason: () => void;
+  refreshProfile: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -16,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [blockedReason, setBlockedReason] = useState<string | null>(null);
 
   async function fetchProfile(userId: string) {
     const { data } = await supabase
@@ -23,7 +27,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('id', userId)
       .single();
-    setProfile(data as Profile | null);
+    const prof = data as Profile | null;
+
+    // Students belong to one tahun pelajaran at a time -- once the active
+    // year moves on, their account stops being usable until an admin
+    // updates it. Skip the check entirely for other roles / untagged rows.
+    if (prof?.role === 'student' && prof.tahun_pelajaran) {
+      const { data: setting } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'tahun_pelajaran_aktif')
+        .maybeSingle();
+      const activeYear = setting?.value ?? null;
+      if (activeYear && prof.tahun_pelajaran !== activeYear) {
+        await supabase.auth.signOut();
+        setUser(null);
+        setProfile(null);
+        setBlockedReason('Akun untuk tahun pelajaran ini sudah tidak aktif. Hubungi admin jika ini keliru.');
+        setLoading(false);
+        return;
+      }
+    }
+
+    setProfile(prof);
     setLoading(false);
   }
 
@@ -53,8 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }
 
+  async function refreshProfile() {
+    if (user) await fetchProfile(user.id);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signOut }}>
+    <AuthContext.Provider value={{
+      user, profile, loading, blockedReason,
+      clearBlockedReason: () => setBlockedReason(null),
+      refreshProfile, signOut,
+    }}>
       {children}
     </AuthContext.Provider>
   );

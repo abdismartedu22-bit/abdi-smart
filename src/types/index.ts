@@ -13,6 +13,8 @@ export interface Profile {
   jurusan: string | null;
   tingkat_kelas: string | null;
   is_active: boolean;
+  tahun_pelajaran: string | null;
+  consent_at: string | null;
   created_at: string;
 }
 

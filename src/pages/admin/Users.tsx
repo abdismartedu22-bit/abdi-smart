@@ -17,6 +17,7 @@ type UserRow = {
   tanggal_lahir: string | null;
   sekolah: string | null;
   tingkat_kelas: string | null;
+  tahun_pelajaran: string | null;
   student_groups?: { group_id: string; groups: { id: string; nama: string; kode: string } }[];
 };
 
@@ -92,27 +93,60 @@ function UsersTab() {
   const [showEdit, setShowEdit] = useState(false);
   const [editTarget, setEditTarget] = useState<UserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const [activeTahunPelajaran, setActiveTahunPelajaran] = useState('');
+  const [tahunFilter, setTahunFilter] = useState('all');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const [{ data: u }, { data: g }] = await Promise.all([
+    const [{ data: u }, { data: g }, { data: s }] = await Promise.all([
       supabase.from('profiles')
         .select('*, student_groups(group_id, groups(id, nama, kode))')
         .order('role').order('display_name')
         .range(0, 4999),
       supabase.from('groups').select('*').order('nama'),
+      supabase.from('app_settings').select('value').eq('key', 'tahun_pelajaran_aktif').maybeSingle(),
     ]);
     setUsers((u ?? []) as UserRow[]);
     setGroups(g ?? []);
+    setActiveTahunPelajaran(s?.value ?? '');
     setLoading(false);
+  }
+
+  // Grows on its own: every year a student gets tagged with (or the admin
+  // adds via "+ Tambah tahun pelajaran baru") shows up here from then on.
+  const tahunPelajaranYears = Array.from(new Set(
+    users.filter(u => u.tahun_pelajaran).map(u => u.tahun_pelajaran as string)
+      .concat(activeTahunPelajaran ? [activeTahunPelajaran] : [])
+  )).sort().reverse();
+
+  // Requires an explicit Edit -> pick -> Simpan, unlike the role/status
+  // filters below -- this one gates login for every student, so it
+  // shouldn't change from a stray click on an always-open dropdown.
+  const [editingTahunAktif, setEditingTahunAktif] = useState(false);
+  const [draftTahunAktif, setDraftTahunAktif] = useState('');
+
+  async function saveTahunAktif() {
+    if (!draftTahunAktif.trim()) return;
+    setActiveTahunPelajaran(draftTahunAktif);
+    setEditingTahunAktif(false);
+    await supabase.from('app_settings').upsert({
+      key: 'tahun_pelajaran_aktif',
+      value: draftTahunAktif,
+      updated_by: me?.id,
+      updated_at: new Date().toISOString(),
+    });
   }
 
   const filtered = users.filter(u => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false;
     if (activeFilter === 'active' && u.is_active === false) return false;
     if (activeFilter === 'inactive' && u.is_active !== false) return false;
+    if (tahunFilter !== 'all' && u.tahun_pelajaran !== tahunFilter) return false;
     if (search && !u.username.toLowerCase().includes(search.toLowerCase()) && !u.display_name.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -120,12 +154,54 @@ function UsersTab() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Reset to page 1 when filter changes
-  const handleSearch = (v: string) => { setSearch(v); setPage(1); };
-  const handleRole = (v: Role | 'all') => { setRoleFilter(v); setPage(1); };
+  // Reset to page 1 (and clear selection, since it's scoped to whatever's
+  // currently filtered) when a filter changes
+  const handleSearch = (v: string) => { setSearch(v); setPage(1); setSelectedIds(new Set()); };
+  const handleRole = (v: Role | 'all') => { setRoleFilter(v); setPage(1); setSelectedIds(new Set()); };
+
+  const selectableIds = filtered.filter(u => u.id !== me?.id).map(u => u.id);
+  const allFilteredSelected = selectableIds.length > 0 && selectableIds.every(id => selectedIds.has(id));
+
+  function toggleSelectAll() {
+    setSelectedIds(allFilteredSelected ? new Set() : new Set(selectableIds));
+  }
+
+  function toggleSelectOne(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   return (
     <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '16px', padding: '10px 14px', background: '#fff', border: '1px solid #E2E1DC', borderRadius: '8px' }}>
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', fontWeight: 600, color: '#2E2E2E' }}>Tahun Pelajaran Aktif</span>
+        {editingTahunAktif ? (
+          <>
+            <TahunPelajaranSelect
+              years={tahunPelajaranYears}
+              value={draftTahunAktif}
+              onChange={setDraftTahunAktif}
+              style={{ width: '220px' }}
+            />
+            <button onClick={saveTahunAktif} disabled={!draftTahunAktif.trim()} style={{ ...btnEdit, opacity: draftTahunAktif.trim() ? 1 : 0.5 }}>Simpan</button>
+            <button onClick={() => setEditingTahunAktif(false)} style={btnGhost}>Batal</button>
+          </>
+        ) : (
+          <>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, color: '#0D5C3A', background: '#D6EEE2', padding: '5px 12px', borderRadius: '6px' }}>
+              {activeTahunPelajaran || '-- Belum diatur --'}
+            </span>
+            <button onClick={() => { setDraftTahunAktif(activeTahunPelajaran); setEditingTahunAktif(true); }} style={btnEdit}>Edit</button>
+          </>
+        )}
+        <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.75rem', color: '#888' }}>
+          Siswa dengan tahun pelajaran berbeda tidak bisa login.
+        </span>
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           <input
@@ -138,14 +214,30 @@ function UsersTab() {
             <option value="all">Semua role</option>
             {ROLES.map(r => <option key={r} value={r}>{roleLabel[r]}</option>)}
           </select>
-          <select value={activeFilter} onChange={e => { setActiveFilter(e.target.value as 'all' | 'active' | 'inactive'); setPage(1); }} style={selectStyle}>
+          <select value={activeFilter} onChange={e => { setActiveFilter(e.target.value as 'all' | 'active' | 'inactive'); setPage(1); setSelectedIds(new Set()); }} style={selectStyle}>
             <option value="all">Semua status</option>
             <option value="active">Aktif</option>
             <option value="inactive">Non-aktif</option>
           </select>
+          <select value={tahunFilter} onChange={e => { setTahunFilter(e.target.value); setPage(1); setSelectedIds(new Set()); }} style={selectStyle}>
+            <option value="all">Semua tahun pelajaran</option>
+            {tahunPelajaranYears.map(y => <option key={y} value={y}>{y}</option>)}
+          </select>
         </div>
         <button onClick={() => setShowCreate(true)} style={btnPrimary}>+ Tambah User</button>
       </div>
+
+      {selectedIds.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '12px', padding: '10px 14px', background: '#FFF0F1', border: '1px solid #FFC8CC', borderRadius: '8px' }}>
+          <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', fontWeight: 600, color: '#0D0D0D' }}>
+            {selectedIds.size} user dipilih
+          </span>
+          <button onClick={() => setBulkDeleting(true)} style={{ ...btnPrimary, flex: 'none', background: '#DC0A1E' }}>
+            Hapus Terpilih
+          </button>
+          <button onClick={() => setSelectedIds(new Set())} style={btnGhost}>Batal Pilih</button>
+        </div>
+      )}
 
       {loading ? (
         <p style={mutedStyle}>Memuat...</p>
@@ -154,6 +246,12 @@ function UsersTab() {
       ) : (
         <>
           <div style={{ background: '#fff', border: '1px solid #E2E1DC', borderRadius: '10px', overflow: 'hidden', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 16px', borderBottom: '1px solid #E2E1DC', background: '#F9F9F7' }}>
+              <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll} style={{ cursor: 'pointer' }} />
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: '0.78rem', color: '#666' }}>
+                Pilih semua ({selectableIds.length} sesuai filter)
+              </span>
+            </div>
             {paginated.map((u, i) => {
               const isActive = u.is_active !== false;
               return (
@@ -162,6 +260,11 @@ function UsersTab() {
                   borderBottom: i < paginated.length - 1 ? '1px solid #E2E1DC' : 'none',
                   flexWrap: 'wrap',
                 }}>
+                  {u.id !== me?.id ? (
+                    <input type="checkbox" checked={selectedIds.has(u.id)} onChange={() => toggleSelectOne(u.id)} style={{ cursor: 'pointer', flexShrink: 0 }} />
+                  ) : (
+                    <span style={{ width: '13px', flexShrink: 0 }} />
+                  )}
                   <span title={isActive ? 'Aktif' : 'Non-aktif'} style={{
                     width: '9px', height: '9px', borderRadius: '50%', flexShrink: 0,
                     background: isActive ? '#22C55E' : '#EAB308',
@@ -176,6 +279,9 @@ function UsersTab() {
                       @{u.username}
                       {u.role === 'student' && u.tingkat_kelas && (
                         <span> &middot; {u.tingkat_kelas}</span>
+                      )}
+                      {u.role === 'student' && u.tahun_pelajaran && (
+                        <span> &middot; {u.tahun_pelajaran}</span>
                       )}
                     </div>
                   </div>
@@ -196,6 +302,8 @@ function UsersTab() {
       {showCreate && (
         <CreateUserModal
           groups={groups}
+          tahunPelajaranYears={tahunPelajaranYears}
+          activeTahunPelajaran={activeTahunPelajaran}
           onClose={() => setShowCreate(false)}
           onDone={() => { setShowCreate(false); load(); }}
         />
@@ -204,6 +312,8 @@ function UsersTab() {
         <EditUserModal
           user={editTarget}
           groups={groups}
+          tahunPelajaranYears={tahunPelajaranYears}
+          activeTahunPelajaran={activeTahunPelajaran}
           isSelf={editTarget.id === me?.id}
           onClose={() => setShowEdit(false)}
           onDone={() => { setShowEdit(false); load(); }}
@@ -216,18 +326,26 @@ function UsersTab() {
           onDone={() => { setDeleteTarget(null); load(); }}
         />
       )}
+      {bulkDeleting && (
+        <BulkDeleteUsersModal
+          userIds={Array.from(selectedIds)}
+          onClose={() => setBulkDeleting(false)}
+          onDone={() => { setBulkDeleting(false); setSelectedIds(new Set()); load(); }}
+        />
+      )}
     </>
   );
 }
 
 /* ===================== CREATE USER MODAL ===================== */
 
-function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose: () => void; onDone: () => void }) {
+function CreateUserModal({ groups, tahunPelajaranYears, activeTahunPelajaran, onClose, onDone }: { groups: Group[]; tahunPelajaranYears: string[]; activeTahunPelajaran: string; onClose: () => void; onDone: () => void }) {
   const [form, setForm] = useState({
     display_name: '', nama: '', username: '', email: '', password: '',
     role: 'student' as Role,
     group_ids: [] as string[],
     tempat_lahir: '', tanggal_lahir: '', sekolah: '', tingkat_kelas: '',
+    tahun_pelajaran: activeTahunPelajaran,
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -246,6 +364,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi untuk siswa'); return; }
       if (!form.sekolah) { setError('Sekolah wajib diisi untuk siswa'); return; }
       if (!form.tingkat_kelas) { setError('Tingkat kelas wajib diisi untuk siswa'); return; }
+      if (!form.tahun_pelajaran.trim()) { setError('Tahun pelajaran wajib diisi untuk siswa'); return; }
     }
     setSubmitting(true);
     const { data: { session } } = await supabase.auth.getSession();
@@ -276,6 +395,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
       if (form.tanggal_lahir) extras.tanggal_lahir = form.tanggal_lahir;
       if (form.sekolah) extras.sekolah = form.sekolah;
       if (form.tingkat_kelas) extras.tingkat_kelas = form.tingkat_kelas;
+      if (form.tahun_pelajaran) extras.tahun_pelajaran = form.tahun_pelajaran;
       if (Object.keys(extras).length > 0) {
         await supabase.from('profiles').update(extras).eq('id', json.id);
       }
@@ -340,6 +460,13 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
                   {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
               </FieldRow>
+              <FieldRow label="Tahun Pelajaran *">
+                <TahunPelajaranSelect
+                  years={tahunPelajaranYears}
+                  value={form.tahun_pelajaran}
+                  onChange={v => setForm(f => ({ ...f, tahun_pelajaran: v }))}
+                />
+              </FieldRow>
             </>
           )}
           {error && <p style={errorStyle}>{error}</p>}
@@ -355,7 +482,7 @@ function CreateUserModal({ groups, onClose, onDone }: { groups: Group[]; onClose
 
 /* ===================== EDIT USER MODAL ===================== */
 
-function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRow; groups: Group[]; isSelf: boolean; onClose: () => void; onDone: () => void }) {
+function EditUserModal({ user, groups, tahunPelajaranYears, activeTahunPelajaran, isSelf, onClose, onDone }: { user: UserRow; groups: Group[]; tahunPelajaranYears: string[]; activeTahunPelajaran: string; isSelf: boolean; onClose: () => void; onDone: () => void }) {
   const currentGroupIds = (user.student_groups ?? []).map(sg => sg.group_id);
   const [form, setForm] = useState({
     display_name: user.display_name,
@@ -367,6 +494,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
     tanggal_lahir: user.tanggal_lahir ?? '',
     sekolah: user.sekolah ?? '',
     tingkat_kelas: user.tingkat_kelas ?? '',
+    tahun_pelajaran: user.tahun_pelajaran ?? activeTahunPelajaran,
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -388,6 +516,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
       if (!form.tanggal_lahir) { setError('Tanggal lahir wajib diisi'); return; }
       if (!form.sekolah) { setError('Sekolah wajib diisi'); return; }
       if (!form.tingkat_kelas) { setError('Tingkat kelas wajib diisi'); return; }
+      if (!form.tahun_pelajaran.trim()) { setError('Tahun pelajaran wajib diisi'); return; }
     }
     setSubmitting(true);
 
@@ -398,6 +527,7 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
       update.tanggal_lahir = form.tanggal_lahir || null;
       update.sekolah = form.sekolah || null;
       update.tingkat_kelas = form.tingkat_kelas || null;
+      update.tahun_pelajaran = form.tahun_pelajaran || null;
     }
 
     const { error: profileErr } = await supabase.from('profiles').update(update).eq('id', user.id);
@@ -510,6 +640,13 @@ function EditUserModal({ user, groups, isSelf, onClose, onDone }: { user: UserRo
                   <option value="">-- Pilih tingkat kelas --</option>
                   {TINGKAT_KELAS_OPTIONS.map(k => <option key={k} value={k}>{k}</option>)}
                 </select>
+              </FieldRow>
+              <FieldRow label="Tahun Pelajaran *">
+                <TahunPelajaranSelect
+                  years={tahunPelajaranYears}
+                  value={form.tahun_pelajaran}
+                  onChange={v => setForm(f => ({ ...f, tahun_pelajaran: v }))}
+                />
               </FieldRow>
             </>
           )}
@@ -647,6 +784,81 @@ function DeleteUserModal({ user, onClose, onDone }: { user: UserRow; onClose: ()
           <button onClick={onClose} style={btnSecondary}>Batal</button>
           <button onClick={handleDelete} disabled={deleting} style={{ ...btnPrimary, background: '#DC0A1E' }}>
             {deleting ? 'Menghapus...' : 'Hapus'}
+          </button>
+        </div>
+      </div>
+    </Overlay>
+  );
+}
+
+/* ===================== BULK DELETE USERS MODAL ===================== */
+
+function BulkDeleteUsersModal({ userIds, onClose, onDone }: { userIds: string[]; onClose: () => void; onDone: () => void }) {
+  const total = userIds.length;
+  const [remaining, setRemaining] = useState<string[]>(userIds);
+  const [deleting, setDeleting] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [attempted, setAttempted] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    setProgress(0);
+    const { data: { session } } = await supabase.auth.getSession();
+    const toTry = remaining;
+    const stillFailed: string[] = [];
+
+    for (let i = 0; i < toTry.length; i++) {
+      try {
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session?.access_token}`,
+            'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({ user_id: toTry[i] }),
+        });
+        if (!res.ok) stillFailed.push(toTry[i]);
+      } catch {
+        stillFailed.push(toTry[i]);
+      }
+      setProgress(i + 1);
+    }
+
+    setRemaining(stillFailed);
+    setDeleting(false);
+    setAttempted(true);
+    if (stillFailed.length === 0) onDone();
+  }
+
+  const failedCount = attempted ? remaining.length : 0;
+
+  return (
+    <Overlay>
+      <div style={{ background: '#fff', borderRadius: '12px', padding: '28px 32px', width: '100%', maxWidth: '420px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.1rem', margin: '0 0 10px', color: '#DC0A1E' }}>
+          Hapus {total} User?
+        </h2>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.88rem', color: '#666', margin: '0 0 8px' }}>
+          {total} akun yang dipilih akan dihapus permanen.
+        </p>
+        <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.82rem', color: '#DC0A1E', margin: '0 0 20px', fontWeight: 600 }}>
+          Semua data absensi dan riwayat user-user ini akan ikut terhapus. Tindakan ini tidak bisa dibatalkan.
+        </p>
+        {deleting && (
+          <p style={{ fontFamily: 'var(--font-body)', fontSize: '0.85rem', color: '#666', margin: '0 0 12px' }}>
+            Menghapus {progress} dari {remaining.length}...
+          </p>
+        )}
+        {!deleting && failedCount > 0 && (
+          <p style={{ ...errorStyle, marginBottom: '12px' }}>
+            {failedCount} dari {total} gagal dihapus. Sisanya sudah terhapus -- coba lagi untuk yang gagal.
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button onClick={onClose} style={btnSecondary}>{failedCount > 0 ? 'Tutup' : 'Batal'}</button>
+          <button onClick={handleDelete} disabled={deleting} style={{ ...btnPrimary, background: '#DC0A1E' }}>
+            {deleting ? 'Menghapus...' : failedCount > 0 ? 'Coba Lagi' : 'Hapus'}
           </button>
         </div>
       </div>
@@ -986,6 +1198,53 @@ function PaginationBar({ page, totalPages, total, onChange }: { page: number; to
         </button>
       </div>
     </div>
+  );
+}
+
+/* ===================== TAHUN PELAJARAN SELECT ===================== */
+
+// A dropdown of years seen so far, plus a way to add one that hasn't
+// existed yet -- new academic years get added here as they come, not
+// pre-seeded ahead of time.
+function TahunPelajaranSelect({ years, value, onChange, style }: { years: string[]; value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  if (adding) {
+    return (
+      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <input
+          style={{ ...inputStyle, ...style }}
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          placeholder="cth. 2026/2027"
+          autoFocus
+        />
+        <button
+          type="button"
+          onClick={() => { if (draft.trim()) { onChange(draft.trim()); setAdding(false); } }}
+          style={btnEdit}
+        >
+          Tambah
+        </button>
+        <button type="button" onClick={() => setAdding(false)} style={btnGhost}>Batal</button>
+      </div>
+    );
+  }
+
+  return (
+    <select
+      value={value && years.includes(value) ? value : ''}
+      onChange={e => {
+        if (e.target.value === '__new__') { setDraft(''); setAdding(true); }
+        else onChange(e.target.value);
+      }}
+      style={{ ...inputStyle, ...style, cursor: 'pointer' }}
+    >
+      <option value="" disabled>-- Pilih tahun pelajaran --</option>
+      {years.map(y => <option key={y} value={y}>{y}</option>)}
+      <option value="__new__">+ Tambah tahun pelajaran baru...</option>
+    </select>
   );
 }
 
