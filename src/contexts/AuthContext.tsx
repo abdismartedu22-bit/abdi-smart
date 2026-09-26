@@ -29,6 +29,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .single();
     const prof = data as Profile | null;
 
+    // is_active has always been shown as a status badge but never actually
+    // enforced -- Login.tsx never checked it, so a deactivated account
+    // could still sign in. Block it here for every role.
+    if (prof && prof.is_active === false) {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+      setBlockedReason('Akun ini sudah non-aktif. Hubungi admin jika ini keliru.');
+      setLoading(false);
+      return;
+    }
+
     // Students belong to one tahun pelajaran at a time -- once the active
     // year moves on, their account stops being usable until an admin
     // updates it. Skip the check entirely for other roles / untagged rows.
