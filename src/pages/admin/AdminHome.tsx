@@ -31,6 +31,7 @@ type GroupSisa = {
   warna_text: string;
   paket: number;
   realisasi: number;
+  active: boolean;
   wa_group_link?: string | null;
 };
 
@@ -145,7 +146,7 @@ export default function AdminHome() {
     const allGroups = (groupsRes.data ?? []) as GroupSisa[];
     setSisaAlert(
       allGroups
-        .filter(g => g.paket != null && g.paket > 0 && (g.paket - g.realisasi) < 10)
+        .filter(g => g.active && g.paket != null && g.paket > 0 && (g.paket - Number(g.realisasi)) < 10)
         .map(g => ({ ...g, wa_group_link: waMap[g.id] ?? null }))
     );
     setInactiveGroups((inactiveRes.data ?? []) as InactiveGroup[]);

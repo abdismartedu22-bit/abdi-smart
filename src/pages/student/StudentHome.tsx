@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { toISODate, fmtTime } from '../../lib/dates';
+import { fetchRealisasiById } from '../../lib/realisasi';
 import GrupBadge from '../../components/shared/GrupBadge';
 import AnnouncementSlider from '../../components/shared/AnnouncementSlider';
 
@@ -103,17 +104,9 @@ export default function StudentHome() {
         const currentOnlineData = onlineDataRef.current;
 
         if (currentGroups.length > 0) {
-          const { data } = await supabase
-            .from('attendance')
-            .select('schedules!schedule_id(group_id)')
-            .eq('person_role', 'teacher')
-            .eq('sesi_status', 'terlaksana');
+          const all = await fetchRealisasiById();
           const rMap: Record<string, number> = {};
-          currentGroups.forEach(g => { rMap[g.id] = 0; });
-          ((data ?? []) as unknown as { schedules: { group_id: string } | null }[]).forEach(r => {
-            const gid = r.schedules?.group_id;
-            if (gid && rMap[gid] !== undefined) rMap[gid]++;
-          });
+          currentGroups.forEach(g => { rMap[g.id] = all[g.id] ?? 0; });
           setRealisasiByGroup(rMap);
         }
 
@@ -157,17 +150,9 @@ export default function StudentHome() {
     const allGroupIds = [...new Set([...groupIds, ...onlineGroupIds])];
 
     if (groupIds.length > 0) {
-      const { data: terlaksanaData } = await supabase
-        .from('attendance')
-        .select('schedules!schedule_id(group_id)')
-        .eq('person_role', 'teacher')
-        .eq('sesi_status', 'terlaksana');
+      const all = await fetchRealisasiById();
       const rMap: Record<string, number> = {};
-      myGroups.forEach(g => { rMap[g.id] = 0; });
-      ((terlaksanaData ?? []) as unknown as { schedules: { group_id: string } | null }[]).forEach(r => {
-        const gid = r.schedules?.group_id;
-        if (gid && rMap[gid] !== undefined) rMap[gid]++;
-      });
+      myGroups.forEach(g => { rMap[g.id] = all[g.id] ?? 0; });
       setRealisasiByGroup(rMap);
     }
 

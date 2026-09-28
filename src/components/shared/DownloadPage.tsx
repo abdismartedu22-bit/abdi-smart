@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { getWeekStart, nextWeek, prevWeek, toISODate, formatWeekLabel } from '../../lib/dates';
 import { startOfMonth, format } from 'date-fns';
 import * as XLSX from 'xlsx';
+import { fetchGroupRealisasi, type GroupRealisasiRow } from '../../lib/realisasi';
 
 type Group = { id: string; nama: string; kode: string };
 type ReportType = 'jadwal' | 'absensi' | 'kelas' | 'gedung';
@@ -180,49 +181,26 @@ export default function DownloadPage() {
   async function downloadKelas() {
     setLoading(true);
 
-    const [groupsRes, sgRes, schedRes, realisasiRes] = await Promise.all([
-      supabase.from('groups').select('id, kode, nama, sekolah, paket').eq('active', true).order('kode'),
-      supabase.from('student_groups').select('group_id'),
-      supabase.from('schedules').select('group_id, hari, lokasi'),
-      supabase.from('attendance')
-        .select('schedule_id, session_date, schedule:schedules!schedule_id(group_id)')
-        .eq('person_role', 'teacher')
-        .eq('sesi_status', 'terlaksana'),
-    ]);
-
-    const allGroups    = (groupsRes.data ?? []) as any[];
-    const allSG        = (sgRes.data ?? []) as any[];
-    const allScheds    = (schedRes.data ?? []) as any[];
-    const allRealisasi = (realisasiRes.data ?? []) as any[];
-
-    const studentCount: Record<string, number> = {};
-    for (const sg of allSG) studentCount[sg.group_id] = (studentCount[sg.group_id] ?? 0) + 1;
-
-    const hariMap: Record<string, Set<string>> = {};
-    const lokasiMap: Record<string, string> = {};
-    for (const s of allScheds) {
-      if (!hariMap[s.group_id]) hariMap[s.group_id] = new Set();
-      hariMap[s.group_id].add(s.hari);
-      if (s.lokasi && !lokasiMap[s.group_id]) lokasiMap[s.group_id] = s.lokasi;
-    }
-
-    const realisasiSet: Record<string, Set<string>> = {};
-    for (const r of allRealisasi) {
-      const gid = r.schedule?.group_id;
-      if (!gid) continue;
-      if (!realisasiSet[gid]) realisasiSet[gid] = new Set();
-      realisasiSet[gid].add(`${r.schedule_id}__${r.session_date}`);
+    // Same function the dashboard's "Sisa Sesi" widget reads, so the two
+    // can't disagree. (This used to recompute everything client-side from
+    // four unpaginated queries, silently capped at 1000 rows each.)
+    let allGroups: GroupRealisasiRow[];
+    try {
+      allGroups = (await fetchGroupRealisasi())
+        .filter(g => g.active)
+        .sort((a, b) => a.kode.localeCompare(b.kode));
+    } catch (err) {
+      setLoading(false);
+      alert('Gagal memuat data kelas: ' + (err as Error).message);
+      return;
     }
 
     const header = ['', 'NAMA', 'Sekolah', 'Jumlah', 'Lokasi', 'Hari Belajar 1', 'Paket', 'REALISASI', 'SISA'];
-    const body = allGroups.map((g: any) => {
-      const jumlah    = studentCount[g.id] ?? 0;
-      const lokasi    = lokasiMap[g.id] ?? '-';
-      const hariSet   = hariMap[g.id] ?? new Set<string>();
+    const body = allGroups.map(g => {
+      const hariSet = new Set(g.hari ?? []);
       const hariBelajar = HARI_ORDER.filter(h => hariSet.has(h)).map(h => HARI_ABB[h]).join('-') || '-';
-      const paket     = g.paket ?? 0;
-      const realisasi = realisasiSet[g.id]?.size ?? 0;
-      return [g.kode, g.nama, g.sekolah ?? '-', jumlah, lokasi, hariBelajar, paket, realisasi, paket - realisasi];
+      const paket = g.paket ?? 0;
+      return [g.kode, g.nama, g.sekolah ?? '-', g.jumlah_siswa, g.lokasi ?? '-', hariBelajar, paket, g.realisasi, paket - g.realisasi];
     });
 
     writeExcel([header, ...body], 'KELAS', `Kelas_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
